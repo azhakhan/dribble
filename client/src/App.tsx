@@ -1,9 +1,8 @@
 import { ThemeProvider } from "@/components/theme-provider";
-import "handsontable/styles/handsontable.min.css";
-import "handsontable/styles/ht-theme-main.min.css";
 import { useState, useRef, useEffect } from "react";
 import Editor from "@monaco-editor/react";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
+import { ModeToggle } from "@/components/mode-toggle";
 
 import { EditableTable } from "@/elements/EditableTable";
 import { FileTree } from "@/elements/FileTree";
@@ -57,6 +56,19 @@ const sampleFileTree: FileNode[] = [
   },
 ];
 
+function TopMenu() {
+  return (
+    <div className="h-8 border-b flex items-center justify-between px-3 bg-background">
+      <div className="flex items-center gap-2">
+        <span className="text-xs font-semibold">DBIDE</span>
+      </div>
+      <div className="flex items-center gap-2">
+        <ModeToggle />
+      </div>
+    </div>
+  );
+}
+
 function App() {
   const editorContainerRef = useRef<HTMLDivElement>(null);
   const [sqlContent, setSqlContent] = useState<string>(
@@ -84,64 +96,70 @@ function App() {
 
   return (
     <ThemeProvider defaultTheme="dark" storageKey="vite-ui-theme">
-      <div className="h-screen">
-        <PanelGroup
-          direction="horizontal"
-          onLayout={(sizes) => setSizes(sizes)}
-          storage={localStorage}
-          autoSaveId="main-layout"
-        >
-          <Panel defaultSize={sizes[0]} minSize={10}>
-            <div className="h-full">
-              <FileTree data={sampleFileTree} onFileSelect={handleFileSelect} />
-            </div>
-          </Panel>
+      <div className="h-screen flex flex-col">
+        <TopMenu />
+        <div className="flex-1">
+          <PanelGroup
+            direction="horizontal"
+            onLayout={(sizes) => setSizes(sizes)}
+            storage={localStorage}
+            autoSaveId="main-layout"
+          >
+            <Panel defaultSize={sizes[0]} minSize={10}>
+              <div className="h-full">
+                <FileTree
+                  data={sampleFileTree}
+                  onFileSelect={handleFileSelect}
+                />
+              </div>
+            </Panel>
 
-          <PanelResizeHandle className="w-1 bg-border hover:bg-primary transition-colors" />
+            <PanelResizeHandle className="w-1 bg-border hover:bg-primary transition-colors" />
 
-          <Panel defaultSize={sizes[1]} minSize={30}>
-            <PanelGroup
-              direction="vertical"
-              storage={localStorage}
-              autoSaveId="editor-layout"
-            >
-              <Panel defaultSize={60} minSize={30}>
-                <div className="h-full overflow-auto">
-                  <EditableTable />
-                </div>
-              </Panel>
+            <Panel defaultSize={sizes[1]} minSize={30}>
+              <PanelGroup
+                direction="vertical"
+                storage={localStorage}
+                autoSaveId="editor-layout"
+              >
+                <Panel defaultSize={60} minSize={30}>
+                  <div className="h-full overflow-auto">
+                    <EditableTable />
+                  </div>
+                </Panel>
 
-              <PanelResizeHandle className="h-1 bg-border hover:bg-primary transition-colors" />
+                <PanelResizeHandle className="h-1 bg-border hover:bg-primary transition-colors" />
 
-              <Panel defaultSize={40} minSize={10}>
-                <div ref={editorContainerRef} className="h-full">
-                  <Editor
-                    height="100%"
-                    defaultLanguage="sql"
-                    theme="vs-dark"
-                    value={sqlContent}
-                    onChange={handleEditorChange}
-                    options={{
-                      minimap: { enabled: false },
-                      fontSize: 14,
-                      wordWrap: "on",
-                      automaticLayout: true,
-                      scrollBeyondLastLine: false,
-                    }}
-                  />
-                </div>
-              </Panel>
-            </PanelGroup>
-          </Panel>
+                <Panel defaultSize={40} minSize={10}>
+                  <div ref={editorContainerRef} className="h-full">
+                    <Editor
+                      height="100%"
+                      defaultLanguage="sql"
+                      theme="vs-dark"
+                      value={sqlContent}
+                      onChange={handleEditorChange}
+                      options={{
+                        minimap: { enabled: false },
+                        fontSize: 14,
+                        wordWrap: "on",
+                        automaticLayout: true,
+                        scrollBeyondLastLine: false,
+                      }}
+                    />
+                  </div>
+                </Panel>
+              </PanelGroup>
+            </Panel>
 
-          <PanelResizeHandle className="w-1 bg-border hover:bg-primary transition-colors" />
+            <PanelResizeHandle className="w-1 bg-border hover:bg-primary transition-colors" />
 
-          <Panel defaultSize={sizes[2]} minSize={15}>
-            <div className="h-full">
-              <ChatSidebar />
-            </div>
-          </Panel>
-        </PanelGroup>
+            <Panel defaultSize={sizes[2]} minSize={15}>
+              <div className="h-full">
+                <ChatSidebar />
+              </div>
+            </Panel>
+          </PanelGroup>
+        </div>
       </div>
     </ThemeProvider>
   );

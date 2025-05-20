@@ -9,6 +9,53 @@ import {
   type Theme as GlideTheme,
 } from "@glideapps/glide-data-grid";
 import { useTheme } from "@/components/theme-provider";
+import { useCallback, useMemo } from "react";
+
+const dataEditorBaseTheme: GlideTheme = {
+  accentColor: "#4F5DFF",
+  accentFg: "#FFFFFF",
+  accentLight: "rgba(62, 116, 253, 0.1)",
+
+  textDark: "#313139",
+  textMedium: "#737383",
+  textLight: "#B2B2C0",
+  textBubble: "#313139",
+
+  bgIconHeader: "#737383",
+  fgIconHeader: "#FFFFFF",
+  textHeader: "#313139",
+  textGroupHeader: "#313139BB",
+  textHeaderSelected: "#FFFFFF",
+
+  bgCell: "#FFFFFF",
+  bgCellMedium: "#FAFAFB",
+  bgHeader: "#F7F7F8",
+  bgHeaderHasFocus: "#E9E9EB",
+  bgHeaderHovered: "#EFEFF1",
+
+  bgBubble: "#EDEDF3",
+  bgBubbleSelected: "#FFFFFF",
+
+  bgSearchResult: "#fff9e3",
+
+  borderColor: "rgba(115, 116, 131, 0.16)",
+  drilldownBorder: "rgba(0, 0, 0, 0)",
+
+  linkColor: "#353fb5",
+
+  cellHorizontalPadding: 8,
+  cellVerticalPadding: 3,
+
+  headerIconSize: 18,
+
+  headerFontStyle: "600 13px",
+  baseFontStyle: "13px",
+  markerFontStyle: "9px",
+  fontFamily:
+    "Inter, Roboto, -apple-system, BlinkMacSystemFont, avenir next, avenir, segoe ui, helvetica neue, helvetica, Ubuntu, noto, arial, sans-serif",
+  editorFontSize: "13px",
+  lineHeight: 1.4, //unitless scaler depends on your font
+};
 
 const data = [
   {
@@ -31,33 +78,9 @@ const data = [
 
 // Grid columns may also provide icon, overlayIcon, menu, style, and theme overrides
 const columns: GridColumn[] = [
-  { title: "First Name", width: 100 },
-  { title: "Last Name", width: 100 },
+  { title: "First Name", width: 200 },
+  { title: "Last Name", width: 200 },
 ];
-
-// If fetching data is slow you can use the DataEditor ref to send updates for cells
-// once data is loaded.
-function getData([col, row]: Item): GridCell {
-  const person = data[row];
-
-  if (col === 0) {
-    return {
-      kind: GridCellKind.Text,
-      data: person.firstName,
-      allowOverlay: false,
-      displayData: person.firstName,
-    };
-  } else if (col === 1) {
-    return {
-      kind: GridCellKind.Text,
-      data: person.lastName,
-      allowOverlay: false,
-      displayData: person.lastName,
-    };
-  } else {
-    throw new Error();
-  }
-}
 
 export const EditableTable = () => {
   const { theme } = useTheme();
@@ -69,53 +92,70 @@ export const EditableTable = () => {
         window.matchMedia("(prefers-color-scheme: dark)").matches);
 
     return {
-      accentColor: isDark ? "var(--accent)" : "var(--accent)",
-      accentFg: isDark
-        ? "var(--accent-foreground)"
-        : "var(--accent-foreground)",
-      accentLight: isDark ? "var(--muted)" : "var(--muted)",
-      textDark: isDark ? "var(--foreground)" : "var(--foreground)",
-      textMedium: isDark
-        ? "var(--muted-foreground)"
-        : "var(--muted-foreground)",
-      textLight: isDark ? "var(--muted-foreground)" : "var(--muted-foreground)",
-      textBubble: isDark ? "var(--card)" : "var(--card)",
-      bgIconHeader: isDark ? "var(--card)" : "var(--card)",
-      fgIconHeader: isDark ? "var(--foreground)" : "var(--foreground)",
-      textHeader: isDark ? "var(--foreground)" : "var(--foreground)",
-      textGroupHeader: isDark
-        ? "var(--muted-foreground)"
-        : "var(--muted-foreground)",
-      textHeaderSelected: isDark ? "var(--foreground)" : "var(--foreground)",
-      bgCell: isDark ? "var(--card)" : "var(--background)",
-      bgCellMedium: isDark ? "var(--muted)" : "var(--muted)",
-      bgHeader: isDark ? "var(--card)" : "var(--background)",
-      bgHeaderHasFocus: isDark ? "var(--card)" : "var(--background)",
-      bgHeaderHovered: isDark ? "var(--muted)" : "var(--muted)",
-      bgBubble: isDark ? "var(--card)" : "var(--card)",
-      bgBubbleSelected: isDark ? "var(--muted)" : "var(--muted)",
-      bgSearchResult: isDark ? "var(--muted)" : "var(--muted)",
-      borderColor: isDark ? "var(--border)" : "var(--border)",
-      drilldownBorder: isDark ? "var(--border)" : "var(--border)",
-      linkColor: isDark ? "var(--accent)" : "var(--accent)",
-      cellHorizontalPadding: 10,
-      cellVerticalPadding: 10,
-      headerFontStyle: "bold",
-      headerIconSize: 16,
-      baseFontStyle: "normal",
-      markerFontStyle: "normal",
-      fontFamily: "var(--font-sans)",
-      editorFontSize: "14px",
-      lineHeight: 1.5,
+      ...dataEditorBaseTheme,
+      // Accent colors
+      accentColor: isDark
+        ? "oklch(0.274 0.006 286.033)"
+        : "oklch(0.967 0.001 286.375)",
+      accentLight: isDark
+        ? "oklch(0.274 0.006 286.033)"
+        : "oklch(0.967 0.001 286.375)",
+
+      // Text colors
+      textDark: isDark ? "oklch(0.985 0 0)" : "oklch(0.141 0.005 285.823)",
+
+      // Header colors
+      textHeader: isDark ? "oklch(0.985 0 0)" : "oklch(0.141 0.005 285.823)",
+      textHeaderSelected: isDark
+        ? "oklch(0.985 0 0)"
+        : "oklch(0.141 0.005 285.823)",
+
+      // Cell and background colors
+      bgCell: isDark ? "#171717" : "#fafafa",
+      bgHeader: isDark ? "oklch(0.21 0.006 285.885)" : "oklch(1 0 0)",
+      bgHeaderHasFocus: isDark ? "oklch(0.21 0.006 285.885)" : "oklch(1 0 0)",
+      bgHeaderHovered: isDark
+        ? "oklch(0.274 0.006 286.033)"
+        : "oklch(0.967 0.001 286.375)",
+
+      // Border and link colors
+      borderColor: isDark ? "oklch(1 0 0 / 10%)" : "oklch(0.92 0.004 286.32)",
     };
   };
+
+  const dataIndexes = useMemo(() => {
+    return data.length > 0 ? Object.keys(data[0]) : [];
+  }, []);
+
+  const getCellContent = useCallback(
+    (cell: Item): GridCell => {
+      const [col, row] = cell;
+      const dataRow: { [key: string]: string } = data[row];
+      const columnName: string = dataIndexes[col];
+      const cellValue: string = dataRow[columnName];
+
+      const gridCell = {
+        kind: GridCellKind.Text,
+        displayData: cellValue,
+        data: cellValue,
+      };
+
+      return gridCell as GridCell;
+    },
+    [dataIndexes]
+  );
 
   return (
     <DataEditor
       columns={columns}
-      getCellContent={getData}
+      getCellContent={getCellContent}
       rows={data.length}
-      // theme={getGlideTheme()}
+      theme={getGlideTheme()}
+      width="100%"
+      height="100%"
+      smoothScrollX
+      smoothScrollY
+      rowHeight={30}
     />
   );
 };
