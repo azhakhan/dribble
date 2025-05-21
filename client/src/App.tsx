@@ -61,7 +61,7 @@ function TopMenu() {
   return (
     <div className="h-8 border-b flex items-center justify-between px-3 bg-background">
       <div className="flex items-center gap-2">
-        <img src={logo} alt="DBIDE" className="w-5 h-5" />
+        <img src={logo} alt="Dribble IDE" className="w-5 h-5" />
       </div>
       <div className="flex items-center gap-2">
         <ModeToggle />

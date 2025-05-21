@@ -1,6 +1,6 @@
 version: "3.9"
 services:
-  dbide-server:
+  dribble-server:
     build:
       context: ./server
       dockerfile: Dockerfile
@@ -17,9 +17,9 @@ services:
       - ENVIRONMENT=development
       - WATCHFILES_FORCE_POLLING=1
     networks:
-      - dbide-network
+      - dribble-network
 
-  dbide-client:
+  dribble-client:
     build:
       context: ./client
       dockerfile: Dockerfile
@@ -27,15 +27,15 @@ services:
       - ./client:/app
       - /app/node_modules
     ports:
-      - "5173:5173"
+      - "3000:3000"
     environment:
-      - VITE_API_URL=http://dbide-server:8080
+      - VITE_API_URL=http://dribble-server:8080
       - NODE_ENV=development
     depends_on:
-      - dbide-server
+      - dribble-server
     networks:
-      - dbide-network
+      - dribble-network
 
 networks:
-  dbide-network:
+  dribble-network:
     driver: bridge

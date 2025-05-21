@@ -1,7 +1,7 @@
 [project]
-name = "dbide-server"
+name = "dribble-server"
 version = "0.1.0"
-description = "DBIDE server"
+description = "dribble server"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = ["fastapi[standard]>=0.115.12"]
