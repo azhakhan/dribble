@@ -3,6 +3,7 @@ import { useState, useRef, useEffect } from "react";
 import Editor from "@monaco-editor/react";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 import { ModeToggle } from "@/components/mode-toggle";
+import logo from "@/assets/logo.png";
 
 import { EditableTable } from "@/elements/EditableTable";
 import { FileTree } from "@/elements/FileTree";
@@ -60,7 +61,7 @@ function TopMenu() {
   return (
     <div className="h-8 border-b flex items-center justify-between px-3 bg-background">
       <div className="flex items-center gap-2">
-        <span className="text-xs font-semibold">DBIDE</span>
+        <img src={logo} alt="DBIDE" className="w-5 h-5" />
       </div>
       <div className="flex items-center gap-2">
         <ModeToggle />
