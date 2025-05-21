@@ -1,0 +1,11 @@
+.env
+*.pyc
+*.pyo
+*.pyd
+*.pyw
+*.pyz
+*.pywz
+*.pyzw
+.DS_Store
+*.ipynb
+*.ipynb_checkpoints

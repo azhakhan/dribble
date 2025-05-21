@@ -17,7 +17,7 @@ interface FileNode {
 // Sample file tree data - replace this with your actual data
 const sampleFileTree: FileNode[] = [
   {
-    name: "Database",
+    name: "Postgres",
     type: "folder",
     children: [
       {
@@ -36,7 +36,7 @@ const sampleFileTree: FileNode[] = [
     ],
   },
   {
-    name: "Database",
+    name: "Snowflake",
     type: "folder",
     children: [
       {

@@ -1,0 +1,41 @@
+version: "3.9"
+services:
+  dbide-server:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    volumes:
+      - ./server/app:/app/app:cached
+      - ./server/pyproject.toml:/app/pyproject.toml:cached
+    ports:
+      - "8080:8080"
+    env_file:
+      - .env
+    environment:
+      - IN_DOCKER=1
+      - PYTHONPATH=/app
+      - ENVIRONMENT=development
+      - WATCHFILES_FORCE_POLLING=1
+    networks:
+      - dbide-network
+
+  dbide-client:
+    build:
+      context: ./client
+      dockerfile: Dockerfile
+    volumes:
+      - ./client:/app
+      - /app/node_modules
+    ports:
+      - "5173:5173"
+    environment:
+      - VITE_API_URL=http://dbide-server:8080
+      - NODE_ENV=development
+    depends_on:
+      - dbide-server
+    networks:
+      - dbide-network
+
+networks:
+  dbide-network:
+    driver: bridge
