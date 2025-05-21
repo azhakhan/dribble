@@ -3,8 +3,9 @@ from app.schemas.sources import CreateSourceRequest, UpdateSourceRequest, Delete
 from app.core.db import get_db
 from sqlalchemy.orm import Session
 from app.models import Source
-from app.dependencies import get_current_user, get_current_workspace
+from app.dependencies import get_current_workspace
 from uuid import UUID
+from app.controllers.sources import get_source_schemas
 
 
 router = APIRouter(prefix="/sources", tags=["sources"])
@@ -57,6 +58,17 @@ async def delete_source(
     db.delete(source)
     db.commit()
     return {"message": "Source deleted"}
+
+
+@router.get("/schemas/{source_id}")
+async def get_schemas(
+    source_id: UUID,
+    db: Session = Depends(get_db),
+):
+    source = db.query(Source).filter_by(id=source_id).first()
+    if not source:
+        raise HTTPException(status_code=404, detail="Source not found")
+    return get_source_schemas(source)
 
 
 # get all sources
