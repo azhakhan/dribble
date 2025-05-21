@@ -35,7 +35,7 @@ services:
       - PYTHONPATH=/app
       - ENVIRONMENT=development
       - WATCHFILES_FORCE_POLLING=1
-      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/dribble
+      - DATABASE_URL=postgresql+psycopg://postgres:postgres@postgres:5432/dribble
     networks:
       - dribble-network
     depends_on:

@@ -1,14 +1,18 @@
 from fastapi import FastAPI
-import os
-
-app = FastAPI()
-
-
-@app.get("/")
-def read_root():
-    return {"Hello": "World"}
+from contextlib import asynccontextmanager
+from app.routes.sources import router as sources_router
+from app.routes.query import router as query_router
+from app.controllers.start import ensure_user_and_workspace
 
 
-@app.get("/env")
-def read_env():
-    return {"AZ_KEY": os.getenv("AZ_KEY"), "AZ_SECRET": "still works!"}
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    ensure_user_and_workspace()
+    yield
+
+
+app = FastAPI(lifespan=lifespan)
+
+
+app.include_router(sources_router)
+app.include_router(query_router)
