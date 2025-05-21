@@ -1,5 +1,24 @@
 version: "3.9"
 services:
+  postgres:
+    image: postgres:16-alpine
+    restart: always
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=dribble
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - dribble-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
   dribble-server:
     build:
       context: ./server
@@ -8,7 +27,7 @@ services:
       - ./server/app:/app/app:cached
       - ./server/pyproject.toml:/app/pyproject.toml:cached
     ports:
-      - "8080:8080"
+      - "8000:8000"
     env_file:
       - .env
     environment:
@@ -16,8 +35,12 @@ services:
       - PYTHONPATH=/app
       - ENVIRONMENT=development
       - WATCHFILES_FORCE_POLLING=1
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/dribble
     networks:
       - dribble-network
+    depends_on:
+      postgres:
+        condition: service_healthy
 
   dribble-client:
     build:
@@ -29,7 +52,7 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - VITE_API_URL=http://dribble-server:8080
+      - VITE_API_URL=http://dribble-server:8000
       - NODE_ENV=development
     depends_on:
       - dribble-server
@@ -39,3 +62,6 @@ services:
 networks:
   dribble-network:
     driver: bridge
+
+volumes:
+  postgres_data:
