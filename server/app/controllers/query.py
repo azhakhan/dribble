@@ -1,18 +1,30 @@
-from models import Source
+from app.models import Source
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session
-from schemas.query import QueryRequest
+from app.schemas.sources import PostgresCreds
+from sqlalchemy import URL
+from sqlalchemy.exc import OperationalError
 
 
-def query_controller(request: QueryRequest, db: Session):
-    # get source from request
-    source = db.query(Source).filter_by(id=request.database_id).first()
-    if not source:
-        raise Exception("Source not found")
+def execute_query(source: Source, query: str):
 
-    # connect to db
     if source.dbtype == "postgres":
-        engine = create_engine(source.creds)
-        with engine.connect() as conn:
-            result = conn.execute(text(request.query))
-            return result.fetchall()
+        creds = PostgresCreds(**source.creds)
+        url = URL.create(
+            "postgresql+psycopg",
+            username=creds.user,
+            password=creds.password,
+            host=creds.host,
+            port=creds.port,
+            database=creds.dbname,
+        )
+        engine = create_engine(url, connect_args={"connect_timeout": 5})  # 5 second timeout
+        try:
+            with engine.connect() as conn:
+                result = conn.execute(text(query))
+                rows = result.fetchall()
+                return [dict(row._mapping) for row in rows]
+        except OperationalError as e:
+            raise Exception(f"Error executing query: {e}")
+    else:
+        raise Exception("Unsupported database type")
