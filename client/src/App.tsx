@@ -75,6 +75,8 @@ function App() {
     sourceId: string;
     tableName: string;
   } | null>(null);
+  const [queryResults, setQueryResults] = useState<object[] | null>(null);
+  const [queryRunning, setQueryRunning] = useState(false);
 
   // Query for all sources
   const {
@@ -131,6 +133,15 @@ function App() {
   // Handle table double-click
   const handleTableDoubleClick = (sourceId: string, tableName: string) => {
     setSelectedTableData({ sourceId, tableName });
+    // Clear query results when selecting a table
+    setQueryResults(null);
+  };
+
+  // Handle SQL query execution
+  const handleQueryExecution = (results: object[]) => {
+    setQueryResults(results);
+    // Clear table selection since we're viewing custom query results
+    setSelectedTableData(null);
   };
 
   return (
@@ -183,7 +194,11 @@ function App() {
                 autoSaveId="editor-layout"
               >
                 <Panel defaultSize={60} minSize={30}>
-                  <TableDataDisplay tableData={selectedTableData} />
+                  <TableDataDisplay
+                    tableData={selectedTableData}
+                    queryResults={queryResults}
+                    isQueryRunning={queryRunning}
+                  />
                 </Panel>
 
                 <PanelResizeHandle className="h-1 bg-border hover:bg-primary transition-colors" />
@@ -193,6 +208,8 @@ function App() {
                     selectedSource={selectedSource}
                     schemasLoading={schemasLoading}
                     schemasError={schemasError}
+                    onQueryExecution={handleQueryExecution}
+                    onQueryStatusChange={setQueryRunning}
                   />
                 </Panel>
               </PanelGroup>
