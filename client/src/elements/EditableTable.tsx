@@ -66,20 +66,92 @@ const defaultColumns: GridColumn[] = [
 interface EditableTableProps {
   data?: Record<string, unknown>[];
   isLoading?: boolean;
+  tableId?: string; // Unique identifier for this table
+  source?: string; // Optional source identifier
+  schema?: string; // Optional schema identifier
 }
+
+// Helper to generate storage key
+const getStorageKey = (tableId?: string, source?: string, schema?: string) => {
+  const parts = [source, schema, tableId].filter(Boolean);
+  return parts.length > 0 ? `table_columns_${parts.join("_")}` : null;
+};
+
+// Helper to load column sizes from localStorage
+const loadColumnSizes = (storageKey: string | null) => {
+  if (!storageKey) return {};
+  try {
+    const saved = localStorage.getItem(storageKey);
+    return saved ? JSON.parse(saved) : {};
+  } catch (e) {
+    console.error("Failed to load column sizes:", e);
+    return {};
+  }
+};
+
+// Helper to save column sizes to localStorage
+const saveColumnSizes = (
+  storageKey: string | null,
+  sizes: Record<string, number>
+) => {
+  if (!storageKey) return;
+  try {
+    localStorage.setItem(storageKey, JSON.stringify(sizes));
+  } catch (e) {
+    console.error("Failed to save column sizes:", e);
+  }
+};
 
 export const EditableTable = ({
   data: queryData,
   isLoading,
+  tableId = "default",
+  source,
+  schema,
 }: EditableTableProps) => {
   const { theme } = useTheme();
   const initializedRef = useRef(false);
+  const storageKey = useMemo(
+    () => getStorageKey(tableId, source, schema),
+    [tableId, source, schema]
+  );
 
   // Use query data if available, otherwise use default data
   const data = useMemo(() => queryData || [], [queryData]);
 
   // State for managing column sizes
   const [columnSizes, setColumnSizes] = useState<Record<string, number>>({});
+
+  // Load saved column sizes from localStorage on mount
+  useEffect(() => {
+    if (!initializedRef.current && storageKey) {
+      const savedSizes = loadColumnSizes(storageKey);
+      setColumnSizes(savedSizes);
+      initializedRef.current = true;
+    }
+  }, [storageKey]);
+
+  // Initialize column sizes when data changes
+  useEffect(() => {
+    if (data.length > 0 && initializedRef.current) {
+      const keys = Object.keys(data[0]);
+      const newSizes = { ...columnSizes };
+      let changed = false;
+
+      // Add any missing columns with default width
+      keys.forEach((key) => {
+        if (newSizes[key] === undefined) {
+          newSizes[key] = 200;
+          changed = true;
+        }
+      });
+
+      if (changed) {
+        setColumnSizes(newSizes);
+        if (storageKey) saveColumnSizes(storageKey, newSizes);
+      }
+    }
+  }, [data, columnSizes, storageKey]);
 
   const getGlideTheme = (): GlideTheme => {
     const isDark =
@@ -129,18 +201,6 @@ export const EditableTable = ({
       id: key,
     }));
   }, [data, columnSizes]);
-
-  // Initialize column sizes when data changes
-  useEffect(() => {
-    if (data.length > 0 && !initializedRef.current) {
-      initializedRef.current = true;
-      const initialSizes: Record<string, number> = {};
-      Object.keys(data[0]).forEach((key) => {
-        initialSizes[key] = 200;
-      });
-      setColumnSizes(initialSizes);
-    }
-  }, [data]);
 
   const dataIndexes = useMemo(() => {
     return data.length > 0 ? Object.keys(data[0]) : [];
@@ -198,10 +258,17 @@ export const EditableTable = ({
     console.log("Column resized:", column.title, newSize, colIndex);
 
     // Update the column size in state
-    setColumnSizes((prev) => ({
-      ...prev,
+    const newColumnSizes = {
+      ...columnSizes,
       [column.title]: newSize,
-    }));
+    };
+
+    setColumnSizes(newColumnSizes);
+
+    // Save to localStorage
+    if (storageKey) {
+      saveColumnSizes(storageKey, newColumnSizes);
+    }
   };
 
   if (isLoading) {
