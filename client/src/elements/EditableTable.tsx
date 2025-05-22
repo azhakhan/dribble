@@ -9,7 +9,7 @@ import {
   type Theme as GlideTheme,
 } from "@glideapps/glide-data-grid";
 import { useTheme } from "@/components/theme-provider";
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, useState, useEffect, useRef } from "react";
 
 const dataEditorBaseTheme: GlideTheme = {
   accentColor: "#4F5DFF",
@@ -73,9 +73,13 @@ export const EditableTable = ({
   isLoading,
 }: EditableTableProps) => {
   const { theme } = useTheme();
+  const initializedRef = useRef(false);
 
   // Use query data if available, otherwise use default data
   const data = useMemo(() => queryData || [], [queryData]);
+
+  // State for managing column sizes
+  const [columnSizes, setColumnSizes] = useState<Record<string, number>>({});
 
   const getGlideTheme = (): GlideTheme => {
     const isDark =
@@ -121,8 +125,21 @@ export const EditableTable = ({
 
     return Object.keys(data[0]).map((key) => ({
       title: key,
-      width: 200,
+      width: columnSizes[key] || 200, // Use stored width or default
+      id: key,
     }));
+  }, [data, columnSizes]);
+
+  // Initialize column sizes when data changes
+  useEffect(() => {
+    if (data.length > 0 && !initializedRef.current) {
+      initializedRef.current = true;
+      const initialSizes: Record<string, number> = {};
+      Object.keys(data[0]).forEach((key) => {
+        initialSizes[key] = 200;
+      });
+      setColumnSizes(initialSizes);
+    }
   }, [data]);
 
   const dataIndexes = useMemo(() => {
@@ -167,10 +184,25 @@ export const EditableTable = ({
         kind: GridCellKind.Text,
         displayData: cellValue,
         data: cellValue,
+        copyData: cellValue,
       } as GridCell;
     },
     [dataIndexes, data]
   );
+
+  const handleColumnResize = (
+    column: GridColumn,
+    newSize: number,
+    colIndex: number
+  ) => {
+    console.log("Column resized:", column.title, newSize, colIndex);
+
+    // Update the column size in state
+    setColumnSizes((prev) => ({
+      ...prev,
+      [column.title]: newSize,
+    }));
+  };
 
   if (isLoading) {
     return (
@@ -191,6 +223,7 @@ export const EditableTable = ({
       smoothScrollX
       smoothScrollY
       rowHeight={30}
+      onColumnResize={handleColumnResize}
     />
   );
 };
