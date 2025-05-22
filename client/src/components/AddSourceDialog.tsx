@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { PlusCircle } from "lucide-react";
+import { PlusCircle, Loader2 } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -13,6 +13,7 @@ import { createSource, testSource } from "@/lib/api";
 import type { PostgresCreds, MysqlCreds, SqliteCreds, CreateSourceRequest } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 
 interface AddSourceDialogProps {
   className?: string;
@@ -22,6 +23,7 @@ interface AddSourceDialogProps {
 export const AddSourceDialog = ({ className, onSourceAdded }: AddSourceDialogProps) => {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [testing, setTesting] = useState(false);
   const [sourceType, setSourceType] = useState<"postgres" | "mysql" | "sqlite" | "">("");
   const [sourceName, setSourceName] = useState("");
   const [formError, setFormError] = useState("");
@@ -130,6 +132,7 @@ export const AddSourceDialog = ({ className, onSourceAdded }: AddSourceDialogPro
 
       setOpen(false);
       resetForm();
+      toast.success(`Source "${sourceName}" created successfully`);
 
       if (onSourceAdded) {
         onSourceAdded();
@@ -137,6 +140,7 @@ export const AddSourceDialog = ({ className, onSourceAdded }: AddSourceDialogPro
     } catch (error) {
       console.error("Failed to create source:", error);
       setFormError("Failed to create source. Please check your connection details.");
+      toast.error("Failed to create source");
     } finally {
       setLoading(false);
     }
@@ -160,25 +164,28 @@ export const AddSourceDialog = ({ className, onSourceAdded }: AddSourceDialogPro
     }
 
     try {
-      setLoading(true);
+      setTesting(true);
       setFormError("");
 
       const sourceData: CreateSourceRequest = {
-        name: sourceName,
+        name: sourceName || "Test Connection",
         dbtype: sourceType,
         creds: credentials!
       };
 
       await testSource(sourceData);
 
-      setFormError("Connection successful");
+      toast.success("Connection test successful");
     } catch (error) {
       console.error("Failed to test source:", error);
-      setFormError("Failed to test source. Please check your connection details.");
+      toast.error("Connection test failed. Please check your connection details.");
     } finally {
-      setLoading(false);
+      setTesting(false);
     }
   };
+
+  // Helper for form field disabled state
+  const isFormDisabled = loading || testing;
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -211,6 +218,7 @@ export const AddSourceDialog = ({ className, onSourceAdded }: AddSourceDialogPro
               value={sourceName}
               onChange={(e) => setSourceName(e.target.value)}
               placeholder="My Database"
+              disabled={isFormDisabled}
             />
           </div>
 
@@ -225,6 +233,7 @@ export const AddSourceDialog = ({ className, onSourceAdded }: AddSourceDialogPro
               onChange={(e) =>
                 setSourceType(e.target.value as "postgres" | "mysql" | "sqlite" | "")
               }
+              disabled={isFormDisabled}
             >
               <option value="">Select database type</option>
               <option value="postgres">PostgreSQL</option>
@@ -250,6 +259,7 @@ export const AddSourceDialog = ({ className, onSourceAdded }: AddSourceDialogPro
                     })
                   }
                   placeholder="localhost"
+                  disabled={isFormDisabled}
                 />
               </div>
               <div className="grid grid-cols-4 items-center gap-4">
@@ -267,6 +277,7 @@ export const AddSourceDialog = ({ className, onSourceAdded }: AddSourceDialogPro
                       port: parseInt(e.target.value, 10) || 5432
                     })
                   }
+                  disabled={isFormDisabled}
                 />
               </div>
               <div className="grid grid-cols-4 items-center gap-4">
@@ -284,6 +295,7 @@ export const AddSourceDialog = ({ className, onSourceAdded }: AddSourceDialogPro
                     })
                   }
                   placeholder="postgres"
+                  disabled={isFormDisabled}
                 />
               </div>
               <div className="grid grid-cols-4 items-center gap-4">
@@ -301,6 +313,7 @@ export const AddSourceDialog = ({ className, onSourceAdded }: AddSourceDialogPro
                       password: e.target.value
                     })
                   }
+                  disabled={isFormDisabled}
                 />
               </div>
               <div className="grid grid-cols-4 items-center gap-4">
@@ -317,6 +330,7 @@ export const AddSourceDialog = ({ className, onSourceAdded }: AddSourceDialogPro
                       dbname: e.target.value
                     })
                   }
+                  disabled={isFormDisabled}
                 />
               </div>
             </>
@@ -334,6 +348,7 @@ export const AddSourceDialog = ({ className, onSourceAdded }: AddSourceDialogPro
                   value={mysqlConfig.host}
                   onChange={(e) => setMysqlConfig({ ...mysqlConfig, host: e.target.value })}
                   placeholder="localhost"
+                  disabled={isFormDisabled}
                 />
               </div>
               <div className="grid grid-cols-4 items-center gap-4">
@@ -351,6 +366,7 @@ export const AddSourceDialog = ({ className, onSourceAdded }: AddSourceDialogPro
                       port: parseInt(e.target.value, 10) || 3306
                     })
                   }
+                  disabled={isFormDisabled}
                 />
               </div>
               <div className="grid grid-cols-4 items-center gap-4">
@@ -363,6 +379,7 @@ export const AddSourceDialog = ({ className, onSourceAdded }: AddSourceDialogPro
                   value={mysqlConfig.user}
                   onChange={(e) => setMysqlConfig({ ...mysqlConfig, user: e.target.value })}
                   placeholder="root"
+                  disabled={isFormDisabled}
                 />
               </div>
               <div className="grid grid-cols-4 items-center gap-4">
@@ -375,6 +392,7 @@ export const AddSourceDialog = ({ className, onSourceAdded }: AddSourceDialogPro
                   className="col-span-3 flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                   value={mysqlConfig.password}
                   onChange={(e) => setMysqlConfig({ ...mysqlConfig, password: e.target.value })}
+                  disabled={isFormDisabled}
                 />
               </div>
               <div className="grid grid-cols-4 items-center gap-4">
@@ -386,6 +404,7 @@ export const AddSourceDialog = ({ className, onSourceAdded }: AddSourceDialogPro
                   className="col-span-3 flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                   value={mysqlConfig.dbname}
                   onChange={(e) => setMysqlConfig({ ...mysqlConfig, dbname: e.target.value })}
+                  disabled={isFormDisabled}
                 />
               </div>
             </>
@@ -402,6 +421,7 @@ export const AddSourceDialog = ({ className, onSourceAdded }: AddSourceDialogPro
                 value={sqliteConfig.path}
                 onChange={(e) => setSquliteConfig({ path: e.target.value })}
                 placeholder="/path/to/database.db"
+                disabled={isFormDisabled}
               />
             </div>
           )}
@@ -416,14 +436,21 @@ export const AddSourceDialog = ({ className, onSourceAdded }: AddSourceDialogPro
               setOpen(false);
               resetForm();
             }}
-            disabled={loading}
+            disabled={isFormDisabled}
           >
             Cancel
           </Button>
-          <Button onClick={handleTest} disabled={loading}>
-            Test Connection
+          <Button onClick={handleTest} disabled={isFormDisabled}>
+            {testing ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Testing...
+              </>
+            ) : (
+              "Test Connection"
+            )}
           </Button>
-          <Button onClick={handleSave} disabled={loading}>
+          <Button onClick={handleSave} disabled={isFormDisabled}>
             {loading ? "Saving..." : "Save"}
           </Button>
         </DialogFooter>
