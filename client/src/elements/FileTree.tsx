@@ -9,6 +9,7 @@ import {
   Columns,
 } from "lucide-react";
 import type { Source } from "@/lib/api";
+import { PostgresIcon, MySQLIcon, SQLiteIcon } from "./icons";
 
 interface FileNode {
   name: string;
@@ -89,7 +90,29 @@ const FileTreeItem = ({
     if (isFolder) {
       return <Folder className="h-4 w-4" />;
     } else if (isSource) {
-      return <Database className="h-4 w-4" />;
+      // Use SVG components with constrained size
+      const dbType = node.dbtype?.toLowerCase();
+      if (dbType === "postgres") {
+        return (
+          <div className="h-4 w-4 flex items-center justify-center">
+            <PostgresIcon />
+          </div>
+        );
+      } else if (dbType === "mysql") {
+        return (
+          <div className="h-4 w-4 flex items-center justify-center">
+            <MySQLIcon />
+          </div>
+        );
+      } else if (dbType === "sqlite") {
+        return (
+          <div className="h-4 w-4 flex items-center justify-center">
+            <SQLiteIcon />
+          </div>
+        );
+      } else {
+        return <Database className="h-4 w-4" />;
+      }
     } else if (isSchema) {
       return <Database className="h-4 w-4" />;
     } else if (isTable) {
@@ -161,19 +184,13 @@ export const FileTree = ({
 
 // Helper function to convert sources to file tree nodes
 export const sourcesToFileTreeNodes = (sources: Source[]): FileNode[] => {
-  // Create a "Data Sources" folder node with sources as children
-  return [
-    {
-      name: "Data Sources",
-      type: "folder",
-      children: sources.map((source) => ({
-        name: source.name,
-        type: "source",
-        id: source.id,
-        dbtype: source.dbtype,
-      })),
-    },
-  ];
+  // Return sources directly at the root level
+  return sources.map((source) => ({
+    name: source.name,
+    type: "source",
+    id: source.id,
+    dbtype: source.dbtype,
+  }));
 };
 
 // Helper function to convert schema data to file tree nodes
