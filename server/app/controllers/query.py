@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from app.schemas.sources import PostgresCreds
 from sqlalchemy import URL
 from sqlalchemy.exc import OperationalError
+import binascii
 
 
 def execute_query(source: Source, query: str):
@@ -23,7 +24,18 @@ def execute_query(source: Source, query: str):
             with engine.connect() as conn:
                 result = conn.execute(text(query))
                 rows = result.fetchall()
-                return [dict(row._mapping) for row in rows]
+                processed_rows = []
+                for row in rows:
+                    processed_row = {}
+                    for key, value in row._mapping.items():
+                        # Handle binary data (bytea) by converting to hex string
+                        if isinstance(value, bytes):
+                            hex_value = "0x" + binascii.hexlify(value).decode("ascii")
+                            processed_row[key] = hex_value
+                        else:
+                            processed_row[key] = value
+                    processed_rows.append(processed_row)
+                return processed_rows
         except OperationalError as e:
             raise Exception(f"Error executing query: {e}")
     else:
