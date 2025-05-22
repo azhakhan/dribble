@@ -57,26 +57,6 @@ const dataEditorBaseTheme: GlideTheme = {
   lineHeight: 1.4, //unitless scaler depends on your font
 };
 
-// Default data for when no query results are available
-const defaultData: Record<string, unknown>[] = [
-  {
-    firstName: "John",
-    lastName: "Doe",
-  },
-  {
-    firstName: "Maria",
-    lastName: "Garcia",
-  },
-  {
-    firstName: "Nancy",
-    lastName: "Jones",
-  },
-  {
-    firstName: "James",
-    lastName: "Smith",
-  },
-];
-
 // Default columns
 const defaultColumns: GridColumn[] = [
   { title: "First Name", width: 200 },
@@ -95,7 +75,7 @@ export const EditableTable = ({
   const { theme } = useTheme();
 
   // Use query data if available, otherwise use default data
-  const data = useMemo(() => queryData || defaultData, [queryData]);
+  const data = useMemo(() => queryData || [], [queryData]);
 
   const getGlideTheme = (): GlideTheme => {
     const isDark =

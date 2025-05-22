@@ -5,13 +5,13 @@ import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 import { ModeToggle } from "@/components/mode-toggle";
 import logo from "@/assets/logo.png";
 
+import { FileTree } from "@/elements/FileTree";
 import {
-  FileTree,
   sourcesToFileTreeNodes,
   schemaToFileTreeNodes,
   type FileNode,
-} from "@/elements/FileTree";
-import { TableDataDisplay } from "@/components/TableDataDisplay";
+} from "@/lib/fileTreeUtils";
+import { TableDataDisplay } from "@/elements/TableDataDisplay";
 import { ChatSidebar } from "@/elements/ChatSidebar";
 import { useSourcesQuery } from "@/hooks/useSourcesQuery";
 import { useSourceSchemasQuery } from "@/hooks/useSourceSchemasQuery";
