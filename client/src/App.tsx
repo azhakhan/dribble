@@ -1,6 +1,5 @@
 import { ThemeProvider } from "@/components/theme-provider";
-import { useState, useRef, useEffect } from "react";
-import Editor from "@monaco-editor/react";
+import { useState, useEffect } from "react";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 import { ModeToggle } from "@/components/mode-toggle";
 import logo from "@/assets/logo.png";
@@ -13,6 +12,7 @@ import {
 } from "@/lib/fileTreeUtils";
 import { TableDataDisplay } from "@/elements/TableDataDisplay";
 import { ChatSidebar } from "@/elements/ChatSidebar";
+import { Editor } from "@/elements/Editor";
 import { useSourcesQuery } from "@/hooks/useSourcesQuery";
 import { useSourceSchemasQuery } from "@/hooks/useSourceSchemasQuery";
 import type { Source } from "@/lib/api";
@@ -63,10 +63,6 @@ function TopMenu() {
 }
 
 function App() {
-  const editorContainerRef = useRef<HTMLDivElement>(null);
-  const [sqlContent, setSqlContent] = useState<string>(
-    "-- Write your SQL query here\n",
-  );
   const [sizes, setSizes] = useState(() => {
     const savedSizes = localStorage.getItem("panel-sizes");
     return savedSizes ? JSON.parse(savedSizes) : [20, 60, 20];
@@ -137,12 +133,6 @@ function App() {
     setSelectedTableData({ sourceId, tableName });
   };
 
-  const handleEditorChange = (value: string | undefined) => {
-    if (value !== undefined) {
-      setSqlContent(value);
-    }
-  };
-
   return (
     <ThemeProvider defaultTheme="dark" storageKey="vite-ui-theme">
       <div className="h-screen flex flex-col">
@@ -199,22 +189,11 @@ function App() {
                 <PanelResizeHandle className="h-1 bg-border hover:bg-primary transition-colors" />
 
                 <Panel defaultSize={40} minSize={10}>
-                  <div ref={editorContainerRef} className="h-full">
-                    <Editor
-                      height="100%"
-                      defaultLanguage="sql"
-                      theme="vs-dark"
-                      value={sqlContent}
-                      onChange={handleEditorChange}
-                      options={{
-                        minimap: { enabled: false },
-                        fontSize: 14,
-                        wordWrap: "on",
-                        automaticLayout: true,
-                        scrollBeyondLastLine: false,
-                      }}
-                    />
-                  </div>
+                  <Editor
+                    selectedSource={selectedSource}
+                    schemasLoading={schemasLoading}
+                    schemasError={schemasError}
+                  />
                 </Panel>
               </PanelGroup>
             </Panel>
