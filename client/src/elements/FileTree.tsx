@@ -10,6 +10,7 @@ import {
   Loader,
 } from "lucide-react";
 import { PostgresIcon, MySQLIcon, SQLiteIcon } from "./icons";
+import { getColumnTypeIcon } from "./ColumnTypeIcons";
 import type { FileNode } from "@/lib/fileTreeUtils";
 
 interface FileTreeProps {
@@ -122,6 +123,10 @@ const FileTreeItem = ({
       // Both tables and views are "table" type
       return <Table className="h-4 w-4" strokeWidth={1} />;
     } else if (isColumn) {
+      // If it's a column, use the column type icon instead of the generic Columns icon
+      if (node.dataType) {
+        return getColumnTypeIcon(node.dataType);
+      }
       return <Columns className="h-4 w-4" strokeWidth={1} />;
     }
     return <File className="h-4 w-4" strokeWidth={1} />;

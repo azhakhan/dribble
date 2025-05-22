@@ -85,7 +85,7 @@ export const schemaToFileTreeNodes = (
         if (table.columns && table.columns.length > 0) {
           table.columns.forEach((column: SchemaColumn) => {
             tableNode.children?.push({
-              name: `${column.name} (${column.type})`,
+              name: column.name,
               type: "column",
               dataType: column.type,
               nullable: column.nullable,
@@ -123,7 +123,7 @@ export const schemaToFileTreeNodes = (
         if (view.columns && view.columns.length > 0) {
           view.columns.forEach((column: SchemaColumn) => {
             viewNode.children?.push({
-              name: `${column.name} (${column.type})`,
+              name: column.name,
               type: "column",
               dataType: column.type,
               nullable: column.nullable,
