@@ -7,7 +7,7 @@ import {
   Database,
   Table,
   Columns,
-  Loader,
+  Loader2,
   PlusCircle
 } from "lucide-react";
 import { PostgresIcon, MySQLIcon, SQLiteIcon } from "./icons";
@@ -96,7 +96,7 @@ const FileTreeItem = ({
     } else if (isSource) {
       // Show loading spinner if this source is being loaded
       if (isLoading) {
-        return <Loader className="h-4 w-4 animate-spin" strokeWidth={1} />;
+        return <Loader2 className="h-4 w-4 animate-spin" strokeWidth={1} />;
       }
 
       // Use SVG components with constrained size
