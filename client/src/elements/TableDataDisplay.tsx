@@ -12,7 +12,7 @@ export const TableDataDisplay = ({ tableData }: TableDataDisplayProps) => {
   // Fetch table data when a table is selected
   const { data: queryResults, isLoading } = useQueryQuery(
     tableData?.sourceId || "",
-    tableData ? `SELECT * FROM ${tableData.tableName} LIMIT 100` : "",
+    tableData ? `SELECT * FROM ${tableData.tableName} LIMIT 101` : "",
     { enabled: !!tableData }
   );
 

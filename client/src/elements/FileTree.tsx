@@ -30,6 +30,8 @@ const FileTreeItem = ({
   onSourceSelect,
   onTableDoubleClick,
   loadingSourceId,
+  selectedNodeId,
+  setSelectedNodeId,
 }: {
   node: FileNode;
   level?: number;
@@ -40,6 +42,8 @@ const FileTreeItem = ({
   }) => void;
   onTableDoubleClick?: (sourceId: string, tableName: string) => void;
   loadingSourceId?: string;
+  selectedNodeId?: string;
+  setSelectedNodeId: (id: string | undefined) => void;
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const isFolder = node.type === "folder";
@@ -49,10 +53,16 @@ const FileTreeItem = ({
   const isColumn = node.type === "column";
   const hasChildren = Boolean(node.children?.length);
   const isLoading = isSource && loadingSourceId === node.id;
+  const isSelected = selectedNodeId === node.id;
 
   // Handle item selection (single click)
   const handleItemClick = (e: React.MouseEvent) => {
     e.stopPropagation();
+
+    // Set this node as selected
+    if (node.id) {
+      setSelectedNodeId(node.id);
+    }
 
     // For all database objects, just select them
     if (isSource && onSourceSelect && node.id) {
@@ -151,7 +161,9 @@ const FileTreeItem = ({
   return (
     <div>
       <div
-        className="flex items-center gap-1 px-2 py-1 hover:bg-accent cursor-pointer select-none"
+        className={`flex items-center gap-1 px-2 py-1 hover:bg-accent cursor-pointer select-none ${
+          isSelected ? "bg-accent" : ""
+        }`}
         style={{ paddingLeft: `${level * 12 + 8}px` }}
         onClick={handleItemClick}
         onDoubleClick={handleDoubleClick}
@@ -174,6 +186,8 @@ const FileTreeItem = ({
                 onSourceSelect={onSourceSelect}
                 onTableDoubleClick={onTableDoubleClick}
                 loadingSourceId={loadingSourceId}
+                selectedNodeId={selectedNodeId}
+                setSelectedNodeId={setSelectedNodeId}
               />
             ))}
           {isSource &&
@@ -198,6 +212,10 @@ export const FileTree = ({
   onTableDoubleClick,
   loadingSourceId,
 }: FileTreeProps) => {
+  const [selectedNodeId, setSelectedNodeId] = useState<string | undefined>(
+    undefined
+  );
+
   return (
     <div className="h-full overflow-auto border-r select-none">
       <div className="p-2 font-semibold border-b">Files</div>
@@ -209,6 +227,8 @@ export const FileTree = ({
             onSourceSelect={onSourceSelect}
             onTableDoubleClick={onTableDoubleClick}
             loadingSourceId={loadingSourceId}
+            selectedNodeId={selectedNodeId}
+            setSelectedNodeId={setSelectedNodeId}
           />
         ))}
       </div>
