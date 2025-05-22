@@ -9,12 +9,36 @@ import {
   FileTree,
   sourcesToFileTreeNodes,
   schemaToFileTreeNodes,
+  type FileNode,
 } from "@/elements/FileTree";
 import { TableDataDisplay } from "@/components/TableDataDisplay";
 import { ChatSidebar } from "@/elements/ChatSidebar";
 import { useSourcesQuery } from "@/hooks/useSourcesQuery";
 import { useSourceSchemasQuery } from "@/hooks/useSourceSchemasQuery";
 import type { Source } from "@/lib/api";
+
+// Interface for schema objects
+interface SchemaColumn {
+  name: string;
+  type: string;
+  nullable: boolean;
+}
+
+interface SchemaTable {
+  columns: SchemaColumn[];
+}
+
+interface SchemaView {
+  columns: SchemaColumn[];
+}
+
+interface SchemaObject {
+  tables: Record<string, SchemaTable>;
+  views: Record<string, SchemaView>;
+}
+
+// Type for the schema map
+type SourceSchemaMap = Record<string, Record<string, SchemaObject>>;
 
 // Sample file tree data as fallback
 const sampleFileTree = [
@@ -50,6 +74,7 @@ function App() {
 
   // State for selected source and table
   const [selectedSource, setSelectedSource] = useState<Source | null>(null);
+  const [sourceSchemaMap, setSourceSchemaMap] = useState<SourceSchemaMap>({});
   const [selectedTableData, setSelectedTableData] = useState<{
     sourceId: string;
     tableName: string;
@@ -69,13 +94,34 @@ function App() {
     error: schemasError,
   } = useSourceSchemasQuery(selectedSource?.id);
 
-  // Build file tree data with both sources and schemas (if selected)
+  // Update schema map when new schema data is loaded
+  useEffect(() => {
+    if (selectedSource?.id && sourceSchemas) {
+      setSourceSchemaMap((prev) => ({
+        ...prev,
+        [selectedSource.id]: sourceSchemas,
+      }));
+    }
+  }, [selectedSource, sourceSchemas]);
+
+  // Build file tree data with sources and their schemas
   let fileTreeData = sources ? sourcesToFileTreeNodes(sources) : sampleFileTree;
 
-  // If we have schema data for the selected source, add it to the file tree
-  if (selectedSource && sourceSchemas) {
-    const schemaNodes = schemaToFileTreeNodes(sourceSchemas, selectedSource.id);
-    fileTreeData = [...fileTreeData, ...schemaNodes];
+  // Add schema children to sources that have loaded schemas
+  if (Object.keys(sourceSchemaMap).length > 0) {
+    fileTreeData = (fileTreeData as FileNode[]).map((node) => {
+      if (node.id && sourceSchemaMap[node.id]) {
+        const schemaNodes = schemaToFileTreeNodes(
+          sourceSchemaMap[node.id],
+          node.id
+        );
+        return {
+          ...node,
+          children: schemaNodes,
+        };
+      }
+      return node;
+    });
   }
 
   useEffect(() => {

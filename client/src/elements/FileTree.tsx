@@ -11,7 +11,7 @@ import {
 import type { Source } from "@/lib/api";
 import { PostgresIcon, MySQLIcon, SQLiteIcon } from "./icons";
 
-interface FileNode {
+export interface FileNode {
   name: string;
   type: "file" | "folder" | "source" | "schema" | "table" | "column";
   id?: string;
@@ -78,12 +78,17 @@ const FileTreeItem = ({
   const handleClick = () => {
     if (isFolder || isSchema || (isTable && hasChildren)) {
       setIsOpen(!isOpen);
-    } else if (isSource && onSourceSelect && node.id) {
-      onSourceSelect({
-        id: node.id,
-        name: node.name,
-        dbtype: node.dbtype || "",
-      });
+    } else if (isSource) {
+      // For source nodes, both toggle open state and trigger source select
+      setIsOpen(!isOpen);
+
+      if (onSourceSelect && node.id) {
+        onSourceSelect({
+          id: node.id,
+          name: node.name,
+          dbtype: node.dbtype || "",
+        });
+      }
     } else if (onFileSelect) {
       onFileSelect(node.name);
     }
@@ -146,7 +151,7 @@ const FileTreeItem = ({
         onClick={handleClick}
         onDoubleClick={handleDoubleClick}
       >
-        {isFolder || isSchema || (isTable && hasChildren) ? (
+        {isFolder || isSchema || (isTable && hasChildren) || isSource ? (
           isOpen ? (
             <ChevronDown className="h-4 w-4" />
           ) : (
@@ -159,18 +164,27 @@ const FileTreeItem = ({
           <span className="text-xs text-red-500 ml-1">*</span>
         )}
       </div>
-      {(isFolder || isSchema || isTable) && isOpen && node.children && (
+      {(isFolder || isSchema || isTable || isSource) && isOpen && (
         <div>
-          {node.children.map((child, index) => (
-            <FileTreeItem
-              key={index}
-              node={child}
-              level={level + 1}
-              onFileSelect={onFileSelect}
-              onSourceSelect={onSourceSelect}
-              onTableDoubleClick={onTableDoubleClick}
-            />
-          ))}
+          {node.children &&
+            node.children.map((child, index) => (
+              <FileTreeItem
+                key={index}
+                node={child}
+                level={level + 1}
+                onFileSelect={onFileSelect}
+                onSourceSelect={onSourceSelect}
+                onTableDoubleClick={onTableDoubleClick}
+              />
+            ))}
+          {isSource && (!node.children || node.children.length === 0) && (
+            <div
+              className="flex items-center gap-1 px-2 py-1 text-muted-foreground"
+              style={{ paddingLeft: `${(level + 1) * 12 + 8}px` }}
+            >
+              <span className="text-sm font-light">Loading schemas...</span>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -209,6 +223,7 @@ export const sourcesToFileTreeNodes = (sources: Source[]): FileNode[] => {
     type: "source",
     id: source.id,
     dbtype: source.dbtype,
+    children: [], // Initialize empty children array for each source
   }));
 };
 
