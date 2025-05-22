@@ -39,13 +39,13 @@ WORKDIR /app
 COPY package.json yarn.lock ./
 
 # Install dependencies
-RUN yarn install
+RUN yarn install --frozen-lockfile
 
 # Copy the rest of the application
 COPY . .
 
 # Expose Vite dev server port
-EXPOSE 5173
+EXPOSE 3000
 
 # Start Vite dev server with host flag to allow external connections
 CMD ["yarn", "dev", "--host", "0.0.0.0"]

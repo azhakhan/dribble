@@ -72,4 +72,14 @@ async def get_schemas(
 
 
 # get all sources
+@router.get("/")
+async def get_sources(
+    db: Session = Depends(get_db),
+    workspace=Depends(get_current_workspace),
+):
+    # only return name and id
+    sources = db.query(Source).filter_by(workspace_id=workspace.id).all()
+    return [{"id": source.id, "name": source.name, "dbtype": source.dbtype} for source in sources]
+
+
 # get a source by id

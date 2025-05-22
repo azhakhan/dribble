@@ -6,54 +6,30 @@ import { ModeToggle } from "@/components/mode-toggle";
 import logo from "@/assets/logo.png";
 
 import { EditableTable } from "@/elements/EditableTable";
-import { FileTree } from "@/elements/FileTree";
+import {
+  FileTree,
+  sourcesToFileTreeNodes,
+  schemaToFileTreeNodes,
+} from "@/elements/FileTree";
 import { ChatSidebar } from "@/elements/ChatSidebar";
+import { useSourcesQuery } from "@/hooks/useSourcesQuery";
+import { useSourceSchemasQuery } from "@/hooks/useSourceSchemasQuery";
+import type { Source } from "@/lib/api";
 
 interface FileNode {
   name: string;
-  type: "file" | "folder";
+  type: "file" | "folder" | "source";
+  id?: string;
+  dbtype?: string;
   children?: FileNode[];
 }
 
-// Sample file tree data - replace this with your actual data
+// Sample file tree data as fallback
 const sampleFileTree: FileNode[] = [
   {
-    name: "Postgres",
+    name: "Loading...",
     type: "folder",
-    children: [
-      {
-        name: "Tables",
-        type: "folder",
-        children: [
-          { name: "users.sql", type: "file" },
-          { name: "products.sql", type: "file" },
-        ],
-      },
-      {
-        name: "Views",
-        type: "folder",
-        children: [{ name: "active_users.sql", type: "file" }],
-      },
-    ],
-  },
-  {
-    name: "Snowflake",
-    type: "folder",
-    children: [
-      {
-        name: "Tables",
-        type: "folder",
-        children: [
-          { name: "users.sql", type: "file" },
-          { name: "products.sql", type: "file" },
-        ],
-      },
-      {
-        name: "Views",
-        type: "folder",
-        children: [{ name: "active_users.sql", type: "file" }],
-      },
-    ],
+    children: [],
   },
 ];
 
@@ -79,6 +55,31 @@ function App() {
     const savedSizes = localStorage.getItem("panel-sizes");
     return savedSizes ? JSON.parse(savedSizes) : [10, 70, 20];
   });
+  const [selectedSource, setSelectedSource] = useState<Source | null>(null);
+
+  // Query for all sources
+  const {
+    data: sources,
+    isLoading: sourcesLoading,
+    error: sourcesError,
+  } = useSourcesQuery();
+
+  // Query for selected source schemas
+  const {
+    data: schemaData,
+    isLoading: schemasLoading,
+    error: schemasError,
+  } = useSourceSchemasQuery(selectedSource?.id);
+
+  // Convert sources to file tree nodes when data is loaded
+  let fileTreeData = sources ? sourcesToFileTreeNodes(sources) : sampleFileTree;
+
+  // If we have schema data for the selected source, add it to the file tree
+  if (selectedSource && schemaData) {
+    // Add schema data to the tree
+    const schemaNodes = schemaToFileTreeNodes(schemaData, selectedSource.id);
+    fileTreeData = [...fileTreeData, ...schemaNodes];
+  }
 
   useEffect(() => {
     localStorage.setItem("panel-sizes", JSON.stringify(sizes));
@@ -87,6 +88,12 @@ function App() {
   const handleFileSelect = (path: string) => {
     console.log("Selected file:", path);
     // Implement your file selection logic here
+  };
+
+  const handleSourceSelect = (source: Source) => {
+    console.log("Selected source:", source);
+    setSelectedSource(source);
+    // When a source is selected, it will trigger the schemas query
   };
 
   const handleEditorChange = (value: string | undefined) => {
@@ -108,10 +115,21 @@ function App() {
           >
             <Panel defaultSize={sizes[0]} minSize={10}>
               <div className="h-full">
-                <FileTree
-                  data={sampleFileTree}
-                  onFileSelect={handleFileSelect}
-                />
+                {sourcesLoading ? (
+                  <div className="p-4 text-sm text-muted-foreground">
+                    Loading sources...
+                  </div>
+                ) : sourcesError ? (
+                  <div className="p-4 text-sm text-red-500">
+                    Error loading sources
+                  </div>
+                ) : (
+                  <FileTree
+                    data={fileTreeData}
+                    onFileSelect={handleFileSelect}
+                    onSourceSelect={handleSourceSelect}
+                  />
+                )}
               </div>
             </Panel>
 
@@ -125,6 +143,16 @@ function App() {
               >
                 <Panel defaultSize={60} minSize={30}>
                   <div className="h-full overflow-auto">
+                    {selectedSource ? (
+                      <div className="p-2 border-b bg-muted">
+                        <h3 className="text-sm font-medium">
+                          Connected to: {selectedSource.name} (
+                          {selectedSource.dbtype})
+                          {schemasLoading && " - Loading schemas..."}
+                          {schemasError && " - Error loading schemas"}
+                        </h3>
+                      </div>
+                    ) : null}
                     <EditableTable />
                   </div>
                 </Panel>
