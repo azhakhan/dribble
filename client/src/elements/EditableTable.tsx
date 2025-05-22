@@ -57,7 +57,8 @@ const dataEditorBaseTheme: GlideTheme = {
   lineHeight: 1.4, //unitless scaler depends on your font
 };
 
-const data = [
+// Default data for when no query results are available
+const defaultData: Record<string, unknown>[] = [
   {
     firstName: "John",
     lastName: "Doe",
@@ -76,14 +77,25 @@ const data = [
   },
 ];
 
-// Grid columns may also provide icon, overlayIcon, menu, style, and theme overrides
-const columns: GridColumn[] = [
+// Default columns
+const defaultColumns: GridColumn[] = [
   { title: "First Name", width: 200 },
   { title: "Last Name", width: 200 },
 ];
 
-export const EditableTable = () => {
+interface EditableTableProps {
+  data?: Record<string, unknown>[];
+  isLoading?: boolean;
+}
+
+export const EditableTable = ({
+  data: queryData,
+  isLoading,
+}: EditableTableProps) => {
   const { theme } = useTheme();
+
+  // Use query data if available, otherwise use default data
+  const data = useMemo(() => queryData || defaultData, [queryData]);
 
   const getGlideTheme = (): GlideTheme => {
     const isDark =
@@ -123,27 +135,70 @@ export const EditableTable = () => {
     };
   };
 
+  // Dynamically determine column headers from data
+  const columns = useMemo(() => {
+    if (data.length === 0) return defaultColumns;
+
+    return Object.keys(data[0]).map((key) => ({
+      title: key,
+      width: 200,
+    }));
+  }, [data]);
+
   const dataIndexes = useMemo(() => {
     return data.length > 0 ? Object.keys(data[0]) : [];
-  }, []);
+  }, [data]);
 
   const getCellContent = useCallback(
     (cell: Item): GridCell => {
       const [col, row] = cell;
-      const dataRow: { [key: string]: string } = data[row];
-      const columnName: string = dataIndexes[col];
-      const cellValue: string = dataRow[columnName];
 
-      const gridCell = {
+      if (row >= data.length) {
+        return {
+          kind: GridCellKind.Text,
+          displayData: "",
+          data: "",
+        } as GridCell;
+      }
+
+      const dataRow = data[row] as Record<string, unknown>;
+      const columnName = dataIndexes[col];
+
+      if (columnName === undefined) {
+        return {
+          kind: GridCellKind.Text,
+          displayData: "",
+          data: "",
+        } as GridCell;
+      }
+
+      let cellValue = dataRow[columnName];
+
+      // Handle different data types for display
+      if (cellValue === null) {
+        cellValue = "null";
+      } else if (typeof cellValue === "object") {
+        cellValue = JSON.stringify(cellValue);
+      } else {
+        cellValue = String(cellValue);
+      }
+
+      return {
         kind: GridCellKind.Text,
         displayData: cellValue,
         data: cellValue,
-      };
-
-      return gridCell as GridCell;
+      } as GridCell;
     },
-    [dataIndexes]
+    [dataIndexes, data]
   );
+
+  if (isLoading) {
+    return (
+      <div className="h-full w-full flex items-center justify-center">
+        Loading data...
+      </div>
+    );
+  }
 
   return (
     <DataEditor

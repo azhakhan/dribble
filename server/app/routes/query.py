@@ -52,7 +52,7 @@ async def delete(query_id: UUID, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/execute")
+@router.post("/execute/")
 async def execute_query_string(request: ExecuteQueryRequest, db: Session = Depends(get_db)):
     try:
         source = db.query(Source).filter_by(id=request.database_id).first()
@@ -63,7 +63,7 @@ async def execute_query_string(request: ExecuteQueryRequest, db: Session = Depen
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/{query_id}/execute")
+@router.post("/{query_id}/execute/")
 async def execute_query_id(query_id: UUID, db: Session = Depends(get_db)):
     try:
         query = db.query(Query).filter_by(id=query_id).first()

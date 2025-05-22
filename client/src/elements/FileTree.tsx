@@ -48,6 +48,7 @@ interface FileTreeProps {
     name: string;
     dbtype: string;
   }) => void;
+  onTableDoubleClick?: (sourceId: string, tableName: string) => void;
 }
 
 const FileTreeItem = ({
@@ -55,6 +56,7 @@ const FileTreeItem = ({
   level = 0,
   onFileSelect,
   onSourceSelect,
+  onTableDoubleClick,
 }: {
   node: FileNode;
   level?: number;
@@ -64,6 +66,7 @@ const FileTreeItem = ({
     name: string;
     dbtype: string;
   }) => void;
+  onTableDoubleClick?: (sourceId: string, tableName: string) => void;
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const isFolder = node.type === "folder";
@@ -83,6 +86,18 @@ const FileTreeItem = ({
       });
     } else if (onFileSelect) {
       onFileSelect(node.name);
+    }
+  };
+
+  const handleDoubleClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (isTable && onTableDoubleClick && node.id) {
+      // Extract sourceId from the combined id (format: sourceId_schemaName_tableName)
+      const idParts = node.id.split("_");
+      if (idParts.length >= 1) {
+        const sourceId = idParts[0];
+        onTableDoubleClick(sourceId, node.name);
+      }
     }
   };
 
@@ -129,6 +144,7 @@ const FileTreeItem = ({
         className="flex items-center gap-1 px-2 py-1 hover:bg-accent cursor-pointer"
         style={{ paddingLeft: `${level * 12 + 8}px` }}
         onClick={handleClick}
+        onDoubleClick={handleDoubleClick}
       >
         {isFolder || isSchema || (isTable && hasChildren) ? (
           isOpen ? (
@@ -152,6 +168,7 @@ const FileTreeItem = ({
               level={level + 1}
               onFileSelect={onFileSelect}
               onSourceSelect={onSourceSelect}
+              onTableDoubleClick={onTableDoubleClick}
             />
           ))}
         </div>
@@ -164,6 +181,7 @@ export const FileTree = ({
   data,
   onFileSelect,
   onSourceSelect,
+  onTableDoubleClick,
 }: FileTreeProps) => {
   return (
     <div className="h-full overflow-auto border-r">
@@ -175,6 +193,7 @@ export const FileTree = ({
             node={node}
             onFileSelect={onFileSelect}
             onSourceSelect={onSourceSelect}
+            onTableDoubleClick={onTableDoubleClick}
           />
         ))}
       </div>

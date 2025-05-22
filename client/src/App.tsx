@@ -5,30 +5,22 @@ import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 import { ModeToggle } from "@/components/mode-toggle";
 import logo from "@/assets/logo.png";
 
-import { EditableTable } from "@/elements/EditableTable";
 import {
   FileTree,
   sourcesToFileTreeNodes,
   schemaToFileTreeNodes,
 } from "@/elements/FileTree";
+import { TableDataDisplay } from "@/components/TableDataDisplay";
 import { ChatSidebar } from "@/elements/ChatSidebar";
 import { useSourcesQuery } from "@/hooks/useSourcesQuery";
 import { useSourceSchemasQuery } from "@/hooks/useSourceSchemasQuery";
 import type { Source } from "@/lib/api";
 
-interface FileNode {
-  name: string;
-  type: "file" | "folder" | "source";
-  id?: string;
-  dbtype?: string;
-  children?: FileNode[];
-}
-
 // Sample file tree data as fallback
-const sampleFileTree: FileNode[] = [
+const sampleFileTree = [
   {
     name: "Loading...",
-    type: "folder",
+    type: "folder" as const,
     children: [],
   },
 ];
@@ -53,9 +45,15 @@ function App() {
   );
   const [sizes, setSizes] = useState(() => {
     const savedSizes = localStorage.getItem("panel-sizes");
-    return savedSizes ? JSON.parse(savedSizes) : [10, 70, 20];
+    return savedSizes ? JSON.parse(savedSizes) : [20, 60, 20];
   });
+
+  // State for selected source and table
   const [selectedSource, setSelectedSource] = useState<Source | null>(null);
+  const [selectedTableData, setSelectedTableData] = useState<{
+    sourceId: string;
+    tableName: string;
+  } | null>(null);
 
   // Query for all sources
   const {
@@ -66,18 +64,17 @@ function App() {
 
   // Query for selected source schemas
   const {
-    data: schemaData,
+    data: sourceSchemas,
     isLoading: schemasLoading,
     error: schemasError,
   } = useSourceSchemasQuery(selectedSource?.id);
 
-  // Convert sources to file tree nodes when data is loaded
+  // Build file tree data with both sources and schemas (if selected)
   let fileTreeData = sources ? sourcesToFileTreeNodes(sources) : sampleFileTree;
 
   // If we have schema data for the selected source, add it to the file tree
-  if (selectedSource && schemaData) {
-    // Add schema data to the tree
-    const schemaNodes = schemaToFileTreeNodes(schemaData, selectedSource.id);
+  if (selectedSource && sourceSchemas) {
+    const schemaNodes = schemaToFileTreeNodes(sourceSchemas, selectedSource.id);
     fileTreeData = [...fileTreeData, ...schemaNodes];
   }
 
@@ -85,15 +82,14 @@ function App() {
     localStorage.setItem("panel-sizes", JSON.stringify(sizes));
   }, [sizes]);
 
-  const handleFileSelect = (path: string) => {
-    console.log("Selected file:", path);
-    // Implement your file selection logic here
+  const handleSourceSelect = (source: Source) => {
+    console.log("Source selected in App:", source);
+    setSelectedSource(source);
   };
 
-  const handleSourceSelect = (source: Source) => {
-    console.log("Selected source:", source);
-    setSelectedSource(source);
-    // When a source is selected, it will trigger the schemas query
+  // Handle table double-click
+  const handleTableDoubleClick = (sourceId: string, tableName: string) => {
+    setSelectedTableData({ sourceId, tableName });
   };
 
   const handleEditorChange = (value: string | undefined) => {
@@ -124,11 +120,23 @@ function App() {
                     Error loading sources
                   </div>
                 ) : (
-                  <FileTree
-                    data={fileTreeData}
-                    onFileSelect={handleFileSelect}
-                    onSourceSelect={handleSourceSelect}
-                  />
+                  <div className="h-full">
+                    {schemasLoading && selectedSource && (
+                      <div className="p-2 text-xs text-muted-foreground">
+                        Loading schemas for {selectedSource.name}...
+                      </div>
+                    )}
+                    {schemasError && selectedSource && (
+                      <div className="p-2 text-xs text-red-500">
+                        Error loading schemas for {selectedSource.name}
+                      </div>
+                    )}
+                    <FileTree
+                      data={fileTreeData}
+                      onSourceSelect={handleSourceSelect}
+                      onTableDoubleClick={handleTableDoubleClick}
+                    />
+                  </div>
                 )}
               </div>
             </Panel>
@@ -142,19 +150,7 @@ function App() {
                 autoSaveId="editor-layout"
               >
                 <Panel defaultSize={60} minSize={30}>
-                  <div className="h-full overflow-auto">
-                    {selectedSource ? (
-                      <div className="p-2 border-b bg-muted">
-                        <h3 className="text-sm font-medium">
-                          Connected to: {selectedSource.name} (
-                          {selectedSource.dbtype})
-                          {schemasLoading && " - Loading schemas..."}
-                          {schemasError && " - Error loading schemas"}
-                        </h3>
-                      </div>
-                    ) : null}
-                    <EditableTable />
-                  </div>
+                  <TableDataDisplay tableData={selectedTableData} />
                 </Panel>
 
                 <PanelResizeHandle className="h-1 bg-border hover:bg-primary transition-colors" />

@@ -27,4 +27,12 @@ export const getSourceSchemas = async (sourceId: string) => {
   return response.data;
 };
 
+export const executeQuery = async (database_id: string, query: string) => {
+  const response = await api.post<object[]>("query/execute/", {
+    database_id,
+    query,
+  });
+  return response.data;
+};
+
 export default api;
