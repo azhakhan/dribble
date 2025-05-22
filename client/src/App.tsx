@@ -167,20 +167,18 @@ function App() {
                   </div>
                 ) : (
                   <div className="h-full">
-                    {schemasLoading && selectedSource && (
-                      <div className="p-2 text-xs text-muted-foreground">
-                        Loading schemas for {selectedSource.name}...
-                      </div>
-                    )}
                     {schemasError && selectedSource && (
                       <div className="p-2 text-xs text-red-500">
-                        Error loading schemas for {selectedSource.name}
+                        Error loading schemas
                       </div>
                     )}
                     <FileTree
                       data={fileTreeData}
                       onSourceSelect={handleSourceSelect}
                       onTableDoubleClick={handleTableDoubleClick}
+                      loadingSourceId={
+                        schemasLoading ? selectedSource?.id : undefined
+                      }
                     />
                   </div>
                 )}

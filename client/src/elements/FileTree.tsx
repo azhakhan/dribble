@@ -7,6 +7,7 @@ import {
   Database,
   Table,
   Columns,
+  Loader,
 } from "lucide-react";
 import { PostgresIcon, MySQLIcon, SQLiteIcon } from "./icons";
 import type { FileNode } from "@/lib/fileTreeUtils";
@@ -28,6 +29,7 @@ const FileTreeItem = ({
   onFileSelect,
   onSourceSelect,
   onTableDoubleClick,
+  loadingSourceId,
 }: {
   node: FileNode;
   level?: number;
@@ -38,6 +40,7 @@ const FileTreeItem = ({
     dbtype: string;
   }) => void;
   onTableDoubleClick?: (sourceId: string, tableName: string) => void;
+  loadingSourceId?: string;
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const isFolder = node.type === "folder";
@@ -45,6 +48,7 @@ const FileTreeItem = ({
   const isSchema = node.type === "schema";
   const isTable = node.type === "table";
   const hasChildren = Boolean(node.children?.length);
+  const isLoading = isSource && loadingSourceId === node.id;
 
   const handleClick = () => {
     if (isFolder || isSchema || (isTable && hasChildren)) {
@@ -81,6 +85,11 @@ const FileTreeItem = ({
     if (isFolder) {
       return <Folder className="h-4 w-4" strokeWidth={1} />;
     } else if (isSource) {
+      // Show loading spinner if this source is being loaded
+      if (isLoading) {
+        return <Loader className="h-4 w-4 animate-spin" strokeWidth={1} />;
+      }
+
       // Use SVG components with constrained size
       const dbType = node.dbtype?.toLowerCase();
       if (dbType === "postgres") {
@@ -146,16 +155,19 @@ const FileTreeItem = ({
                 onFileSelect={onFileSelect}
                 onSourceSelect={onSourceSelect}
                 onTableDoubleClick={onTableDoubleClick}
+                loadingSourceId={loadingSourceId}
               />
             ))}
-          {isSource && (!node.children || node.children.length === 0) && (
-            <div
-              className="flex items-center gap-1 px-2 py-1 text-muted-foreground"
-              style={{ paddingLeft: `${(level + 1) * 12 + 8}px` }}
-            >
-              <span className="text-sm font-light">Loading schemas...</span>
-            </div>
-          )}
+          {isSource &&
+            (!node.children || node.children.length === 0) &&
+            !isLoading && (
+              <div
+                className="flex items-center gap-1 px-2 py-1 text-muted-foreground"
+                style={{ paddingLeft: `${(level + 1) * 12 + 8}px` }}
+              >
+                <span className="text-sm font-light">No schemas found</span>
+              </div>
+            )}
         </div>
       )}
     </div>
@@ -167,7 +179,8 @@ export const FileTree = ({
   onFileSelect,
   onSourceSelect,
   onTableDoubleClick,
-}: FileTreeProps) => {
+  loadingSourceId,
+}: FileTreeProps & { loadingSourceId?: string }) => {
   return (
     <div className="h-full overflow-auto border-r">
       <div className="p-2 font-semibold border-b">Files</div>
@@ -179,6 +192,7 @@ export const FileTree = ({
             onFileSelect={onFileSelect}
             onSourceSelect={onSourceSelect}
             onTableDoubleClick={onTableDoubleClick}
+            loadingSourceId={loadingSourceId}
           />
         ))}
       </div>
