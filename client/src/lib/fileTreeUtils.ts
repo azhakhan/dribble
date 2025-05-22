@@ -4,6 +4,7 @@ export interface FileNode {
   name: string;
   type: "file" | "folder" | "source" | "schema" | "table" | "column";
   id?: string;
+  sourceId?: string;
   dbtype?: string;
   dataType?: string;
   nullable?: boolean;
@@ -36,6 +37,7 @@ export const sourcesToFileTreeNodes = (sources: Source[]): FileNode[] => {
     name: source.name,
     type: "source",
     id: source.id,
+    sourceId: source.id,
     dbtype: source.dbtype,
     children: [], // Initialize empty children array for each source
   }));
@@ -55,6 +57,7 @@ export const schemaToFileTreeNodes = (
       name: schemaName,
       type: "schema",
       id: `${sourceId}_${schemaName}`,
+      sourceId: sourceId,
       children: [],
     };
 
@@ -63,6 +66,7 @@ export const schemaToFileTreeNodes = (
       const tablesNode: FileNode = {
         name: "Tables",
         type: "folder",
+        sourceId: sourceId,
         children: [],
       };
 
@@ -73,6 +77,7 @@ export const schemaToFileTreeNodes = (
           name: tableName,
           type: "table",
           id: `${sourceId}_${schemaName}_${tableName}`,
+          sourceId: sourceId,
           children: [],
         };
 
@@ -99,6 +104,7 @@ export const schemaToFileTreeNodes = (
       const viewsNode: FileNode = {
         name: "Views",
         type: "folder",
+        sourceId: sourceId,
         children: [],
       };
 
@@ -109,6 +115,7 @@ export const schemaToFileTreeNodes = (
           name: viewName,
           type: "table", // Reusing the table type for views
           id: `${sourceId}_${schemaName}_${viewName}`,
+          sourceId: sourceId,
           children: [],
         };
 

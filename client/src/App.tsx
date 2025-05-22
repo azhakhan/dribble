@@ -129,7 +129,6 @@ function App() {
   }, [sizes]);
 
   const handleSourceSelect = (source: Source) => {
-    console.log("Source selected in App:", source);
     setSelectedSource(source);
   };
 

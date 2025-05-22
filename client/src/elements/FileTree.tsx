@@ -14,26 +14,24 @@ import type { FileNode } from "@/lib/fileTreeUtils";
 
 interface FileTreeProps {
   data: FileNode[];
-  onFileSelect?: (path: string) => void;
   onSourceSelect?: (source: {
     id: string;
     name: string;
     dbtype: string;
   }) => void;
   onTableDoubleClick?: (sourceId: string, tableName: string) => void;
+  loadingSourceId?: string;
 }
 
 const FileTreeItem = ({
   node,
   level = 0,
-  onFileSelect,
   onSourceSelect,
   onTableDoubleClick,
   loadingSourceId,
 }: {
   node: FileNode;
   level?: number;
-  onFileSelect?: (path: string) => void;
   onSourceSelect?: (source: {
     id: string;
     name: string;
@@ -62,8 +60,6 @@ const FileTreeItem = ({
         name: node.name,
         dbtype: node.dbtype || "",
       });
-    } else if (onFileSelect) {
-      onFileSelect(node.name);
     }
   };
 
@@ -82,11 +78,8 @@ const FileTreeItem = ({
       setIsOpen(!isOpen);
     } else if (isTable && onTableDoubleClick && node.id) {
       // For tables and views, query them (both are "table" type)
-      // Extract sourceId from the combined id (format: sourceId_schemaName_tableName)
-      const idParts = node.id.split("_");
-      if (idParts.length >= 1) {
-        const sourceId = idParts[0];
-        onTableDoubleClick(sourceId, node.name);
+      if (node.sourceId) {
+        onTableDoubleClick(node.sourceId, node.name);
       }
     }
   };
@@ -173,7 +166,6 @@ const FileTreeItem = ({
                 key={index}
                 node={child}
                 level={level + 1}
-                onFileSelect={onFileSelect}
                 onSourceSelect={onSourceSelect}
                 onTableDoubleClick={onTableDoubleClick}
                 loadingSourceId={loadingSourceId}
@@ -197,11 +189,10 @@ const FileTreeItem = ({
 
 export const FileTree = ({
   data,
-  onFileSelect,
   onSourceSelect,
   onTableDoubleClick,
   loadingSourceId,
-}: FileTreeProps & { loadingSourceId?: string }) => {
+}: FileTreeProps) => {
   return (
     <div className="h-full overflow-auto border-r select-none">
       <div className="p-2 font-semibold border-b">Files</div>
@@ -210,7 +201,6 @@ export const FileTree = ({
           <FileTreeItem
             key={index}
             node={node}
-            onFileSelect={onFileSelect}
             onSourceSelect={onSourceSelect}
             onTableDoubleClick={onTableDoubleClick}
             loadingSourceId={loadingSourceId}
