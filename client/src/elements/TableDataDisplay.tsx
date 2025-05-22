@@ -13,15 +13,13 @@ interface TableDataDisplayProps {
 export const TableDataDisplay = ({
   tableData,
   queryResults,
-  isQueryRunning = false,
+  isQueryRunning = false
 }: TableDataDisplayProps) => {
   // Fetch table data when a table is selected (and no query results are available)
   const { data: tableQueryResults, isLoading: isTableLoading } = useQueryQuery(
     tableData?.sourceId || "",
-    tableData && !queryResults
-      ? `SELECT * FROM ${tableData.tableName} LIMIT 101`
-      : "",
-    { enabled: !!tableData && !queryResults },
+    tableData && !queryResults ? `SELECT * FROM ${tableData.tableName} LIMIT 101` : "",
+    { enabled: !!tableData && !queryResults }
   );
 
   // Determine what data to display and loading state
@@ -29,11 +27,7 @@ export const TableDataDisplay = ({
   const isLoading = isQueryRunning || isTableLoading;
 
   // Determine the title to show
-  const title = tableData
-    ? tableData.tableName
-    : queryResults
-      ? "Query Results"
-      : "";
+  const title = tableData ? tableData.tableName : queryResults ? "Query Results" : "";
 
   return (
     <div className="h-full">
@@ -41,16 +35,12 @@ export const TableDataDisplay = ({
         <div className="h-full flex flex-col">
           <div className="p-2 font-semibold border-b">{title}</div>
           <div className="flex-1">
-            <EditableTable
-              data={displayData as Record<string, unknown>[]}
-              isLoading={isLoading}
-            />
+            <EditableTable data={displayData as Record<string, unknown>[]} isLoading={isLoading} />
           </div>
         </div>
       ) : (
         <div className="h-full flex items-center justify-center text-gray-400">
-          Double-click on a table in the file tree to view data or run a SQL
-          query
+          Double-click on a table in the file tree to view data or run a SQL query
         </div>
       )}
     </div>

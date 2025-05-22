@@ -8,18 +8,17 @@ import {
   Table,
   Columns,
   Loader,
+  PlusCircle
 } from "lucide-react";
 import { PostgresIcon, MySQLIcon, SQLiteIcon } from "./icons";
 import { getColumnTypeIcon } from "./ColumnTypeIcons";
 import type { FileNode } from "@/lib/fileTreeUtils";
+import { AddSourceDialog } from "@/components/AddSourceDialog";
+import { Button } from "@/components/ui/button";
 
 interface FileTreeProps {
   data: FileNode[];
-  onSourceSelect?: (source: {
-    id: string;
-    name: string;
-    dbtype: string;
-  }) => void;
+  onSourceSelect?: (source: { id: string; name: string; dbtype: string }) => void;
   onTableDoubleClick?: (sourceId: string, tableName: string) => void;
   loadingSourceId?: string;
 }
@@ -31,15 +30,11 @@ const FileTreeItem = ({
   onTableDoubleClick,
   loadingSourceId,
   selectedNodeId,
-  setSelectedNodeId,
+  setSelectedNodeId
 }: {
   node: FileNode;
   level?: number;
-  onSourceSelect?: (source: {
-    id: string;
-    name: string;
-    dbtype: string;
-  }) => void;
+  onSourceSelect?: (source: { id: string; name: string; dbtype: string }) => void;
   onTableDoubleClick?: (sourceId: string, tableName: string) => void;
   loadingSourceId?: string;
   selectedNodeId?: string;
@@ -69,7 +64,7 @@ const FileTreeItem = ({
       onSourceSelect({
         id: node.id,
         name: node.name,
-        dbtype: node.dbtype || "",
+        dbtype: node.dbtype || ""
       });
     }
   };
@@ -190,16 +185,14 @@ const FileTreeItem = ({
                 setSelectedNodeId={setSelectedNodeId}
               />
             ))}
-          {isSource &&
-            (!node.children || node.children.length === 0) &&
-            !isLoading && (
-              <div
-                className="flex items-center gap-1 px-2 py-1 text-muted-foreground select-none"
-                style={{ paddingLeft: `${(level + 1) * 12 + 8}px` }}
-              >
-                <span className="text-sm font-light">No schemas found</span>
-              </div>
-            )}
+          {isSource && (!node.children || node.children.length === 0) && !isLoading && (
+            <div
+              className="flex items-center gap-1 px-2 py-1 text-muted-foreground select-none"
+              style={{ paddingLeft: `${(level + 1) * 12 + 8}px` }}
+            >
+              <span className="text-sm font-light">No schemas found</span>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -210,15 +203,16 @@ export const FileTree = ({
   data,
   onSourceSelect,
   onTableDoubleClick,
-  loadingSourceId,
+  loadingSourceId
 }: FileTreeProps) => {
-  const [selectedNodeId, setSelectedNodeId] = useState<string | undefined>(
-    undefined,
-  );
+  const [selectedNodeId, setSelectedNodeId] = useState<string | undefined>(undefined);
 
   return (
     <div className="h-full overflow-auto border-r select-none">
-      <div className="p-2 font-semibold border-b">Files</div>
+      <div className="p-2 font-semibold border-b flex items-center justify-between">
+        <span>Sources</span>
+        <AddSourceDialog className="hover:text-foreground text-muted-foreground" />
+      </div>
       <div>
         {data.map((node, index) => (
           <FileTreeItem
@@ -231,6 +225,27 @@ export const FileTree = ({
             setSelectedNodeId={setSelectedNodeId}
           />
         ))}
+        {data.length === 0 && (
+          <div className="flex flex-col items-center justify-center text-muted-foreground p-4 text-sm">
+            <p className="mb-2">No sources found</p>
+            <Button
+              variant="outline"
+              size="sm"
+              className="flex items-center gap-1"
+              onClick={() => {
+                // This is just a placeholder to open the add source dialog
+                // The actual implementation would dispatch a click event to the AddSourceDialog
+                const addButton = document.querySelector('[data-testid="add-source-button"]');
+                if (addButton) {
+                  (addButton as HTMLButtonElement).click();
+                }
+              }}
+            >
+              <PlusCircle className="h-4 w-4" />
+              Add Source
+            </Button>
+          </div>
+        )}
       </div>
     </div>
   );

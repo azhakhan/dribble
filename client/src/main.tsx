@@ -14,5 +14,5 @@ createRoot(document.getElementById("root")!).render(
       <Toaster />
       <ReactQueryDevtools initialIsOpen={false} />
     </QueryClientProvider>
-  </StrictMode>,
+  </StrictMode>
 );

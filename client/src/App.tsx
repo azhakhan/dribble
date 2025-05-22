@@ -5,11 +5,7 @@ import { ModeToggle } from "@/components/mode-toggle";
 import logo from "@/assets/logo.png";
 
 import { FileTree } from "@/elements/FileTree";
-import {
-  sourcesToFileTreeNodes,
-  schemaToFileTreeNodes,
-  type FileNode,
-} from "@/lib/fileTreeUtils";
+import { sourcesToFileTreeNodes, schemaToFileTreeNodes, type FileNode } from "@/lib/fileTreeUtils";
 import { TableDataDisplay } from "@/elements/TableDataDisplay";
 import { ChatSidebar } from "@/elements/ChatSidebar";
 import { Editor } from "@/elements/Editor";
@@ -45,8 +41,8 @@ const sampleFileTree = [
   {
     name: "Loading...",
     type: "folder" as const,
-    children: [],
-  },
+    children: []
+  }
 ];
 
 function TopMenu() {
@@ -79,17 +75,13 @@ function App() {
   const [queryRunning, setQueryRunning] = useState(false);
 
   // Query for all sources
-  const {
-    data: sources,
-    isLoading: sourcesLoading,
-    error: sourcesError,
-  } = useSourcesQuery();
+  const { data: sources, isLoading: sourcesLoading, error: sourcesError } = useSourcesQuery();
 
   // Query for selected source schemas
   const {
     data: sourceSchemas,
     isLoading: schemasLoading,
-    error: schemasError,
+    error: schemasError
   } = useSourceSchemasQuery(selectedSource?.id);
 
   // Update schema map when new schema data is loaded
@@ -97,7 +89,7 @@ function App() {
     if (selectedSource?.id && sourceSchemas) {
       setSourceSchemaMap((prev) => ({
         ...prev,
-        [selectedSource.id]: sourceSchemas,
+        [selectedSource.id]: sourceSchemas
       }));
     }
   }, [selectedSource, sourceSchemas]);
@@ -109,13 +101,10 @@ function App() {
   if (Object.keys(sourceSchemaMap).length > 0) {
     fileTreeData = (fileTreeData as FileNode[]).map((node) => {
       if (node.id && sourceSchemaMap[node.id]) {
-        const schemaNodes = schemaToFileTreeNodes(
-          sourceSchemaMap[node.id],
-          node.id,
-        );
+        const schemaNodes = schemaToFileTreeNodes(sourceSchemaMap[node.id], node.id);
         return {
           ...node,
-          children: schemaNodes,
+          children: schemaNodes
         };
       }
       return node;
@@ -158,27 +147,19 @@ function App() {
             <Panel defaultSize={sizes[0]} minSize={10}>
               <div className="h-full">
                 {sourcesLoading ? (
-                  <div className="p-4 text-sm text-muted-foreground">
-                    Loading sources...
-                  </div>
+                  <div className="p-4 text-sm text-muted-foreground">Loading sources...</div>
                 ) : sourcesError ? (
-                  <div className="p-4 text-sm text-red-500">
-                    Error loading sources
-                  </div>
+                  <div className="p-4 text-sm text-red-500">Error loading sources</div>
                 ) : (
                   <div className="h-full">
                     {schemasError && selectedSource && (
-                      <div className="p-2 text-xs text-red-500">
-                        Error loading schemas
-                      </div>
+                      <div className="p-2 text-xs text-red-500">Error loading schemas</div>
                     )}
                     <FileTree
                       data={fileTreeData}
                       onSourceSelect={handleSourceSelect}
                       onTableDoubleClick={handleTableDoubleClick}
-                      loadingSourceId={
-                        schemasLoading ? selectedSource?.id : undefined
-                      }
+                      loadingSourceId={schemasLoading ? selectedSource?.id : undefined}
                     />
                   </div>
                 )}
@@ -188,11 +169,7 @@ function App() {
             <PanelResizeHandle className="w-1 bg-border hover:bg-primary transition-colors" />
 
             <Panel defaultSize={sizes[1]} minSize={30}>
-              <PanelGroup
-                direction="vertical"
-                storage={localStorage}
-                autoSaveId="editor-layout"
-              >
+              <PanelGroup direction="vertical" storage={localStorage} autoSaveId="editor-layout">
                 <Panel defaultSize={60} minSize={30}>
                   <TableDataDisplay
                     tableData={selectedTableData}

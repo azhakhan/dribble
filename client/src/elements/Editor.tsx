@@ -19,12 +19,10 @@ export function Editor({
   schemasLoading,
   schemasError,
   onQueryExecution,
-  onQueryStatusChange,
+  onQueryStatusChange
 }: EditorProps) {
   const editorContainerRef = useRef<HTMLDivElement>(null);
-  const [sqlContent, setSqlContent] = useState<string>(
-    "-- Write your SQL query here\n",
-  );
+  const [sqlContent, setSqlContent] = useState<string>("-- Write your SQL query here\n");
   const [isRunning, setIsRunning] = useState(false);
 
   const handleEditorChange = (value: string | undefined) => {
@@ -79,11 +77,7 @@ export function Editor({
         </div>
       )}
       <div className="flex justify-end gap-2 p-2 border-b">
-        <Button
-          onClick={handleRunQuery}
-          disabled={!isEditorActive || isRunning}
-          className="gap-1"
-        >
+        <Button onClick={handleRunQuery} disabled={!isEditorActive || isRunning} className="gap-1">
           <PlayIcon size={16} />
           Run SQL
         </Button>
@@ -101,7 +95,7 @@ export function Editor({
             wordWrap: "on",
             automaticLayout: true,
             scrollBeyondLastLine: false,
-            readOnly: !isEditorActive,
+            readOnly: !isEditorActive
           }}
         />
       </div>
