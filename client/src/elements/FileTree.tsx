@@ -153,7 +153,7 @@ const FileTreeItem = ({
   return (
     <div>
       <div
-        className="flex items-center gap-1 px-2 py-1 hover:bg-accent cursor-pointer"
+        className="flex items-center gap-1 px-2 py-1 hover:bg-accent cursor-pointer select-none"
         style={{ paddingLeft: `${level * 12 + 8}px` }}
         onClick={handleItemClick}
         onDoubleClick={handleDoubleClick}
@@ -183,7 +183,7 @@ const FileTreeItem = ({
             (!node.children || node.children.length === 0) &&
             !isLoading && (
               <div
-                className="flex items-center gap-1 px-2 py-1 text-muted-foreground"
+                className="flex items-center gap-1 px-2 py-1 text-muted-foreground select-none"
                 style={{ paddingLeft: `${(level + 1) * 12 + 8}px` }}
               >
                 <span className="text-sm font-light">No schemas found</span>
@@ -203,7 +203,7 @@ export const FileTree = ({
   loadingSourceId,
 }: FileTreeProps & { loadingSourceId?: string }) => {
   return (
-    <div className="h-full overflow-auto border-r">
+    <div className="h-full overflow-auto border-r select-none">
       <div className="p-2 font-semibold border-b">Files</div>
       <div>
         {data.map((node, index) => (
