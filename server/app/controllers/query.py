@@ -38,3 +38,25 @@ def execute_query(source: Source, query: str):
             raise Exception(f"Error executing query: {e}") from e
     else:
         raise Exception("Unsupported database type")
+
+
+def test_connection(source: Source):
+    if source.dbtype == "postgres":
+        creds = PostgresCreds(**source.creds)
+        url = URL.create(
+            "postgresql+psycopg",
+            username=creds.user,
+            password=creds.password,
+            host=creds.host,
+            port=creds.port,
+            database=creds.dbname,
+        )
+        engine = create_engine(url, connect_args={"connect_timeout": 5})
+        try:
+            with engine.connect() as conn:
+                conn.execute(text("SELECT 1"))
+                return True
+        except OperationalError:
+            return False
+    else:
+        raise Exception("Unsupported database type")

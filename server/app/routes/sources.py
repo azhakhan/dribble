@@ -1,12 +1,12 @@
 from fastapi import APIRouter, HTTPException, Depends
-from app.schemas.sources import CreateSourceRequest, UpdateSourceRequest
+from app.schemas.sources import CreateSourceRequest, UpdateSourceRequest, TestSourceRequest
 from app.core.db import get_db
 from sqlalchemy.orm import Session
 from app.models import Source
 from app.dependencies import get_current_workspace
 from uuid import UUID
 from app.controllers.sources import get_source_schemas
-
+from app.controllers.query import test_connection
 
 router = APIRouter(prefix="/sources", tags=["sources"])
 
@@ -31,6 +31,23 @@ async def add_source(
     db.commit()
     db.refresh(db.query(Source).filter_by(name=request.name).first())
     return db.query(Source).filter_by(name=request.name).first()
+
+
+@router.post("/test/")
+async def test(request: TestSourceRequest, workspace=Depends(get_current_workspace)):
+    source = Source(
+        name="Testing Source",
+        dbtype=request.dbtype,
+        creds=request.creds.model_dump(),
+        workspace_id=workspace.id,
+    )
+
+    try:
+        if not test_connection(source):
+            raise HTTPException(status_code=500, detail="Connection failed")
+        return {"message": "Connection successful"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 # edit a source

@@ -9,7 +9,7 @@ import {
   DialogFooter,
   DialogTrigger
 } from "@/components/ui/dialog";
-import { createSource } from "@/lib/api";
+import { createSource, testSource } from "@/lib/api";
 import type { PostgresCreds, MysqlCreds, SqliteCreds, CreateSourceRequest } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { useQueryClient } from "@tanstack/react-query";
@@ -137,6 +137,44 @@ export const AddSourceDialog = ({ className, onSourceAdded }: AddSourceDialogPro
     } catch (error) {
       console.error("Failed to create source:", error);
       setFormError("Failed to create source. Please check your connection details.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleTest = async () => {
+    if (!sourceType) {
+      setFormError("Please select a database type");
+      return;
+    }
+
+    let credentials: PostgresCreds | MysqlCreds | SqliteCreds;
+
+    // Validate based on source type
+    if (sourceType === "postgres") {
+      credentials = postgresConfig;
+    } else if (sourceType === "mysql") {
+      credentials = mysqlConfig;
+    } else {
+      credentials = sqliteConfig;
+    }
+
+    try {
+      setLoading(true);
+      setFormError("");
+
+      const sourceData: CreateSourceRequest = {
+        name: sourceName,
+        dbtype: sourceType,
+        creds: credentials!
+      };
+
+      await testSource(sourceData);
+
+      setFormError("Connection successful");
+    } catch (error) {
+      console.error("Failed to test source:", error);
+      setFormError("Failed to test source. Please check your connection details.");
     } finally {
       setLoading(false);
     }
@@ -381,6 +419,9 @@ export const AddSourceDialog = ({ className, onSourceAdded }: AddSourceDialogPro
             disabled={loading}
           >
             Cancel
+          </Button>
+          <Button onClick={handleTest} disabled={loading}>
+            Test Connection
           </Button>
           <Button onClick={handleSave} disabled={loading}>
             {loading ? "Saving..." : "Save"}

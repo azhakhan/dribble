@@ -35,6 +35,11 @@ class CreateSourceRequest(BaseModel):
     creds: PostgresCreds | MysqlCreds | SqliteCreds
 
 
+class TestSourceRequest(BaseModel):
+    dbtype: SourceType
+    creds: PostgresCreds | MysqlCreds | SqliteCreds
+
+
 class UpdateSourceRequest(BaseModel):
     name: str | None = None
     dbtype: SourceType | None = None

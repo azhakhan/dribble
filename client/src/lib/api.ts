@@ -67,4 +67,13 @@ export const createSource = async (sourceData: CreateSourceRequest): Promise<Sou
   return response.data;
 };
 
+export interface TestSourceResponse {
+  message: string;
+}
+
+export const testSource = async (sourceData: CreateSourceRequest): Promise<TestSourceResponse> => {
+  const response = await api.post<TestSourceResponse>("/sources/test/", sourceData);
+  return response.data;
+};
+
 export default api;
