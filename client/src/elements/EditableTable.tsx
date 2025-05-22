@@ -92,7 +92,7 @@ const loadColumnSizes = (storageKey: string | null) => {
 // Helper to save column sizes to localStorage
 const saveColumnSizes = (
   storageKey: string | null,
-  sizes: Record<string, number>
+  sizes: Record<string, number>,
 ) => {
   if (!storageKey) return;
   try {
@@ -113,7 +113,7 @@ export const EditableTable = ({
   const initializedRef = useRef(false);
   const storageKey = useMemo(
     () => getStorageKey(tableId, source, schema),
-    [tableId, source, schema]
+    [tableId, source, schema],
   );
 
   // Use query data if available, otherwise use default data
@@ -247,13 +247,13 @@ export const EditableTable = ({
         copyData: cellValue,
       } as GridCell;
     },
-    [dataIndexes, data]
+    [dataIndexes, data],
   );
 
   const handleColumnResize = (
     column: GridColumn,
     newSize: number,
-    colIndex: number
+    colIndex: number,
   ) => {
     console.log("Column resized:", column.title, newSize, colIndex);
 

@@ -13,7 +13,7 @@ export const TableDataDisplay = ({ tableData }: TableDataDisplayProps) => {
   const { data: queryResults, isLoading } = useQueryQuery(
     tableData?.sourceId || "",
     tableData ? `SELECT * FROM ${tableData.tableName} LIMIT 101` : "",
-    { enabled: !!tableData }
+    { enabled: !!tableData },
   );
 
   return (

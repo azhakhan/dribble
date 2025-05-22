@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException, Depends
-from app.schemas.sources import CreateSourceRequest, UpdateSourceRequest, DeleteSourceRequest
+from app.schemas.sources import CreateSourceRequest, UpdateSourceRequest
 from app.core.db import get_db
 from sqlalchemy.orm import Session
 from app.models import Source
@@ -20,7 +20,14 @@ async def add_source(
 ):
     # convert creds to dict
     creds = request.creds.model_dump()
-    db.add(Source(name=request.name, dbtype=request.dbtype, creds=creds, workspace_id=workspace.id))
+    db.add(
+        Source(
+            name=request.name,
+            dbtype=request.dbtype,
+            creds=creds,
+            workspace_id=workspace.id,
+        )
+    )
     db.commit()
     db.refresh(db.query(Source).filter_by(name=request.name).first())
     return db.query(Source).filter_by(name=request.name).first()

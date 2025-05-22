@@ -65,7 +65,7 @@ function TopMenu() {
 function App() {
   const editorContainerRef = useRef<HTMLDivElement>(null);
   const [sqlContent, setSqlContent] = useState<string>(
-    "-- Write your SQL query here\n"
+    "-- Write your SQL query here\n",
   );
   const [sizes, setSizes] = useState(() => {
     const savedSizes = localStorage.getItem("panel-sizes");
@@ -113,7 +113,7 @@ function App() {
       if (node.id && sourceSchemaMap[node.id]) {
         const schemaNodes = schemaToFileTreeNodes(
           sourceSchemaMap[node.id],
-          node.id
+          node.id,
         );
         return {
           ...node,

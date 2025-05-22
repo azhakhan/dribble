@@ -117,4 +117,4 @@ def get_postgres_schemas(source: Source):
             return schemas
 
     except OperationalError as e:
-        raise Exception(f"Error connecting to database: {e}")
+        raise Exception(f"Error connecting to database: {e}") from e

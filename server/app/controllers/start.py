@@ -20,7 +20,9 @@ def ensure_user_and_workspace():
                 db.commit()
                 db.refresh(user)
                 # create user workspace
-                user_workspace = WorkspaceUser(user_id=user.id, workspace_id=workspace.id, role="admin")
+                user_workspace = WorkspaceUser(
+                    user_id=user.id, workspace_id=workspace.id, role="admin"
+                )
                 db.add(user_workspace)
                 db.commit()
                 db.refresh(user_workspace)

@@ -1,5 +1,9 @@
 from fastapi import APIRouter, HTTPException, Depends
-from app.schemas.query import ExecuteQueryRequest, CreateQueryRequest, UpdateQueryRequest
+from app.schemas.query import (
+    ExecuteQueryRequest,
+    CreateQueryRequest,
+    UpdateQueryRequest,
+)
 from app.controllers.query import execute_query
 from app.core.db import get_db
 from sqlalchemy.orm import Session
@@ -20,7 +24,7 @@ async def query(request: CreateQueryRequest, db: Session = Depends(get_db)):
         db.refresh(query)
         return query
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.put("/{query_id}")
@@ -36,7 +40,7 @@ async def update(query_id: UUID, request: UpdateQueryRequest, db: Session = Depe
         db.refresh(query)
         return query
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.delete("/{query_id}")
@@ -49,7 +53,7 @@ async def delete(query_id: UUID, db: Session = Depends(get_db)):
         db.commit()
         return {"message": "Query deleted successfully"}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.post("/execute/")
@@ -60,7 +64,7 @@ async def execute_query_string(request: ExecuteQueryRequest, db: Session = Depen
             raise Exception("Source not found")
         return execute_query(source, request.query)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.post("/{query_id}/execute/")
@@ -74,4 +78,4 @@ async def execute_query_id(query_id: UUID, db: Session = Depends(get_db)):
             raise Exception("Source not found")
         return execute_query(source, query.query)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e

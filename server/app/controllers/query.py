@@ -1,6 +1,5 @@
 from app.models import Source
 from sqlalchemy import create_engine, text
-from sqlalchemy.orm import Session
 from app.schemas.sources import PostgresCreds
 from sqlalchemy import URL
 from sqlalchemy.exc import OperationalError
@@ -8,7 +7,6 @@ import binascii
 
 
 def execute_query(source: Source, query: str):
-
     if source.dbtype == "postgres":
         creds = PostgresCreds(**source.creds)
         url = URL.create(
@@ -37,6 +35,6 @@ def execute_query(source: Source, query: str):
                     processed_rows.append(processed_row)
                 return processed_rows
         except OperationalError as e:
-            raise Exception(f"Error executing query: {e}")
+            raise Exception(f"Error executing query: {e}") from e
     else:
         raise Exception("Unsupported database type")

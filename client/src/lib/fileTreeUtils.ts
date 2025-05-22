@@ -46,7 +46,7 @@ export const sourcesToFileTreeNodes = (sources: Source[]): FileNode[] => {
 // Helper function to convert schema data to file tree nodes
 export const schemaToFileTreeNodes = (
   schemaData: Record<string, SchemaObject>,
-  sourceId: string
+  sourceId: string,
 ): FileNode[] => {
   const result: FileNode[] = [];
 

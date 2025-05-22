@@ -22,5 +22,3 @@ def get_current_workspace(db: Session = Depends(get_db)) -> Workspace:
         if not workspace:
             raise HTTPException(status_code=401, detail="Not authenticated")
         return workspace
-    else:
-        raise HTTPException(status_code=401, detail="Not authenticated")

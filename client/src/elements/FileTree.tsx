@@ -213,7 +213,7 @@ export const FileTree = ({
   loadingSourceId,
 }: FileTreeProps) => {
   const [selectedNodeId, setSelectedNodeId] = useState<string | undefined>(
-    undefined
+    undefined,
   );
 
   return (
