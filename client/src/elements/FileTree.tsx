@@ -88,7 +88,7 @@ const FileTreeItem = ({
 
   const renderIcon = () => {
     if (isFolder) {
-      return <Folder className="h-4 w-4" />;
+      return <Folder className="h-4 w-4" strokeWidth={1} />;
     } else if (isSource) {
       // Use SVG components with constrained size
       const dbType = node.dbtype?.toLowerCase();
@@ -111,16 +111,16 @@ const FileTreeItem = ({
           </div>
         );
       } else {
-        return <Database className="h-4 w-4" />;
+        return <Database className="h-4 w-4" strokeWidth={1} />;
       }
     } else if (isSchema) {
-      return <Database className="h-4 w-4" />;
+      return <Database className="h-4 w-4" strokeWidth={1} />;
     } else if (isTable) {
-      return <Table className="h-4 w-4" />;
+      return <Table className="h-4 w-4" strokeWidth={1} />;
     } else if (node.type === "column") {
-      return <Columns className="h-4 w-4" />;
+      return <Columns className="h-4 w-4" strokeWidth={1} />;
     }
-    return <File className="h-4 w-4" />;
+    return <File className="h-4 w-4" strokeWidth={1} />;
   };
 
   return (
@@ -138,7 +138,7 @@ const FileTreeItem = ({
           )
         ) : null}
         {renderIcon()}
-        <span className="text-sm">{node.name}</span>
+        <span className="text-sm font-light">{node.name}</span>
         {node.type === "column" && node.nullable === false && (
           <span className="text-xs text-red-500 ml-1">*</span>
         )}
