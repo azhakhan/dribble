@@ -9,13 +9,13 @@ import {
   DialogFooter,
   DialogTrigger
 } from "@/components/ui/dialog";
-import { createSource, testSource, getSourceCredentials, updateSource } from "@/lib/api";
+import { createSource, testSource, getSourceCredentials, updateSourceCredentials } from "@/lib/api";
 import type {
   PostgresCreds,
   MysqlCreds,
   SqliteCreds,
   CreateSourceRequest,
-  UpdateSourceRequest
+  UpdateCredentialsRequest
 } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { useQueryClient } from "@tanstack/react-query";
@@ -201,9 +201,7 @@ export const AddSourceDialog = ({
       };
 
       // For update operation
-      const updateData: UpdateSourceRequest = {
-        name: sourceName,
-        dbtype: sourceType as "postgres" | "mysql" | "sqlite",
+      const updateData: UpdateCredentialsRequest = {
         creds: { ...credentials! } // Create a copy
       };
 
@@ -220,7 +218,7 @@ export const AddSourceDialog = ({
           updateData.creds = restCreds as MysqlCreds;
         }
 
-        await updateSource(editSourceId, updateData);
+        await updateSourceCredentials(editSourceId, updateData);
         toast.success(`Source "${sourceName}" updated successfully`);
       } else {
         // Otherwise create a new source

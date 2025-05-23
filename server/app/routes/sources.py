@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, Depends
 from app.schemas.sources import (
     CreateSourceRequest,
-    UpdateSourceRequest,
+    UpdateCredentialsRequest,
     TestSourceRequest,
     RenameSourceRequest,
 )
@@ -51,26 +51,6 @@ async def test(request: TestSourceRequest, workspace=Depends(get_current_workspa
         return {"message": "Connection successful"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
-
-
-# edit a source
-@router.put("/{source_id}/")
-async def edit_source(
-    source_id: UUID,
-    request: UpdateSourceRequest,
-    db: Session = Depends(get_db),
-):
-    source = db.query(Source).filter_by(id=source_id).first()
-    if not source:
-        raise HTTPException(status_code=404, detail="Source not found")
-
-    source.name = request.name if request.name else source.name
-    source.dbtype = request.dbtype if request.dbtype else source.dbtype
-    source.creds = request.creds.model_dump() if request.creds else source.creds
-
-    db.commit()
-    db.refresh(source)
-    return source
 
 
 @router.put("/rename/{source_id}/")
@@ -137,3 +117,19 @@ async def get_credentials(
     creds = source.creds
     creds.pop("password", None)
     return {"name": source.name, "dbtype": source.dbtype, "creds": creds}
+
+
+# edit a credential
+@router.put("/credentials/{source_id}/")
+async def edit_source(
+    source_id: UUID,
+    request: UpdateCredentialsRequest,
+    db: Session = Depends(get_db),
+):
+    source = db.query(Source).filter_by(id=source_id).first()
+    if not source:
+        raise HTTPException(status_code=404, detail="Source not found")
+    source.creds = request.creds.model_dump()
+    db.commit()
+    db.refresh(source)
+    return source

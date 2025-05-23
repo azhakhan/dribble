@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
-import { getSourceCredentials, updateSource } from "@/lib/api";
-import type { PostgresCreds, MysqlCreds, SqliteCreds, UpdateSourceRequest } from "@/lib/api";
+import { getSourceCredentials, updateSourceCredentials } from "@/lib/api";
+import type { PostgresCreds, MysqlCreds, SqliteCreds, UpdateCredentialsRequest } from "@/lib/api";
 import {
   Dialog,
   DialogContent,
@@ -25,7 +25,6 @@ export const EditSourceDialog = ({ open, onOpenChange, sourceId }: EditSourceDia
   const [loadingCreds, setLoadingCreds] = useState(false);
   const [testing, setTesting] = useState(false);
   const [sourceType, setSourceType] = useState<"postgres" | "mysql" | "sqlite" | "">("");
-  const [sourceName, setSourceName] = useState("");
   const [formError, setFormError] = useState("");
   const queryClient = useQueryClient();
 
@@ -60,8 +59,7 @@ export const EditSourceDialog = ({ open, onOpenChange, sourceId }: EditSourceDia
           setLoadingCreds(true);
           const sourceData = await getSourceCredentials(sourceId);
 
-          // Set form values from source data
-          setSourceName(sourceData.name);
+          // Set source type
           setSourceType(sourceData.dbtype as "postgres" | "mysql" | "sqlite");
 
           // Set config based on database type
@@ -104,7 +102,6 @@ export const EditSourceDialog = ({ open, onOpenChange, sourceId }: EditSourceDia
 
   const resetForm = () => {
     setSourceType("");
-    setSourceName("");
     setFormError("");
     setPostgresConfig({
       host: "",
@@ -136,13 +133,8 @@ export const EditSourceDialog = ({ open, onOpenChange, sourceId }: EditSourceDia
   };
 
   const handleSave = async () => {
-    if (!sourceName.trim()) {
-      setFormError("Source name is required");
-      return;
-    }
-
     if (!sourceType) {
-      setFormError("Please select a database type");
+      setFormError("Database type not found");
       return;
     }
 
@@ -180,9 +172,7 @@ export const EditSourceDialog = ({ open, onOpenChange, sourceId }: EditSourceDia
       setFormError("");
 
       // For update operation
-      const updateData: UpdateSourceRequest = {
-        name: sourceName,
-        dbtype: sourceType as "postgres" | "mysql" | "sqlite",
+      const updateData: UpdateCredentialsRequest = {
         creds: { ...credentials! } // Create a copy
       };
 
@@ -197,8 +187,8 @@ export const EditSourceDialog = ({ open, onOpenChange, sourceId }: EditSourceDia
         updateData.creds = restCreds as MysqlCreds;
       }
 
-      await updateSource(sourceId, updateData);
-      toast.success(`Source "${sourceName}" updated successfully`);
+      await updateSourceCredentials(sourceId, updateData);
+      toast.success("Database connection updated successfully");
 
       // Invalidate sources query to refresh the list
       queryClient.invalidateQueries({ queryKey: ["sources"] });
@@ -231,52 +221,18 @@ export const EditSourceDialog = ({ open, onOpenChange, sourceId }: EditSourceDia
     >
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
-          <DialogTitle>Edit Database Source</DialogTitle>
+          <DialogTitle>Edit Database Connection</DialogTitle>
           <DialogDescription>Update your database connection details.</DialogDescription>
         </DialogHeader>
 
         {loadingCreds ? (
           <div className="flex justify-center items-center py-8">
             <Loader2 className="h-8 w-8 animate-spin" />
-            <span className="ml-2">Loading source details...</span>
+            <span className="ml-2">Loading connection details...</span>
           </div>
         ) : (
           <>
             <div className="grid gap-4 py-4">
-              <div className="grid grid-cols-4 items-center gap-4">
-                <label htmlFor="name" className="text-right text-sm font-medium">
-                  Name
-                </label>
-                <input
-                  id="name"
-                  className="col-span-3 flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                  value={sourceName}
-                  onChange={(e) => setSourceName(e.target.value)}
-                  placeholder="My Database"
-                  disabled={isFormDisabled}
-                />
-              </div>
-
-              <div className="grid grid-cols-4 items-center gap-4">
-                <label htmlFor="type" className="text-right text-sm font-medium">
-                  Type
-                </label>
-                <select
-                  id="type"
-                  className="col-span-3 flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                  value={sourceType}
-                  onChange={(e) =>
-                    setSourceType(e.target.value as "postgres" | "mysql" | "sqlite" | "")
-                  }
-                  disabled={true} // Always disable type change when editing
-                >
-                  <option value="">Select database type</option>
-                  <option value="postgres">PostgreSQL</option>
-                  <option value="mysql">MySQL</option>
-                  <option value="sqlite">SQLite</option>
-                </select>
-              </div>
-
               {sourceType === "postgres" && (
                 <>
                   <div className="grid grid-cols-4 items-center gap-4">

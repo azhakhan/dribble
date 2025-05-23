@@ -9,9 +9,7 @@ import {
   Columns,
   Loader2,
   PlusCircle,
-  MoreVertical,
-  Trash,
-  Pencil
+  MoreVertical
 } from "lucide-react";
 import { PostgresIcon, MySQLIcon, SQLiteIcon } from "./icons";
 import { getColumnTypeIcon } from "./ColumnTypeIcons";
@@ -210,7 +208,6 @@ const FileTreeItem = ({
                     }, 100);
                   }}
                 >
-                  <Pencil className="h-3 w-3 mr-2" />
                   Edit Credentials
                 </DropdownMenuItem>
                 <DropdownMenuItem
@@ -240,7 +237,6 @@ const FileTreeItem = ({
                     }, 100);
                   }}
                 >
-                  <Trash className="h-3 w-3 mr-2" />
                   Delete
                 </DropdownMenuItem>
               </DropdownMenuContent>

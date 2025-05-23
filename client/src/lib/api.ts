@@ -87,17 +87,15 @@ export const getSourceCredentials = async (sourceId: string): Promise<SourceCred
   return response.data;
 };
 
-export interface UpdateSourceRequest {
-  name?: string;
-  dbtype?: string;
+export interface UpdateCredentialsRequest {
   creds?: PostgresCreds | MysqlCreds | SqliteCreds;
 }
 
-export const updateSource = async (
+export const updateSourceCredentials = async (
   sourceId: string,
-  sourceData: UpdateSourceRequest
+  sourceData: UpdateCredentialsRequest
 ): Promise<Source> => {
-  const response = await api.put<Source>(`/sources/${sourceId}/`, sourceData);
+  const response = await api.put<Source>(`/sources/credentials/${sourceId}/`, sourceData);
   return response.data;
 };
 

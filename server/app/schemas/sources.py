@@ -40,9 +40,7 @@ class TestSourceRequest(BaseModel):
     creds: PostgresCreds | MysqlCreds | SqliteCreds
 
 
-class UpdateSourceRequest(BaseModel):
-    name: str | None = None
-    dbtype: SourceType | None = None
+class UpdateCredentialsRequest(BaseModel):
     creds: PostgresCreds | MysqlCreds | SqliteCreds | None = None
 
 
