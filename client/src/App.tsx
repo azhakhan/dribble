@@ -4,10 +4,10 @@ import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 import { ModeToggle } from "@/components/mode-toggle";
 import logo from "@/assets/logo.png";
 
-import { FileTree } from "@/elements/FileTree";
+import { FileTree } from "@/elements/FileTree/FileTree";
 import { sourcesToFileTreeNodes, schemaToFileTreeNodes, type FileNode } from "@/lib/fileTreeUtils";
-import { TableDataDisplay } from "@/elements/TableDataDisplay";
-import { ChatSidebar } from "@/elements/ChatSidebar";
+import { TableDataDisplay } from "@/elements/Table/TableDataDisplay";
+import { ChatSidebar } from "@/elements/Chat/ChatSidebar";
 import { Editor } from "@/elements/Editor";
 import { useSourcesQuery } from "@/hooks/useSourcesQuery";
 import { useSourceSchemasQuery } from "@/hooks/useSourceSchemasQuery";

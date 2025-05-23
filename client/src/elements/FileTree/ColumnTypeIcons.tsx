@@ -11,7 +11,7 @@ import {
   Binary,
   Brackets,
   SigmaSquare,
-  ListTree,
+  ListTree
 } from "lucide-react";
 
 // Function to determine icon based on data type
@@ -83,11 +83,7 @@ export const getColumnTypeIcon = (dataType: string) => {
   }
 
   // Binary types
-  if (
-    type.includes("binary") ||
-    type.includes("bytea") ||
-    type.includes("blob")
-  ) {
+  if (type.includes("binary") || type.includes("bytea") || type.includes("blob")) {
     return <Binary className="h-4 w-4" strokeWidth={1} />;
   }
 
@@ -107,11 +103,7 @@ export const getColumnTypeIcon = (dataType: string) => {
   }
 
   // Network types
-  if (
-    type.includes("inet") ||
-    type.includes("cidr") ||
-    type.includes("macaddr")
-  ) {
+  if (type.includes("inet") || type.includes("cidr") || type.includes("macaddr")) {
     return <Database className="h-4 w-4" strokeWidth={1} />;
   }
 

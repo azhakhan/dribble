@@ -1,4 +1,4 @@
-import { EditableTable } from "@/elements/EditableTable";
+import { EditableTable } from "@/elements/Table/EditableTable";
 import { useQueryQuery } from "@/hooks/useQueryQuery";
 
 interface TableDataDisplayProps {

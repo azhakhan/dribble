@@ -11,10 +11,10 @@ import {
   PlusCircle,
   MoreVertical
 } from "lucide-react";
-import { PostgresIcon, MySQLIcon, SQLiteIcon } from "./icons";
+import { PostgresIcon, MySQLIcon, SQLiteIcon } from "../icons";
 import { getColumnTypeIcon } from "./ColumnTypeIcons";
 import type { FileNode } from "@/lib/fileTreeUtils";
-import { AddSourceDialog } from "@/elements/AddSourceDialog";
+import { AddSourceDialog } from "@/elements/FileTree/AddSourceDialog";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,

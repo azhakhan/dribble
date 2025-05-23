@@ -6,7 +6,7 @@ import {
   GridCellKind,
   type GridColumn,
   type Item,
-  type Theme as GlideTheme,
+  type Theme as GlideTheme
 } from "@glideapps/glide-data-grid";
 import { useTheme } from "@/components/theme-provider";
 import { useCallback, useMemo, useState, useEffect, useRef } from "react";
@@ -54,13 +54,13 @@ const dataEditorBaseTheme: GlideTheme = {
   fontFamily:
     "Inter, Roboto, -apple-system, BlinkMacSystemFont, avenir next, avenir, segoe ui, helvetica neue, helvetica, Ubuntu, noto, arial, sans-serif",
   editorFontSize: "13px",
-  lineHeight: 1.4, //unitless scaler depends on your font
+  lineHeight: 1.4 //unitless scaler depends on your font
 };
 
 // Default columns
 const defaultColumns: GridColumn[] = [
   { title: "First Name", width: 200 },
-  { title: "Last Name", width: 200 },
+  { title: "Last Name", width: 200 }
 ];
 
 interface EditableTableProps {
@@ -90,10 +90,7 @@ const loadColumnSizes = (storageKey: string | null) => {
 };
 
 // Helper to save column sizes to localStorage
-const saveColumnSizes = (
-  storageKey: string | null,
-  sizes: Record<string, number>,
-) => {
+const saveColumnSizes = (storageKey: string | null, sizes: Record<string, number>) => {
   if (!storageKey) return;
   try {
     localStorage.setItem(storageKey, JSON.stringify(sizes));
@@ -107,13 +104,13 @@ export const EditableTable = ({
   isLoading,
   tableId = "default",
   source,
-  schema,
+  schema
 }: EditableTableProps) => {
   const { theme } = useTheme();
   const initializedRef = useRef(false);
   const storageKey = useMemo(
     () => getStorageKey(tableId, source, schema),
-    [tableId, source, schema],
+    [tableId, source, schema]
   );
 
   // Use query data if available, otherwise use default data
@@ -156,38 +153,29 @@ export const EditableTable = ({
   const getGlideTheme = (): GlideTheme => {
     const isDark =
       theme === "dark" ||
-      (theme === "system" &&
-        window.matchMedia("(prefers-color-scheme: dark)").matches);
+      (theme === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
 
     return {
       ...dataEditorBaseTheme,
       // Accent colors
-      accentColor: isDark
-        ? "oklch(0.274 0.006 286.033)"
-        : "oklch(0.967 0.001 286.375)",
-      accentLight: isDark
-        ? "oklch(0.274 0.006 286.033)"
-        : "oklch(0.967 0.001 286.375)",
+      accentColor: isDark ? "oklch(0.274 0.006 286.033)" : "oklch(0.967 0.001 286.375)",
+      accentLight: isDark ? "oklch(0.274 0.006 286.033)" : "oklch(0.967 0.001 286.375)",
 
       // Text colors
       textDark: isDark ? "oklch(0.985 0 0)" : "oklch(0.141 0.005 285.823)",
 
       // Header colors
       textHeader: isDark ? "oklch(0.985 0 0)" : "oklch(0.141 0.005 285.823)",
-      textHeaderSelected: isDark
-        ? "oklch(0.985 0 0)"
-        : "oklch(0.141 0.005 285.823)",
+      textHeaderSelected: isDark ? "oklch(0.985 0 0)" : "oklch(0.141 0.005 285.823)",
 
       // Cell and background colors
       bgCell: isDark ? "#171717" : "#fafafa",
       bgHeader: isDark ? "oklch(0.21 0.006 285.885)" : "oklch(1 0 0)",
       bgHeaderHasFocus: isDark ? "oklch(0.21 0.006 285.885)" : "oklch(1 0 0)",
-      bgHeaderHovered: isDark
-        ? "oklch(0.274 0.006 286.033)"
-        : "oklch(0.967 0.001 286.375)",
+      bgHeaderHovered: isDark ? "oklch(0.274 0.006 286.033)" : "oklch(0.967 0.001 286.375)",
 
       // Border and link colors
-      borderColor: isDark ? "oklch(1 0 0 / 10%)" : "oklch(0.92 0.004 286.32)",
+      borderColor: isDark ? "oklch(1 0 0 / 10%)" : "oklch(0.92 0.004 286.32)"
     };
   };
 
@@ -198,7 +186,7 @@ export const EditableTable = ({
     return Object.keys(data[0]).map((key) => ({
       title: key,
       width: columnSizes[key] || 200, // Use stored width or default
-      id: key,
+      id: key
     }));
   }, [data, columnSizes]);
 
@@ -214,7 +202,7 @@ export const EditableTable = ({
         return {
           kind: GridCellKind.Text,
           displayData: "",
-          data: "",
+          data: ""
         } as GridCell;
       }
 
@@ -225,7 +213,7 @@ export const EditableTable = ({
         return {
           kind: GridCellKind.Text,
           displayData: "",
-          data: "",
+          data: ""
         } as GridCell;
       }
 
@@ -244,23 +232,19 @@ export const EditableTable = ({
         kind: GridCellKind.Text,
         displayData: cellValue,
         data: cellValue,
-        copyData: cellValue,
+        copyData: cellValue
       } as GridCell;
     },
-    [dataIndexes, data],
+    [dataIndexes, data]
   );
 
-  const handleColumnResize = (
-    column: GridColumn,
-    newSize: number,
-    colIndex: number,
-  ) => {
+  const handleColumnResize = (column: GridColumn, newSize: number, colIndex: number) => {
     console.log("Column resized:", column.title, newSize, colIndex);
 
     // Update the column size in state
     const newColumnSizes = {
       ...columnSizes,
-      [column.title]: newSize,
+      [column.title]: newSize
     };
 
     setColumnSizes(newColumnSizes);
@@ -272,11 +256,7 @@ export const EditableTable = ({
   };
 
   if (isLoading) {
-    return (
-      <div className="h-full w-full flex items-center justify-center">
-        Loading data...
-      </div>
-    );
+    return <div className="h-full w-full flex items-center justify-center">Loading data...</div>;
   }
 
   return (

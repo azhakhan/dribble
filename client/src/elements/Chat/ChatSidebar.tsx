@@ -24,7 +24,7 @@ export function ChatSidebar() {
     setTimeout(() => {
       const aiResponse: Message = {
         role: "assistant",
-        content: `This is a simulated response to: "${input}"`,
+        content: `This is a simulated response to: "${input}"`
       };
       setMessages((prev) => [...prev, aiResponse]);
     }, 500);
@@ -44,9 +44,7 @@ export function ChatSidebar() {
           <div
             key={index}
             className={`p-3 rounded-lg ${
-              message.role === "user"
-                ? "bg-primary text-primary-foreground ml-auto"
-                : "bg-muted"
+              message.role === "user" ? "bg-primary text-primary-foreground ml-auto" : "bg-muted"
             } max-w-[80%] ${message.role === "user" ? "ml-auto" : "mr-auto"}`}
           >
             {message.content}
@@ -57,9 +55,7 @@ export function ChatSidebar() {
         <div className="flex gap-2">
           <Textarea
             value={input}
-            onChange={(e: ChangeEvent<HTMLTextAreaElement>) =>
-              setInput(e.target.value)
-            }
+            onChange={(e: ChangeEvent<HTMLTextAreaElement>) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="Type your message..."
             className="min-h-[80px] resize-none"
