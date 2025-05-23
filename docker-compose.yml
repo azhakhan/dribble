@@ -28,8 +28,6 @@ services:
       - ./server/pyproject.toml:/app/pyproject.toml:cached
     ports:
       - "8000:8000"
-    env_file:
-      - .env
     environment:
       - IN_DOCKER=1
       - PYTHONPATH=/app
