@@ -8,13 +8,25 @@ import {
   Table,
   Columns,
   Loader2,
-  PlusCircle
+  PlusCircle,
+  MoreVertical,
+  Trash,
+  Pencil
 } from "lucide-react";
 import { PostgresIcon, MySQLIcon, SQLiteIcon } from "./icons";
 import { getColumnTypeIcon } from "./ColumnTypeIcons";
 import type { FileNode } from "@/lib/fileTreeUtils";
-import { AddSourceDialog } from "@/components/AddSourceDialog";
+import { AddSourceDialog } from "@/elements/AddSourceDialog";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger
+} from "@/components/ui/dropdown-menu";
+import { EditSourceDialog } from "./EditSourceDialog";
+import { RenameSourceDialog } from "./RenameSourceDialog";
+import { DeleteSourceDialog } from "./DeleteSourceDialog";
 
 interface FileTreeProps {
   data: FileNode[];
@@ -41,6 +53,10 @@ const FileTreeItem = ({
   setSelectedNodeId: (id: string | undefined) => void;
 }) => {
   const [isOpen, setIsOpen] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [renameDialogOpen, setRenameDialogOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
   const isFolder = node.type === "folder";
   const isSource = node.type === "source";
   const isSchema = node.type === "schema";
@@ -171,18 +187,99 @@ const FileTreeItem = ({
         )}
         {isSource && (
           <div
-            className="ml-auto opacity-0 group-hover:opacity-100 hover:text-foreground text-muted-foreground scale-75"
+            className="ml-auto opacity-0 group-hover:opacity-100 text-muted-foreground scale-75 flex items-center"
             onClick={(e) => e.stopPropagation()}
           >
-            <AddSourceDialog
-              isEdit={true}
-              editSourceId={node.id}
-              className="hover:text-foreground"
-              onSourceAdded={() => {}}
-            />
+            <DropdownMenu open={dropdownOpen} onOpenChange={setDropdownOpen}>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-5 w-5 p-0">
+                  <MoreVertical className="h-3 w-3" />
+                  <span className="sr-only">Source options</span>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setDropdownOpen(false);
+
+                    // Small delay to ensure dropdown is closed before opening dialog
+                    setTimeout(() => {
+                      setEditDialogOpen(true);
+                    }, 100);
+                  }}
+                >
+                  <Pencil className="h-3 w-3 mr-2" />
+                  Edit Credentials
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setDropdownOpen(false);
+
+                    // Small delay to ensure dropdown is closed before opening dialog
+                    setTimeout(() => {
+                      setRenameDialogOpen(true);
+                    }, 100);
+                  }}
+                >
+                  Rename
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  variant="destructive"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setDropdownOpen(false);
+
+                    // Small delay to ensure dropdown is closed before opening dialog
+                    setTimeout(() => {
+                      setDeleteDialogOpen(true);
+                    }, 100);
+                  }}
+                >
+                  <Trash className="h-3 w-3 mr-2" />
+                  Delete
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         )}
       </div>
+
+      {/* Separate Dialogs */}
+      {isSource && node.id && (
+        <>
+          <EditSourceDialog
+            open={editDialogOpen}
+            onOpenChange={(open) => {
+              setEditDialogOpen(open);
+            }}
+            sourceId={node.id}
+          />
+
+          <RenameSourceDialog
+            open={renameDialogOpen}
+            onOpenChange={(open) => {
+              setRenameDialogOpen(open);
+            }}
+            sourceId={node.id}
+            sourceName={node.name}
+          />
+
+          <DeleteSourceDialog
+            open={deleteDialogOpen}
+            onOpenChange={(open) => {
+              setDeleteDialogOpen(open);
+            }}
+            sourceId={node.id}
+            sourceName={node.name}
+          />
+        </>
+      )}
+
       {(isFolder || isSchema || isTable || isSource) && isOpen && (
         <div>
           {node.children &&

@@ -1,5 +1,10 @@
 from fastapi import APIRouter, HTTPException, Depends
-from app.schemas.sources import CreateSourceRequest, UpdateSourceRequest, TestSourceRequest
+from app.schemas.sources import (
+    CreateSourceRequest,
+    UpdateSourceRequest,
+    TestSourceRequest,
+    RenameSourceRequest,
+)
 from app.core.db import get_db
 from sqlalchemy.orm import Session
 from app.models import Source
@@ -68,8 +73,23 @@ async def edit_source(
     return source
 
 
+@router.put("/rename/{source_id}/")
+async def rename_source(
+    source_id: UUID,
+    request: RenameSourceRequest,
+    db: Session = Depends(get_db),
+):
+    source = db.query(Source).filter_by(id=source_id).first()
+    if not source:
+        raise HTTPException(status_code=404, detail="Source not found")
+    source.name = request.name
+    db.commit()
+    db.refresh(source)
+    return source
+
+
 # delete a source
-@router.delete("/{source_id}")
+@router.delete("/{source_id}/")
 async def delete_source(
     source_id: UUID,
     db: Session = Depends(get_db),

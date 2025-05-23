@@ -101,4 +101,13 @@ export const updateSource = async (
   return response.data;
 };
 
+export const renameSource = async (sourceId: string, name: string): Promise<Source> => {
+  const response = await api.put<Source>(`/sources/rename/${sourceId}/`, { name });
+  return response.data;
+};
+
+export const deleteSource = async (sourceId: string): Promise<void> => {
+  await api.delete(`/sources/${sourceId}/`);
+};
+
 export default api;

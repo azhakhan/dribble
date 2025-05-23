@@ -46,5 +46,9 @@ class UpdateSourceRequest(BaseModel):
     creds: PostgresCreds | MysqlCreds | SqliteCreds | None = None
 
 
+class RenameSourceRequest(BaseModel):
+    name: str
+
+
 class DeleteSourceRequest(BaseModel):
     id: UUID
