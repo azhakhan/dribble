@@ -76,4 +76,29 @@ export const testSource = async (sourceData: CreateSourceRequest): Promise<TestS
   return response.data;
 };
 
+export interface SourceCredentials {
+  name: string;
+  dbtype: string;
+  creds: PostgresCreds | MysqlCreds | SqliteCreds;
+}
+
+export const getSourceCredentials = async (sourceId: string): Promise<SourceCredentials> => {
+  const response = await api.get<SourceCredentials>(`/sources/credentials/${sourceId}/`);
+  return response.data;
+};
+
+export interface UpdateSourceRequest {
+  name?: string;
+  dbtype?: string;
+  creds?: PostgresCreds | MysqlCreds | SqliteCreds;
+}
+
+export const updateSource = async (
+  sourceId: string,
+  sourceData: UpdateSourceRequest
+): Promise<Source> => {
+  const response = await api.put<Source>(`/sources/${sourceId}/`, sourceData);
+  return response.data;
+};
+
 export default api;

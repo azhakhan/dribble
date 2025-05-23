@@ -49,7 +49,7 @@ async def test(request: TestSourceRequest, workspace=Depends(get_current_workspa
 
 
 # edit a source
-@router.put("/{source_id}")
+@router.put("/{source_id}/")
 async def edit_source(
     source_id: UUID,
     request: UpdateSourceRequest,

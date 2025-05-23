@@ -156,7 +156,7 @@ const FileTreeItem = ({
   return (
     <div>
       <div
-        className={`flex items-center gap-1 px-2 py-1 hover:bg-accent cursor-pointer select-none ${
+        className={`flex items-center gap-1 px-2 py-1 hover:bg-accent cursor-pointer select-none group ${
           isSelected ? "bg-accent" : ""
         }`}
         style={{ paddingLeft: `${level * 12 + 8}px` }}
@@ -168,6 +168,19 @@ const FileTreeItem = ({
         <span className="text-sm font-light">{node.name}</span>
         {isColumn && node.nullable === false && (
           <span className="text-xs text-red-500 ml-1">*</span>
+        )}
+        {isSource && (
+          <div
+            className="ml-auto opacity-0 group-hover:opacity-100 hover:text-foreground text-muted-foreground scale-75"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <AddSourceDialog
+              isEdit={true}
+              editSourceId={node.id}
+              className="hover:text-foreground"
+              onSourceAdded={() => {}}
+            />
+          </div>
         )}
       </div>
       {(isFolder || isSchema || isTable || isSource) && isOpen && (
