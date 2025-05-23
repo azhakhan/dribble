@@ -18,13 +18,11 @@ async def add_source(
     db: Session = Depends(get_db),
     workspace=Depends(get_current_workspace),
 ):
-    # convert creds to dict
-    creds = request.creds.model_dump()
     db.add(
         Source(
             name=request.name,
             dbtype=request.dbtype,
-            creds=creds,
+            creds=request.creds.model_dump(),
             workspace_id=workspace.id,
         )
     )
@@ -63,7 +61,7 @@ async def edit_source(
 
     source.name = request.name if request.name else source.name
     source.dbtype = request.dbtype if request.dbtype else source.dbtype
-    source.creds = request.creds if request.creds else source.creds
+    source.creds = request.creds.model_dump() if request.creds else source.creds
 
     db.commit()
     db.refresh(source)
@@ -107,3 +105,15 @@ async def get_sources(
 
 
 # get a source by id
+@router.get("/credentials/{source_id}/")
+async def get_credentials(
+    source_id: UUID,
+    db: Session = Depends(get_db),
+):
+    source = db.query(Source).filter_by(id=source_id).first()
+    if not source:
+        raise HTTPException(status_code=404, detail="Source not found")
+    # remove password from creds
+    creds = source.creds
+    creds.pop("password", None)
+    return {"name": source.name, "dbtype": source.dbtype, "creds": creds}
