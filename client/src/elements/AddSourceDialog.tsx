@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { PlusCircle, Loader2, Pencil } from "lucide-react";
+import { useState } from "react";
+import { PlusCircle, Loader2 } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -9,14 +9,8 @@ import {
   DialogFooter,
   DialogTrigger
 } from "@/components/ui/dialog";
-import { createSource, testSource, getSourceCredentials, updateSourceCredentials } from "@/lib/api";
-import type {
-  PostgresCreds,
-  MysqlCreds,
-  SqliteCreds,
-  CreateSourceRequest,
-  UpdateCredentialsRequest
-} from "@/lib/api";
+import { createSource, testSource } from "@/lib/api";
+import type { PostgresCreds, MysqlCreds, SqliteCreds, CreateSourceRequest } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -24,19 +18,11 @@ import { toast } from "sonner";
 interface AddSourceDialogProps {
   className?: string;
   onSourceAdded?: () => void;
-  editSourceId?: string;
-  isEdit?: boolean;
 }
 
-export const AddSourceDialog = ({
-  className,
-  onSourceAdded,
-  editSourceId,
-  isEdit = false
-}: AddSourceDialogProps) => {
+export const AddSourceDialog = ({ className, onSourceAdded }: AddSourceDialogProps) => {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [loadingCreds, setLoadingCreds] = useState(false);
   const [testing, setTesting] = useState(false);
   const [sourceType, setSourceType] = useState<"postgres" | "mysql" | "sqlite" | "">("");
   const [sourceName, setSourceName] = useState("");
@@ -65,56 +51,6 @@ export const AddSourceDialog = ({
   const [sqliteConfig, setSquliteConfig] = useState<SqliteCreds>({
     path: ""
   });
-
-  // Load source credentials when editing
-  useEffect(() => {
-    if (isEdit && editSourceId && open) {
-      const loadSourceCredentials = async () => {
-        try {
-          setLoadingCreds(true);
-          const sourceData = await getSourceCredentials(editSourceId);
-
-          // Set form values from source data
-          setSourceName(sourceData.name);
-          setSourceType(sourceData.dbtype as "postgres" | "mysql" | "sqlite");
-
-          // Set config based on database type
-          if (sourceData.dbtype === "postgres") {
-            const creds = sourceData.creds as PostgresCreds;
-            setPostgresConfig({
-              host: creds.host || "",
-              port: creds.port || 5432,
-              user: creds.user || "",
-              password: "", // Password is not returned by API for security
-              dbname: creds.dbname || ""
-            });
-          } else if (sourceData.dbtype === "mysql") {
-            const creds = sourceData.creds as MysqlCreds;
-            setMysqlConfig({
-              host: creds.host || "",
-              port: creds.port || 3306,
-              user: creds.user || "",
-              password: "", // Password is not returned by API for security
-              dbname: creds.dbname || ""
-            });
-          } else if (sourceData.dbtype === "sqlite") {
-            const creds = sourceData.creds as SqliteCreds;
-            setSquliteConfig({
-              path: creds.path || ""
-            });
-          }
-        } catch (error) {
-          console.error("Failed to load source credentials:", error);
-          setFormError("Failed to load source credentials");
-          toast.error("Failed to load source credentials");
-        } finally {
-          setLoadingCreds(false);
-        }
-      };
-
-      loadSourceCredentials();
-    }
-  }, [isEdit, editSourceId, open]);
 
   const resetForm = () => {
     setSourceType("");
@@ -155,26 +91,16 @@ export const AddSourceDialog = ({
 
     // Validate based on source type
     if (sourceType === "postgres") {
-      const { host, user, dbname } = postgresConfig;
-      // Only require password for new sources, not for edits (unless changed)
-      const requirePassword = !isEdit || postgresConfig.password.length > 0;
-      if (!host || !user || (requirePassword && !postgresConfig.password) || !dbname) {
-        setFormError(
-          isEdit
-            ? "All PostgreSQL fields except password are required"
-            : "All PostgreSQL fields are required"
-        );
+      const { host, user, dbname, password } = postgresConfig;
+      if (!host || !user || !password || !dbname) {
+        setFormError("All PostgreSQL fields are required");
         isValid = false;
       }
       credentials = postgresConfig;
     } else if (sourceType === "mysql") {
-      const { host, user, dbname } = mysqlConfig;
-      // Only require password for new sources, not for edits (unless changed)
-      const requirePassword = !isEdit || mysqlConfig.password.length > 0;
-      if (!host || !user || (requirePassword && !mysqlConfig.password) || !dbname) {
-        setFormError(
-          isEdit ? "All MySQL fields except password are required" : "All MySQL fields are required"
-        );
+      const { host, user, dbname, password } = mysqlConfig;
+      if (!host || !user || !password || !dbname) {
+        setFormError("All MySQL fields are required");
         isValid = false;
       }
       credentials = mysqlConfig;
@@ -200,31 +126,8 @@ export const AddSourceDialog = ({
         creds: credentials!
       };
 
-      // For update operation
-      const updateData: UpdateCredentialsRequest = {
-        creds: { ...credentials! } // Create a copy
-      };
-
-      // If we're editing, update the source
-      if (isEdit && editSourceId) {
-        // For updates, only include password if it was changed
-        if (sourceType === "postgres" && !postgresConfig.password && updateData.creds) {
-          // eslint-disable-next-line @typescript-eslint/no-unused-vars
-          const { password, ...restCreds } = updateData.creds as PostgresCreds;
-          updateData.creds = restCreds as PostgresCreds;
-        } else if (sourceType === "mysql" && !mysqlConfig.password && updateData.creds) {
-          // eslint-disable-next-line @typescript-eslint/no-unused-vars
-          const { password, ...restCreds } = updateData.creds as MysqlCreds;
-          updateData.creds = restCreds as MysqlCreds;
-        }
-
-        await updateSourceCredentials(editSourceId, updateData);
-        toast.success(`Source "${sourceName}" updated successfully`);
-      } else {
-        // Otherwise create a new source
-        await createSource(createData);
-        toast.success(`Source "${sourceName}" created successfully`);
-      }
+      await createSource(createData);
+      toast.success(`Source "${sourceName}" created successfully`);
 
       // Invalidate sources query to refresh the list
       queryClient.invalidateQueries({ queryKey: ["sources"] });
@@ -238,7 +141,7 @@ export const AddSourceDialog = ({
     } catch (error) {
       console.error("Failed to save source:", error);
       setFormError("Failed to save source. Please check your connection details.");
-      toast.error(isEdit ? "Failed to update source" : "Failed to create source");
+      toast.error("Failed to create source");
     } finally {
       setLoading(false);
     }
@@ -293,278 +196,265 @@ export const AddSourceDialog = ({
           size="icon"
           className={`p-0 h-auto w-auto ${className} cursor-pointer`}
           onClick={() => setOpen(true)}
-          data-testid={isEdit ? "edit-source-button" : "add-source-button"}
+          data-testid="add-source-button"
         >
-          {isEdit ? <Pencil className="h-2 w-2" /> : <PlusCircle className="h-4 w-4" />}
-          <span className="sr-only">{isEdit ? "Edit Source" : "Add Source"}</span>
+          <PlusCircle className="h-4 w-4" />
+          <span className="sr-only">Add Source</span>
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
-          <DialogTitle>{isEdit ? "Edit Database Source" : "Add New Database Source"}</DialogTitle>
-          <DialogDescription>
-            {isEdit
-              ? "Update your database connection details."
-              : "Connect to your database to start querying data."}
-          </DialogDescription>
+          <DialogTitle>Add New Database Source</DialogTitle>
+          <DialogDescription>Connect to your database to start querying data.</DialogDescription>
         </DialogHeader>
 
-        {loadingCreds ? (
-          <div className="flex justify-center items-center py-8">
-            <Loader2 className="h-8 w-8 animate-spin" />
-            <span className="ml-2">Loading source details...</span>
+        <div className="grid gap-4 py-4">
+          <div className="grid grid-cols-4 items-center gap-4">
+            <label htmlFor="name" className="text-right text-sm font-medium">
+              Name
+            </label>
+            <input
+              id="name"
+              className="col-span-3 flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+              value={sourceName}
+              onChange={(e) => setSourceName(e.target.value)}
+              placeholder="My Database"
+              disabled={isFormDisabled}
+            />
           </div>
-        ) : (
-          <>
-            <div className="grid gap-4 py-4">
+
+          <div className="grid grid-cols-4 items-center gap-4">
+            <label htmlFor="type" className="text-right text-sm font-medium">
+              Type
+            </label>
+            <select
+              id="type"
+              className="col-span-3 flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+              value={sourceType}
+              onChange={(e) =>
+                setSourceType(e.target.value as "postgres" | "mysql" | "sqlite" | "")
+              }
+              disabled={isFormDisabled}
+            >
+              <option value="">Select database type</option>
+              <option value="postgres">PostgreSQL</option>
+              <option value="mysql">MySQL</option>
+              <option value="sqlite">SQLite</option>
+            </select>
+          </div>
+
+          {sourceType === "postgres" && (
+            <>
               <div className="grid grid-cols-4 items-center gap-4">
-                <label htmlFor="name" className="text-right text-sm font-medium">
-                  Name
+                <label htmlFor="host" className="text-right text-sm font-medium">
+                  Host
                 </label>
                 <input
-                  id="name"
+                  id="host"
                   className="col-span-3 flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                  value={sourceName}
-                  onChange={(e) => setSourceName(e.target.value)}
-                  placeholder="My Database"
+                  value={postgresConfig.host}
+                  onChange={(e) =>
+                    setPostgresConfig({
+                      ...postgresConfig,
+                      host: e.target.value
+                    })
+                  }
+                  placeholder="localhost"
                   disabled={isFormDisabled}
                 />
               </div>
-
               <div className="grid grid-cols-4 items-center gap-4">
-                <label htmlFor="type" className="text-right text-sm font-medium">
-                  Type
+                <label htmlFor="port" className="text-right text-sm font-medium">
+                  Port
                 </label>
-                <select
-                  id="type"
-                  className="col-span-3 flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                  value={sourceType}
+                <input
+                  id="port"
+                  type="number"
+                  className="col-span-3 flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                  value={postgresConfig.port}
                   onChange={(e) =>
-                    setSourceType(e.target.value as "postgres" | "mysql" | "sqlite" | "")
+                    setPostgresConfig({
+                      ...postgresConfig,
+                      port: parseInt(e.target.value, 10) || 5432
+                    })
                   }
-                  disabled={isFormDisabled || isEdit} // Disable type change when editing
-                >
-                  <option value="">Select database type</option>
-                  <option value="postgres">PostgreSQL</option>
-                  <option value="mysql">MySQL</option>
-                  <option value="sqlite">SQLite</option>
-                </select>
+                  disabled={isFormDisabled}
+                />
               </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <label htmlFor="username" className="text-right text-sm font-medium">
+                  Username
+                </label>
+                <input
+                  id="username"
+                  className="col-span-3 flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                  value={postgresConfig.user}
+                  onChange={(e) =>
+                    setPostgresConfig({
+                      ...postgresConfig,
+                      user: e.target.value
+                    })
+                  }
+                  placeholder="postgres"
+                  disabled={isFormDisabled}
+                />
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <label htmlFor="password" className="text-right text-sm font-medium">
+                  Password
+                </label>
+                <input
+                  id="password"
+                  type="password"
+                  className="col-span-3 flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                  value={postgresConfig.password}
+                  onChange={(e) =>
+                    setPostgresConfig({
+                      ...postgresConfig,
+                      password: e.target.value
+                    })
+                  }
+                  disabled={isFormDisabled}
+                />
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <label htmlFor="database" className="text-right text-sm font-medium">
+                  Database
+                </label>
+                <input
+                  id="database"
+                  className="col-span-3 flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                  value={postgresConfig.dbname}
+                  onChange={(e) =>
+                    setPostgresConfig({
+                      ...postgresConfig,
+                      dbname: e.target.value
+                    })
+                  }
+                  disabled={isFormDisabled}
+                />
+              </div>
+            </>
+          )}
 
-              {sourceType === "postgres" && (
-                <>
-                  <div className="grid grid-cols-4 items-center gap-4">
-                    <label htmlFor="host" className="text-right text-sm font-medium">
-                      Host
-                    </label>
-                    <input
-                      id="host"
-                      className="col-span-3 flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                      value={postgresConfig.host}
-                      onChange={(e) =>
-                        setPostgresConfig({
-                          ...postgresConfig,
-                          host: e.target.value
-                        })
-                      }
-                      placeholder="localhost"
-                      disabled={isFormDisabled}
-                    />
-                  </div>
-                  <div className="grid grid-cols-4 items-center gap-4">
-                    <label htmlFor="port" className="text-right text-sm font-medium">
-                      Port
-                    </label>
-                    <input
-                      id="port"
-                      type="number"
-                      className="col-span-3 flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                      value={postgresConfig.port}
-                      onChange={(e) =>
-                        setPostgresConfig({
-                          ...postgresConfig,
-                          port: parseInt(e.target.value, 10) || 5432
-                        })
-                      }
-                      disabled={isFormDisabled}
-                    />
-                  </div>
-                  <div className="grid grid-cols-4 items-center gap-4">
-                    <label htmlFor="username" className="text-right text-sm font-medium">
-                      Username
-                    </label>
-                    <input
-                      id="username"
-                      className="col-span-3 flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                      value={postgresConfig.user}
-                      onChange={(e) =>
-                        setPostgresConfig({
-                          ...postgresConfig,
-                          user: e.target.value
-                        })
-                      }
-                      placeholder="postgres"
-                      disabled={isFormDisabled}
-                    />
-                  </div>
-                  <div className="grid grid-cols-4 items-center gap-4">
-                    <label htmlFor="password" className="text-right text-sm font-medium">
-                      Password
-                    </label>
-                    <input
-                      id="password"
-                      type="password"
-                      className="col-span-3 flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                      value={postgresConfig.password}
-                      onChange={(e) =>
-                        setPostgresConfig({
-                          ...postgresConfig,
-                          password: e.target.value
-                        })
-                      }
-                      disabled={isFormDisabled}
-                    />
-                  </div>
-                  <div className="grid grid-cols-4 items-center gap-4">
-                    <label htmlFor="database" className="text-right text-sm font-medium">
-                      Database
-                    </label>
-                    <input
-                      id="database"
-                      className="col-span-3 flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                      value={postgresConfig.dbname}
-                      onChange={(e) =>
-                        setPostgresConfig({
-                          ...postgresConfig,
-                          dbname: e.target.value
-                        })
-                      }
-                      disabled={isFormDisabled}
-                    />
-                  </div>
-                </>
-              )}
+          {sourceType === "mysql" && (
+            <>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <label htmlFor="host" className="text-right text-sm font-medium">
+                  Host
+                </label>
+                <input
+                  id="host"
+                  className="col-span-3 flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                  value={mysqlConfig.host}
+                  onChange={(e) => setMysqlConfig({ ...mysqlConfig, host: e.target.value })}
+                  placeholder="localhost"
+                  disabled={isFormDisabled}
+                />
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <label htmlFor="port" className="text-right text-sm font-medium">
+                  Port
+                </label>
+                <input
+                  id="port"
+                  type="number"
+                  className="col-span-3 flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                  value={mysqlConfig.port}
+                  onChange={(e) =>
+                    setMysqlConfig({
+                      ...mysqlConfig,
+                      port: parseInt(e.target.value, 10) || 3306
+                    })
+                  }
+                  disabled={isFormDisabled}
+                />
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <label htmlFor="username" className="text-right text-sm font-medium">
+                  Username
+                </label>
+                <input
+                  id="username"
+                  className="col-span-3 flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                  value={mysqlConfig.user}
+                  onChange={(e) => setMysqlConfig({ ...mysqlConfig, user: e.target.value })}
+                  placeholder="root"
+                  disabled={isFormDisabled}
+                />
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <label htmlFor="password" className="text-right text-sm font-medium">
+                  Password
+                </label>
+                <input
+                  id="password"
+                  type="password"
+                  className="col-span-3 flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                  value={mysqlConfig.password}
+                  onChange={(e) => setMysqlConfig({ ...mysqlConfig, password: e.target.value })}
+                  disabled={isFormDisabled}
+                />
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <label htmlFor="database" className="text-right text-sm font-medium">
+                  Database
+                </label>
+                <input
+                  id="database"
+                  className="col-span-3 flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                  value={mysqlConfig.dbname}
+                  onChange={(e) => setMysqlConfig({ ...mysqlConfig, dbname: e.target.value })}
+                  disabled={isFormDisabled}
+                />
+              </div>
+            </>
+          )}
 
-              {sourceType === "mysql" && (
-                <>
-                  <div className="grid grid-cols-4 items-center gap-4">
-                    <label htmlFor="host" className="text-right text-sm font-medium">
-                      Host
-                    </label>
-                    <input
-                      id="host"
-                      className="col-span-3 flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                      value={mysqlConfig.host}
-                      onChange={(e) => setMysqlConfig({ ...mysqlConfig, host: e.target.value })}
-                      placeholder="localhost"
-                      disabled={isFormDisabled}
-                    />
-                  </div>
-                  <div className="grid grid-cols-4 items-center gap-4">
-                    <label htmlFor="port" className="text-right text-sm font-medium">
-                      Port
-                    </label>
-                    <input
-                      id="port"
-                      type="number"
-                      className="col-span-3 flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                      value={mysqlConfig.port}
-                      onChange={(e) =>
-                        setMysqlConfig({
-                          ...mysqlConfig,
-                          port: parseInt(e.target.value, 10) || 3306
-                        })
-                      }
-                      disabled={isFormDisabled}
-                    />
-                  </div>
-                  <div className="grid grid-cols-4 items-center gap-4">
-                    <label htmlFor="username" className="text-right text-sm font-medium">
-                      Username
-                    </label>
-                    <input
-                      id="username"
-                      className="col-span-3 flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                      value={mysqlConfig.user}
-                      onChange={(e) => setMysqlConfig({ ...mysqlConfig, user: e.target.value })}
-                      placeholder="root"
-                      disabled={isFormDisabled}
-                    />
-                  </div>
-                  <div className="grid grid-cols-4 items-center gap-4">
-                    <label htmlFor="password" className="text-right text-sm font-medium">
-                      Password
-                    </label>
-                    <input
-                      id="password"
-                      type="password"
-                      className="col-span-3 flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                      value={mysqlConfig.password}
-                      onChange={(e) => setMysqlConfig({ ...mysqlConfig, password: e.target.value })}
-                      disabled={isFormDisabled}
-                    />
-                  </div>
-                  <div className="grid grid-cols-4 items-center gap-4">
-                    <label htmlFor="database" className="text-right text-sm font-medium">
-                      Database
-                    </label>
-                    <input
-                      id="database"
-                      className="col-span-3 flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                      value={mysqlConfig.dbname}
-                      onChange={(e) => setMysqlConfig({ ...mysqlConfig, dbname: e.target.value })}
-                      disabled={isFormDisabled}
-                    />
-                  </div>
-                </>
-              )}
-
-              {sourceType === "sqlite" && (
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <label htmlFor="path" className="text-right text-sm font-medium">
-                    File Path
-                  </label>
-                  <input
-                    id="path"
-                    className="col-span-3 flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                    value={sqliteConfig.path}
-                    onChange={(e) => setSquliteConfig({ path: e.target.value })}
-                    placeholder="/path/to/database.db"
-                    disabled={isFormDisabled}
-                  />
-                </div>
-              )}
-
-              {formError && <div className="text-sm text-red-500 px-4">{formError}</div>}
-            </div>
-
-            <DialogFooter>
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setOpen(false);
-                  resetForm();
-                }}
+          {sourceType === "sqlite" && (
+            <div className="grid grid-cols-4 items-center gap-4">
+              <label htmlFor="path" className="text-right text-sm font-medium">
+                File Path
+              </label>
+              <input
+                id="path"
+                className="col-span-3 flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                value={sqliteConfig.path}
+                onChange={(e) => setSquliteConfig({ path: e.target.value })}
+                placeholder="/path/to/database.db"
                 disabled={isFormDisabled}
-              >
-                Cancel
-              </Button>
-              <Button onClick={handleTest} disabled={isFormDisabled}>
-                {testing ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Testing...
-                  </>
-                ) : (
-                  "Test Connection"
-                )}
-              </Button>
-              <Button onClick={handleSave} disabled={isFormDisabled}>
-                {loading ? "Saving..." : isEdit ? "Update" : "Save"}
-              </Button>
-            </DialogFooter>
-          </>
-        )}
+              />
+            </div>
+          )}
+
+          {formError && <div className="text-sm text-red-500 px-4">{formError}</div>}
+        </div>
+
+        <DialogFooter>
+          <Button
+            variant="outline"
+            onClick={() => {
+              setOpen(false);
+              resetForm();
+            }}
+            disabled={isFormDisabled}
+          >
+            Cancel
+          </Button>
+          <Button onClick={handleTest} disabled={isFormDisabled}>
+            {testing ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Testing...
+              </>
+            ) : (
+              "Test Connection"
+            )}
+          </Button>
+          <Button onClick={handleSave} disabled={isFormDisabled}>
+            {loading ? "Saving..." : "Save"}
+          </Button>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );
