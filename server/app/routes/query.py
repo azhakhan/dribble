@@ -68,19 +68,20 @@ async def execute_query_string(request: ExecuteQueryRequest, db: Session = Depen
 async def get_query_results(query_id: UUID, response: Response):
     # check for results in redis
     result = await get_result(query_id)
-    # if results is successful, return the results
-    if result and "status" in result:
-        if result["status"] == "success":
-            return result["data"]
-        elif result["status"] == "running":
-            response.status_code = 202
-            return {"status": "running"}
-        else:
-            response.status_code = 500
-            return {"status": "error", "error": result["error"]}
-    else:
+    if not result:
+        response.status_code = 500
+        return {"status": "error", "error": "Query not found"}
+    if result.get("status") == "running":
         response.status_code = 202
         return {"status": "running"}
+    if result.get("status") == "error":
+        response.status_code = 500
+        return {"status": "error", "error": result["error"]}
+    if result.get("status") == "success" and result.get("data"):
+        return result["data"]
+    else:
+        response.status_code = 500
+        return {"status": "error", "error": "Unknown error"}
 
 
 @router.post("/{query_id}/execute/")

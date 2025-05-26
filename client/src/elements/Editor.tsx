@@ -34,27 +34,21 @@ export function Editor({
   const isEditorActive = selectedSource && !schemasLoading && !schemasError;
 
   // Poll for query results
-  const pollQueryResults = async (queryId: string, maxAttempts = 100): Promise<object[]> => {
-    console.log(`Polling for results: attempt ${100 - maxAttempts + 1}, query ID: ${queryId}`);
-
+  const pollQueryResults = async (queryId: string, maxAttempts = 50): Promise<object[]> => {
     if (maxAttempts <= 0) {
       throw new Error("Max polling attempts reached");
     }
 
-    try {
-      const results = await getQueryResults(queryId);
+    const results = await getQueryResults(queryId);
 
-      // Check if results is an array (query completed)
-      if (Array.isArray(results)) {
-        return results;
-      } else {
-        // If not an array, we need to keep polling
-        await new Promise((resolve) => setTimeout(resolve, 200));
-        return pollQueryResults(queryId, maxAttempts - 1);
-      }
-    } catch (error) {
-      console.error("Query polling failed:", error);
-      throw error;
+    // Check if results is an array (query completed)
+    if (Array.isArray(results)) {
+      return results;
+    } else {
+      // If not an array, we need to keep polling
+      // Errors are handled in the getQueryResults function
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      return pollQueryResults(queryId, maxAttempts - 1);
     }
   };
 
@@ -68,9 +62,7 @@ export function Editor({
 
     try {
       // Step 1: Execute query and get query ID
-      console.log("Executing query...");
       const queryId = await executeQuery(selectedSource.id, sqlContent);
-      console.log("Got query ID:", queryId);
 
       // Provide initial empty results to indicate query is running
       if (onQueryExecution) {
@@ -80,9 +72,7 @@ export function Editor({
 
       try {
         // Step 2: Poll for results
-        console.log("Starting to poll for results...");
         const results = await pollQueryResults(queryId);
-        console.log("Polling complete, received results:", results);
 
         // Step 3: Send results to parent component
         if (onQueryExecution && results && Array.isArray(results) && results.length > 0) {
@@ -93,9 +83,7 @@ export function Editor({
           onQueryExecution([{ message: "Query returned no data" }]);
           toast.info("Query executed but returned no data");
         }
-      } catch (pollingError) {
-        console.error("Query polling failed:", pollingError);
-
+      } catch {
         // Make sure we show something in the table for errors
         if (onQueryExecution) {
           onQueryExecution([{ error: "Error executing query" }]);
@@ -103,9 +91,7 @@ export function Editor({
 
         toast.error("Failed to retrieve query results");
       }
-    } catch (error) {
-      console.error("Query execution failed:", error);
-
+    } catch {
       // Show error in table
       if (onQueryExecution) {
         onQueryExecution([{ error: "Failed to start query execution" }]);
