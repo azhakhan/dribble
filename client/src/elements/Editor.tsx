@@ -32,9 +32,14 @@ export function Editor({
     data: queryResults,
     isLoading,
     error: queryError
-  } = useQueryQuery(activeQuery?.sourceId || "", activeQuery?.sql || "", {
-    enabled: !!activeQuery
-  });
+  } = useQueryQuery(
+    activeQuery?.sourceId || "",
+    activeQuery?.sql || "",
+    {
+      enabled: !!activeQuery
+    },
+    "manual"
+  );
 
   // Reset active query when query completes or errors
   useEffect(() => {
@@ -60,7 +65,7 @@ export function Editor({
   // Handle query results when they arrive
   useEffect(() => {
     if (queryResults && onQueryExecution) {
-      if (queryResults.length > 0) {
+      if (Array.isArray(queryResults) && queryResults.length > 0) {
         onQueryExecution(queryResults);
         toast.success("Query executed successfully");
       } else {

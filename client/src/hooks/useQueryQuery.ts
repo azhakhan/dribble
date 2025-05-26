@@ -14,10 +14,11 @@ import { executeQuery, getQueryResults } from "@/lib/api";
 export function useQueryQuery(
   database_id: string,
   query: string,
-  options?: Omit<UseQueryOptions<object[], Error>, "queryKey" | "queryFn">
+  options?: Omit<UseQueryOptions<object[], Error>, "queryKey" | "queryFn">,
+  queryType: "table" | "manual" = "table"
 ) {
   return useQuery<object[], Error>({
-    queryKey: ["query", database_id, query],
+    queryKey: ["query", database_id, query, queryType],
     queryFn: async () => {
       // Step 1: Execute query and get a query ID
       const query_id = await executeQuery(database_id, query);
@@ -44,7 +45,6 @@ export function useQueryQuery(
       // Start polling for results
       return pollForResults();
     },
-    enabled: !!database_id && !!query,
     ...options
   });
 }

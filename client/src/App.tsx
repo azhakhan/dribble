@@ -92,9 +92,14 @@ function App() {
     data: tableQueryResults,
     isLoading,
     error: tableQueryError
-  } = useQueryQuery(selectedTableData?.sourceId || "", selectedTableData?.query || "", {
-    enabled: !!selectedTableData
-  });
+  } = useQueryQuery(
+    selectedTableData?.sourceId || "",
+    selectedTableData?.query || "",
+    {
+      enabled: !!selectedTableData
+    },
+    "table"
+  );
 
   // Update query results when the table query completes
   useEffect(() => {
