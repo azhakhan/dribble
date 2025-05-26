@@ -73,26 +73,16 @@ def test_connection():
 @app.post("/execute/")
 async def run_query(request: QueryRequest):
     logger.info(f"[{datetime.datetime.now()}] Starting query execution for ID: {request.query_id}")
-    await set_result(request.query_id, {"status": "running", "success": False})
+    await set_result(request.query_id, {"status": "running"})
 
     async def execute_sql_query():
         try:
-            logger.info(f"[{datetime.datetime.now()}] Running SQL query for ID: {request.query_id}")
-            logger.info(f"Query: {request.query}")
             result = execute_query(request.query)
-            logger.info(f"[{datetime.datetime.now()}] Query completed for ID: {request.query_id}")
-            logger.info(f"Query result: {result}")
-            # Set result with the correct format expected by the server
-            await set_result(request.query_id, {"success": True, "data": result})
-            logger.info(f"[{datetime.datetime.now()}] Result stored for ID: {request.query_id}")
+            await set_result(request.query_id, {"status": "success", "data": result})
         except Exception as e:
-            logger.error(f"[{datetime.datetime.now()}] Error executing query: {str(e)}")
-            await set_result(request.query_id, {"success": False, "error": str(e)})
+            await set_result(request.query_id, {"status": "error", "error": str(e)})
 
-    logger.info(f"[{datetime.datetime.now()}] Creating task for query ID: {request.query_id}")
     asyncio.create_task(execute_sql_query())
-    logger.info(f"[{datetime.datetime.now()}] Task created for query ID: {request.query_id}")
-
     return {"query_id": request.query_id, "status": "started"}
 
 

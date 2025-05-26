@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Response
 from app.schemas.query import (
     ExecuteQueryRequest,
     CreateQueryRequest,
@@ -65,15 +65,22 @@ async def execute_query_string(request: ExecuteQueryRequest, db: Session = Depen
 
 
 @router.get("/results/{query_id}/")
-async def get_query_results(query_id: UUID):
+async def get_query_results(query_id: UUID, response: Response):
     # check for results in redis
     result = await get_result(query_id)
     # if results is successful, return the results
-    if result and "success" in result and result["success"]:
-        return result["data"]
+    if result and "status" in result:
+        if result["status"] == "success":
+            return result["data"]
+        elif result["status"] == "running":
+            response.status_code = 202
+            return {"status": "running"}
+        else:
+            response.status_code = 500
+            return {"status": "error", "error": result["error"]}
     else:
-        # return still running with 202 status code
-        return {"status": "running"}, 202
+        response.status_code = 202
+        return {"status": "running"}
 
 
 @router.post("/{query_id}/execute/")
