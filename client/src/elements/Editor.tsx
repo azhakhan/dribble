@@ -1,10 +1,10 @@
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect } from "react";
 import MonacoEditor from "@monaco-editor/react";
 import type { Source } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { PlayIcon } from "lucide-react";
-import { executeQuery, getQueryResults } from "@/lib/api";
 import { toast } from "sonner";
+import { useQueryQuery } from "@/hooks/useQueryQuery";
 
 interface EditorProps {
   selectedSource: Source | null;
@@ -24,6 +24,54 @@ export function Editor({
   const editorContainerRef = useRef<HTMLDivElement>(null);
   const [sqlContent, setSqlContent] = useState<string>("-- Write your SQL query here\n");
   const [isRunning, setIsRunning] = useState(false);
+  const [activeQuery, setActiveQuery] = useState<{ sourceId: string; sql: string } | null>(null);
+
+  // Use the query hook with enabled set to false by default
+  // We'll enable it manually when the user clicks the Run button
+  const {
+    data: queryResults,
+    isLoading,
+    error: queryError
+  } = useQueryQuery(activeQuery?.sourceId || "", activeQuery?.sql || "", {
+    enabled: !!activeQuery
+  });
+
+  // Reset active query when query completes or errors
+  useEffect(() => {
+    if (activeQuery && (queryResults || queryError)) {
+      setIsRunning(false);
+      if (onQueryStatusChange) {
+        onQueryStatusChange(false);
+      }
+      setActiveQuery(null);
+    }
+  }, [activeQuery, queryResults, queryError, onQueryStatusChange]);
+
+  // Update isRunning state based on loading status
+  useEffect(() => {
+    if (activeQuery) {
+      setIsRunning(isLoading);
+      if (onQueryStatusChange) {
+        onQueryStatusChange(isLoading);
+      }
+    }
+  }, [isLoading, activeQuery, onQueryStatusChange]);
+
+  // Handle query results when they arrive
+  useEffect(() => {
+    if (queryResults && onQueryExecution) {
+      if (queryResults.length > 0) {
+        onQueryExecution(queryResults);
+        toast.success("Query executed successfully");
+      } else {
+        onQueryExecution([{ message: "Query returned no data" }]);
+        toast.info("Query executed but returned no data");
+      }
+    } else if (queryError && onQueryExecution) {
+      onQueryExecution([{ error: "Error executing query" }]);
+      toast.error("Failed to retrieve query results");
+    }
+  }, [queryResults, queryError, onQueryExecution]);
 
   const handleEditorChange = (value: string | undefined) => {
     if (value !== undefined) {
@@ -33,26 +81,7 @@ export function Editor({
 
   const isEditorActive = selectedSource && !schemasLoading && !schemasError;
 
-  // Poll for query results
-  const pollQueryResults = async (queryId: string, maxAttempts = 50): Promise<object[]> => {
-    if (maxAttempts <= 0) {
-      throw new Error("Max polling attempts reached");
-    }
-
-    const results = await getQueryResults(queryId);
-
-    // Check if results is an array (query completed)
-    if (Array.isArray(results)) {
-      return results;
-    } else {
-      // If not an array, we need to keep polling
-      // Errors are handled in the getQueryResults function
-      await new Promise((resolve) => setTimeout(resolve, 500));
-      return pollQueryResults(queryId, maxAttempts - 1);
-    }
-  };
-
-  const handleRunQuery = async () => {
+  const handleRunQuery = () => {
     if (!selectedSource || !sqlContent.trim()) return;
 
     setIsRunning(true);
@@ -60,50 +89,16 @@ export function Editor({
       onQueryStatusChange(true);
     }
 
-    try {
-      // Step 1: Execute query and get query ID
-      const queryId = await executeQuery(selectedSource.id, sqlContent);
-
-      // Provide initial empty results to indicate query is running
-      if (onQueryExecution) {
-        // Send an empty array with a placeholder column so the table doesn't break
-        onQueryExecution([{ status: "Query running..." }]);
-      }
-
-      try {
-        // Step 2: Poll for results
-        const results = await pollQueryResults(queryId);
-
-        // Step 3: Send results to parent component
-        if (onQueryExecution && results && Array.isArray(results) && results.length > 0) {
-          onQueryExecution(results);
-          toast.success("Query executed successfully");
-        } else if (onQueryExecution) {
-          // If we got empty results, provide a meaningful empty state
-          onQueryExecution([{ message: "Query returned no data" }]);
-          toast.info("Query executed but returned no data");
-        }
-      } catch {
-        // Make sure we show something in the table for errors
-        if (onQueryExecution) {
-          onQueryExecution([{ error: "Error executing query" }]);
-        }
-
-        toast.error("Failed to retrieve query results");
-      }
-    } catch {
-      // Show error in table
-      if (onQueryExecution) {
-        onQueryExecution([{ error: "Failed to start query execution" }]);
-      }
-
-      toast.error("Failed to execute query");
-    } finally {
-      setIsRunning(false);
-      if (onQueryStatusChange) {
-        onQueryStatusChange(false);
-      }
+    // Provide initial empty results to indicate query is running
+    if (onQueryExecution) {
+      onQueryExecution([{ status: "Query running..." }]);
     }
+
+    // Set the active query which will trigger the useQueryQuery hook
+    setActiveQuery({
+      sourceId: selectedSource.id,
+      sql: sqlContent
+    });
   };
 
   return (
