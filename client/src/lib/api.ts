@@ -27,12 +27,25 @@ export const getSourceSchemas = async (sourceId: string) => {
   return response.data;
 };
 
-export const executeQuery = async (database_id: string, query: string) => {
-  const response = await api.post<object[]>("query/execute/", {
-    database_id,
+export const executeQuery = async (source_id: string, query: string) => {
+  const response = await api.post<{ query_id: string }>("query/execute/", {
+    source_id,
     query
   });
-  return response.data;
+  return response.data.query_id;
+};
+
+export const getQueryResults = async (query_id: string) => {
+  try {
+    const response = await api.get<object[]>(`query/results/${query_id}/`);
+    return response.data;
+  } catch (error) {
+    if (axios.isAxiosError(error) && error.response?.status === 202) {
+      // Still processing, return a signal that we need to keep polling
+      return null;
+    }
+    throw error;
+  }
 };
 
 // Create a new database source

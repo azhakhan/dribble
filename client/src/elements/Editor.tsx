@@ -3,7 +3,7 @@ import MonacoEditor from "@monaco-editor/react";
 import type { Source } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { PlayIcon } from "lucide-react";
-import { executeQuery } from "@/lib/api";
+import { executeQuery, getQueryResults } from "@/lib/api";
 import { toast } from "sonner";
 
 interface EditorProps {
@@ -33,6 +33,31 @@ export function Editor({
 
   const isEditorActive = selectedSource && !schemasLoading && !schemasError;
 
+  // Poll for query results
+  const pollQueryResults = async (queryId: string, maxAttempts = 100): Promise<object[]> => {
+    console.log(`Polling for results: attempt ${100 - maxAttempts + 1}, query ID: ${queryId}`);
+
+    if (maxAttempts <= 0) {
+      throw new Error("Max polling attempts reached");
+    }
+
+    try {
+      const results = await getQueryResults(queryId);
+
+      // Check if results is an array (query completed)
+      if (Array.isArray(results)) {
+        return results;
+      } else {
+        // If not an array, we need to keep polling
+        await new Promise((resolve) => setTimeout(resolve, 200));
+        return pollQueryResults(queryId, maxAttempts - 1);
+      }
+    } catch (error) {
+      console.error("Query polling failed:", error);
+      throw error;
+    }
+  };
+
   const handleRunQuery = async () => {
     if (!selectedSource || !sqlContent.trim()) return;
 
@@ -42,16 +67,50 @@ export function Editor({
     }
 
     try {
-      const results = await executeQuery(selectedSource.id, sqlContent);
+      // Step 1: Execute query and get query ID
+      console.log("Executing query...");
+      const queryId = await executeQuery(selectedSource.id, sqlContent);
+      console.log("Got query ID:", queryId);
 
-      // Send results to parent component
+      // Provide initial empty results to indicate query is running
       if (onQueryExecution) {
-        onQueryExecution(results);
+        // Send an empty array with a placeholder column so the table doesn't break
+        onQueryExecution([{ status: "Query running..." }]);
       }
 
-      toast.success("Query executed successfully");
+      try {
+        // Step 2: Poll for results
+        console.log("Starting to poll for results...");
+        const results = await pollQueryResults(queryId);
+        console.log("Polling complete, received results:", results);
+
+        // Step 3: Send results to parent component
+        if (onQueryExecution && results && Array.isArray(results) && results.length > 0) {
+          onQueryExecution(results);
+          toast.success("Query executed successfully");
+        } else if (onQueryExecution) {
+          // If we got empty results, provide a meaningful empty state
+          onQueryExecution([{ message: "Query returned no data" }]);
+          toast.info("Query executed but returned no data");
+        }
+      } catch (pollingError) {
+        console.error("Query polling failed:", pollingError);
+
+        // Make sure we show something in the table for errors
+        if (onQueryExecution) {
+          onQueryExecution([{ error: "Error executing query" }]);
+        }
+
+        toast.error("Failed to retrieve query results");
+      }
     } catch (error) {
       console.error("Query execution failed:", error);
+
+      // Show error in table
+      if (onQueryExecution) {
+        onQueryExecution([{ error: "Failed to start query execution" }]);
+      }
+
       toast.error("Failed to execute query");
     } finally {
       setIsRunning(false);

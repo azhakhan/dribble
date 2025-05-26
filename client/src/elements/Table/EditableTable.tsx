@@ -58,10 +58,7 @@ const dataEditorBaseTheme: GlideTheme = {
 };
 
 // Default columns
-const defaultColumns: GridColumn[] = [
-  { title: "First Name", width: 200 },
-  { title: "Last Name", width: 200 }
-];
+const defaultColumns: GridColumn[] = [{ title: "Status", width: 300 }];
 
 interface EditableTableProps {
   data?: Record<string, unknown>[];
@@ -114,7 +111,13 @@ export const EditableTable = ({
   );
 
   // Use query data if available, otherwise use default data
-  const data = useMemo(() => queryData || [], [queryData]);
+  const data = useMemo(() => {
+    // Ensure data is an array and not null/undefined
+    if (!queryData || !Array.isArray(queryData) || queryData.length === 0) {
+      return [{ status: "No data available" }];
+    }
+    return queryData;
+  }, [queryData]);
 
   // State for managing column sizes
   const [columnSizes, setColumnSizes] = useState<Record<string, number>>({});
@@ -181,7 +184,10 @@ export const EditableTable = ({
 
   // Dynamically determine column headers from data
   const columns = useMemo(() => {
-    if (data.length === 0) return defaultColumns;
+    // Safe check to ensure data[0] exists
+    if (!data || data.length === 0 || !data[0]) {
+      return defaultColumns;
+    }
 
     return Object.keys(data[0]).map((key) => ({
       title: key,
@@ -190,15 +196,19 @@ export const EditableTable = ({
     }));
   }, [data, columnSizes]);
 
+  // Get column indexes safely
   const dataIndexes = useMemo(() => {
-    return data.length > 0 ? Object.keys(data[0]) : [];
+    if (!data || data.length === 0 || !data[0]) {
+      return ["status"]; // Default column if no data
+    }
+    return Object.keys(data[0]);
   }, [data]);
 
   const getCellContent = useCallback(
     (cell: Item): GridCell => {
       const [col, row] = cell;
 
-      if (row >= data.length) {
+      if (!data || row >= data.length) {
         return {
           kind: GridCellKind.Text,
           displayData: "",
