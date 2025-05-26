@@ -34,14 +34,6 @@ services:
       timeout: 5s
       retries: 5
 
-  worker-postgres:
-    build:
-      context: ./worker/postgres
-      dockerfile: Dockerfile
-    image: dribble-worker-postgres:latest
-    networks:
-      - dribble-network
-
   dribble-server:
     build:
       context: ./server
