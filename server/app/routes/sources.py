@@ -87,10 +87,13 @@ async def get_schemas(
     source_id: UUID,
     db: Session = Depends(get_db),
 ):
-    source = db.query(Source).filter_by(id=source_id).first()
-    if not source:
-        raise HTTPException(status_code=404, detail="Source not found")
-    return get_source_schemas(source)
+    try:
+        source = db.query(Source).filter_by(id=source_id).first()
+        if not source:
+            raise HTTPException(status_code=404, detail="Source not found")
+        return get_source_schemas(source)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 # get all sources

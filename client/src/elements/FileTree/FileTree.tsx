@@ -9,7 +9,8 @@ import {
   Columns,
   Loader2,
   PlusCircle,
-  MoreVertical
+  MoreVertical,
+  AlertCircle
 } from "lucide-react";
 import { PostgresIcon, MySQLIcon, SQLiteIcon } from "../icons";
 import { getColumnTypeIcon } from "./ColumnTypeIcons";
@@ -25,12 +26,14 @@ import {
 import { EditSourceDialog } from "./EditSourceDialog";
 import { RenameSourceDialog } from "./RenameSourceDialog";
 import { DeleteSourceDialog } from "./DeleteSourceDialog";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface FileTreeProps {
   data: FileNode[];
   onSourceSelect?: (source: { id: string; name: string; dbtype: string }) => void;
   onTableDoubleClick?: (sourceId: string, tableName: string) => void;
   loadingSourceId?: string;
+  sourceErrors?: Record<string, string>;
 }
 
 const FileTreeItem = ({
@@ -40,7 +43,8 @@ const FileTreeItem = ({
   onTableDoubleClick,
   loadingSourceId,
   selectedNodeId,
-  setSelectedNodeId
+  setSelectedNodeId,
+  sourceErrors
 }: {
   node: FileNode;
   level?: number;
@@ -49,6 +53,7 @@ const FileTreeItem = ({
   loadingSourceId?: string;
   selectedNodeId?: string;
   setSelectedNodeId: (id: string | undefined) => void;
+  sourceErrors?: Record<string, string>;
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
@@ -63,6 +68,7 @@ const FileTreeItem = ({
   const hasChildren = Boolean(node.children?.length);
   const isLoading = isSource && loadingSourceId === node.id;
   const isSelected = selectedNodeId === node.id;
+  const hasError = isSource && node.id && sourceErrors && sourceErrors[node.id];
 
   // Handle item selection (single click)
   const handleItemClick = (e: React.MouseEvent) => {
@@ -179,18 +185,36 @@ const FileTreeItem = ({
       >
         {renderChevron()}
         {renderIcon()}
-        <span className="text-sm font-light">{node.name}</span>
+        <span className={`text-sm font-light ${hasError ? "text-red-500" : ""}`}>{node.name}</span>
         {isColumn && node.nullable === false && (
           <span className="text-xs text-red-500 ml-1">*</span>
         )}
         {isSource && (
           <div
-            className="ml-auto opacity-0 group-hover:opacity-100 text-muted-foreground scale-75 flex items-center"
+            className="ml-auto text-muted-foreground scale-75 flex items-center"
             onClick={(e) => e.stopPropagation()}
           >
+            {hasError && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div className="flex items-center mr-1">
+                      <AlertCircle className="h-4 w-4 text-red-500" />
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>{sourceErrors?.[node.id!]}</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
             <DropdownMenu open={dropdownOpen} onOpenChange={setDropdownOpen}>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-5 w-5 p-0">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-5 w-5 p-0 opacity-0 group-hover:opacity-100"
+                >
                   <MoreVertical className="h-3 w-3" />
                   <span className="sr-only">Source options</span>
                 </Button>
@@ -289,6 +313,7 @@ const FileTreeItem = ({
                 loadingSourceId={loadingSourceId}
                 selectedNodeId={selectedNodeId}
                 setSelectedNodeId={setSelectedNodeId}
+                sourceErrors={sourceErrors}
               />
             ))}
           {isSource && (!node.children || node.children.length === 0) && !isLoading && (
@@ -309,7 +334,8 @@ export const FileTree = ({
   data,
   onSourceSelect,
   onTableDoubleClick,
-  loadingSourceId
+  loadingSourceId,
+  sourceErrors
 }: FileTreeProps) => {
   const [selectedNodeId, setSelectedNodeId] = useState<string | undefined>(undefined);
 
@@ -329,6 +355,7 @@ export const FileTree = ({
             loadingSourceId={loadingSourceId}
             selectedNodeId={selectedNodeId}
             setSelectedNodeId={setSelectedNodeId}
+            sourceErrors={sourceErrors}
           />
         ))}
         {data.length === 0 && (

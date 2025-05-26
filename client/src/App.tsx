@@ -73,6 +73,7 @@ function App() {
   } | null>(null);
   const [queryResults, setQueryResults] = useState<object[] | null>(null);
   const [queryRunning, setQueryRunning] = useState(false);
+  const [sourceSchemaErrors, setSourceSchemaErrors] = useState<Record<string, string>>({});
 
   // Query for all sources
   const { data: sources, isLoading: sourcesLoading, error: sourcesError } = useSourcesQuery();
@@ -91,8 +92,26 @@ function App() {
         ...prev,
         [selectedSource.id]: sourceSchemas
       }));
+      // Clear any error for this source
+      if (sourceSchemaErrors[selectedSource.id]) {
+        setSourceSchemaErrors((prev) => {
+          const newErrors = { ...prev };
+          delete newErrors[selectedSource.id];
+          return newErrors;
+        });
+      }
     }
-  }, [selectedSource, sourceSchemas]);
+  }, [selectedSource, sourceSchemas, sourceSchemaErrors]);
+
+  // Track schema errors by source
+  useEffect(() => {
+    if (schemasError && selectedSource?.id) {
+      setSourceSchemaErrors((prev) => ({
+        ...prev,
+        [selectedSource.id]: "Error loading schemas"
+      }));
+    }
+  }, [schemasError, selectedSource]);
 
   // Build file tree data with sources and their schemas
   let fileTreeData = sources ? sourcesToFileTreeNodes(sources) : sampleFileTree;
@@ -152,14 +171,12 @@ function App() {
                   <div className="p-4 text-sm text-red-500">Error loading sources</div>
                 ) : (
                   <div className="h-full">
-                    {schemasError && selectedSource && (
-                      <div className="p-2 text-xs text-red-500">Error loading schemas</div>
-                    )}
                     <FileTree
                       data={fileTreeData}
                       onSourceSelect={handleSourceSelect}
                       onTableDoubleClick={handleTableDoubleClick}
                       loadingSourceId={schemasLoading ? selectedSource?.id : undefined}
+                      sourceErrors={sourceSchemaErrors}
                     />
                   </div>
                 )}
