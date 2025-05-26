@@ -16,10 +16,11 @@ export const TableDataDisplay = ({
   isQueryRunning = false
 }: TableDataDisplayProps) => {
   // Fetch table data when a table is selected (and no query results are available)
+  // Only use the hook if we don't have direct query results
   const { data: tableQueryResults, isLoading: isTableLoading } = useQueryQuery(
     tableData?.sourceId || "",
     tableData && !queryResults ? `SELECT * FROM ${tableData.tableName} LIMIT 101` : "",
-    { enabled: !!tableData && !queryResults }
+    { enabled: !!tableData && !queryResults && !isQueryRunning }
   );
 
   // Determine what data to display and loading state
