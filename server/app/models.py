@@ -1,4 +1,4 @@
-from sqlalchemy import Column, DateTime, String, JSON, ForeignKey
+from sqlalchemy import Column, DateTime, String, JSON, ForeignKey, Integer
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy import Enum as SqlEnum
 from sqlalchemy.dialects.postgresql import UUID
@@ -54,6 +54,7 @@ class Source(Base):
     workspace_id = Column(UUID(as_uuid=True), ForeignKey("workspaces.id"), nullable=False)
     workspace = relationship("Workspace", back_populates="sources")
     queries = relationship("Query", back_populates="source")
+    workers = relationship("Worker", back_populates="source")
     created_at = Column(DateTime, default=datetime.now)
 
 
@@ -65,4 +66,18 @@ class Query(Base):
     query = Column(String, nullable=False)
     source_id = Column(UUID(as_uuid=True), ForeignKey("sources.id"), nullable=False)
     source = relationship("Source", back_populates="queries")
+    created_at = Column(DateTime, default=datetime.now)
+
+
+class Worker(Base):
+    __tablename__ = "workers"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    source_id = Column(UUID(as_uuid=True), ForeignKey("sources.id"), nullable=False)
+    source = relationship("Source", back_populates="workers")
+    container_id = Column(String, nullable=False)
+    port = Column(Integer, nullable=False)
+    host = Column(String, nullable=False)
+    ip_address = Column(String, nullable=False)
+    status = Column(String, nullable=False)
     created_at = Column(DateTime, default=datetime.now)
