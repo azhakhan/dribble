@@ -11,8 +11,8 @@ import { ChatSidebar } from "@/elements/Chat/ChatSidebar";
 import { Editor } from "@/elements/Editor";
 import { useSourcesQuery } from "@/hooks/useSourcesQuery";
 import { useSourceSchemasQuery } from "@/hooks/useSourceSchemasQuery";
+import { useQueryQuery } from "@/hooks/useQueryQuery";
 import type { Source } from "@/lib/api";
-import { executeQuery, getQueryResults } from "@/lib/api";
 
 // Interface for schema objects
 interface SchemaColumn {
@@ -71,6 +71,7 @@ function App() {
   const [selectedTableData, setSelectedTableData] = useState<{
     sourceId: string;
     tableName: string;
+    query: string;
   } | null>(null);
   const [queryResults, setQueryResults] = useState<object[] | null>(null);
   const [queryRunning, setQueryRunning] = useState(false);
@@ -85,6 +86,34 @@ function App() {
     isLoading: schemasLoading,
     error: schemasError
   } = useSourceSchemasQuery(selectedSource?.id);
+
+  // Query for table data using the useQueryQuery hook
+  const {
+    data: tableQueryResults,
+    isLoading,
+    error: tableQueryError
+  } = useQueryQuery(selectedTableData?.sourceId || "", selectedTableData?.query || "", {
+    enabled: !!selectedTableData
+  });
+
+  // Update query results when the table query completes
+  useEffect(() => {
+    if (tableQueryResults) {
+      setQueryResults(tableQueryResults);
+    } else if (tableQueryError) {
+      console.error("Error executing table query:", tableQueryError);
+      setQueryResults([{ error: "Error loading table data" }]);
+    }
+  }, [tableQueryResults, tableQueryError]);
+
+  // Update query running state based on loading state
+  useEffect(() => {
+    if (selectedTableData) {
+      setQueryRunning(isLoading);
+    } else {
+      setQueryRunning(false);
+    }
+  }, [isLoading, selectedTableData]);
 
   // Update schema map when new schema data is loaded
   useEffect(() => {
@@ -141,50 +170,15 @@ function App() {
 
   // Handle table double-click
   const handleTableDoubleClick = async (sourceId: string, tableName: string) => {
-    setSelectedTableData({ sourceId, tableName });
-    // Clear query results when selecting a table
+    // Build the query to select all data from the table with a limit
+    const query = `SELECT * FROM ${tableName} LIMIT 101`;
+
+    // Set the selected table data with the query
+    setSelectedTableData({ sourceId, tableName, query });
+
+    // Clear previous query results and set loading state
     setQueryResults(null);
     setQueryRunning(true);
-
-    try {
-      // Build the query to select all data from the table with a limit
-      const query = `SELECT * FROM ${tableName} LIMIT 101`;
-
-      // Step 1: Execute query and get query ID
-      const queryId = await executeQuery(sourceId, query);
-
-      // Step 2: Poll for results
-      const pollQueryResults = async (queryId: string, maxAttempts = 50): Promise<object[]> => {
-        if (maxAttempts <= 0) {
-          throw new Error("Max polling attempts reached");
-        }
-
-        const results = await getQueryResults(queryId);
-
-        // Check if results is an array (query completed)
-        if (Array.isArray(results)) {
-          return results;
-        } else {
-          // If not an array, we need to keep polling
-          await new Promise((resolve) => setTimeout(resolve, 500));
-          return pollQueryResults(queryId, maxAttempts - 1);
-        }
-      };
-
-      // Poll for results
-      const results = await pollQueryResults(queryId);
-
-      // If we have results, update the state
-      if (Array.isArray(results) && results.length > 0) {
-        setQueryResults(results);
-      }
-    } catch (error) {
-      console.error("Error executing table query:", error);
-      // Show error in the UI
-      setQueryResults([{ error: "Error loading table data" }]);
-    } finally {
-      setQueryRunning(false);
-    }
   };
 
   // Handle SQL query execution
