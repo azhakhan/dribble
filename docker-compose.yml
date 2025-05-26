@@ -19,6 +19,29 @@ services:
       timeout: 5s
       retries: 5
 
+  redis:
+    image: redis:7-alpine
+    restart: always
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - dribble-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  worker-postgres:
+    build:
+      context: ./worker/postgres
+      dockerfile: Dockerfile
+    image: dribble-worker-postgres:latest
+    networks:
+      - dribble-network
+
   dribble-server:
     build:
       context: ./server
@@ -26,6 +49,7 @@ services:
     volumes:
       - ./server/app:/app/app:cached
       - ./server/pyproject.toml:/app/pyproject.toml:cached
+      - /var/run/docker.sock:/var/run/docker.sock
     ports:
       - "8000:8000"
     environment:
@@ -34,10 +58,14 @@ services:
       - ENVIRONMENT=development
       - WATCHFILES_FORCE_POLLING=1
       - DATABASE_URL=postgresql+psycopg://postgres:postgres@postgres:5432/dribble
+      - REDIS_URL=redis://redis:6379/0
+      - DOCKER_NETWORK=dribble-network
     networks:
       - dribble-network
     depends_on:
       postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
 
   dribble-client:
@@ -59,7 +87,9 @@ services:
 
 networks:
   dribble-network:
-    driver: bridge
+    external: true
+    name: dribble-network
 
 volumes:
   postgres_data:
+  redis_data:

@@ -4,6 +4,40 @@ from app.schemas.sources import PostgresCreds
 from sqlalchemy import URL
 from sqlalchemy.exc import OperationalError
 import binascii
+from uuid import UUID
+from sqlalchemy.orm import Session
+from app.models import Worker
+import requests
+import logging
+from app.core._redis import get_result
+
+# Set up logging
+logger = logging.getLogger(__name__)
+
+
+def execute_in_worker(source_id: UUID, query: str, db: Session):
+    worker = db.query(Worker).filter_by(source_id=source_id).first()
+    if not worker:
+        raise Exception("Worker not found")
+
+    response = requests.post(
+        worker.host + "/execute/",
+        json={"query": query, "query_id": str(source_id)},
+        timeout=5,
+    )
+    print("Response", response.json())
+    return response.json()
+
+
+def get_query_results(query_id: str, db: Session):
+    # check for results in redis
+    result = get_result(query_id)
+    # if results is successful, return the results
+    if result["success"]:
+        return result["data"]
+    else:
+        # return still running with 202 status code
+        return {"status": "running"}, 202
 
 
 def execute_query(source: Source, query: str):

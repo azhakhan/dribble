@@ -16,4 +16,4 @@ class UpdateQueryRequest(BaseModel):
 
 class ExecuteQueryRequest(BaseModel):
     query: str
-    database_id: UUID
+    source_id: UUID

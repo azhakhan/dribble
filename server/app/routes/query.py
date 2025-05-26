@@ -4,12 +4,12 @@ from app.schemas.query import (
     CreateQueryRequest,
     UpdateQueryRequest,
 )
-from app.controllers.query import execute_query
+from app.controllers.query import execute_query, execute_in_worker
 from app.core.db import get_db
 from sqlalchemy.orm import Session
 from app.models import Query, Source
 from uuid import UUID
-
+from app.core._redis import get_result
 
 router = APIRouter(prefix="/query", tags=["query"])
 
@@ -59,12 +59,21 @@ async def delete(query_id: UUID, db: Session = Depends(get_db)):
 @router.post("/execute/")
 async def execute_query_string(request: ExecuteQueryRequest, db: Session = Depends(get_db)):
     try:
-        source = db.query(Source).filter_by(id=request.database_id).first()
-        if not source:
-            raise Exception("Source not found")
-        return execute_query(source, request.query)
+        return execute_in_worker(request.source_id, request.query, db)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@router.get("/results/{query_id}/")
+async def get_query_results(query_id: UUID):
+    # check for results in redis
+    result = await get_result(query_id)
+    # if results is successful, return the results
+    if result and "success" in result and result["success"]:
+        return result["data"]
+    else:
+        # return still running with 202 status code
+        return {"status": "running"}, 202
 
 
 @router.post("/{query_id}/execute/")

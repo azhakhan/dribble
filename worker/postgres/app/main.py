@@ -9,6 +9,12 @@ import binascii
 import asyncio
 from app.helpers import set_result
 import json
+import logging
+import datetime
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 
 class PostgresCreds(BaseModel):
@@ -37,7 +43,8 @@ async def lifespan(app: FastAPI):
     app.state.engine = create_engine(url)
     yield
     # Teardown
-    await app.state.engine.dispose()
+    # Since this is a synchronous engine, we don't await its disposal
+    app.state.engine.dispose()
 
 
 app = FastAPI(lifespan=lifespan)
@@ -65,27 +72,40 @@ def test_connection():
 
 @app.post("/execute/")
 async def run_query(request: QueryRequest):
-    await set_result(request.query_id, {"status": "running"})
+    logger.info(f"[{datetime.datetime.now()}] Starting query execution for ID: {request.query_id}")
+    await set_result(request.query_id, {"status": "running", "success": False})
 
-    async def run_query():
+    async def execute_sql_query():
         try:
+            logger.info(f"[{datetime.datetime.now()}] Running SQL query for ID: {request.query_id}")
+            logger.info(f"Query: {request.query}")
             result = execute_query(request.query)
-            await set_result(request.query_id, {"status": "done", "result": result})
+            logger.info(f"[{datetime.datetime.now()}] Query completed for ID: {request.query_id}")
+            logger.info(f"Query result: {result}")
+            # Set result with the correct format expected by the server
+            await set_result(request.query_id, {"success": True, "data": result})
+            logger.info(f"[{datetime.datetime.now()}] Result stored for ID: {request.query_id}")
         except Exception as e:
-            await set_result(request.query_id, {"status": "error", "error": str(e)})
+            logger.error(f"[{datetime.datetime.now()}] Error executing query: {str(e)}")
+            await set_result(request.query_id, {"success": False, "error": str(e)})
 
-    asyncio.create_task(run_query())
+    logger.info(f"[{datetime.datetime.now()}] Creating task for query ID: {request.query_id}")
+    asyncio.create_task(execute_sql_query())
+    logger.info(f"[{datetime.datetime.now()}] Task created for query ID: {request.query_id}")
 
     return {"query_id": request.query_id, "status": "started"}
 
 
 def execute_query(query: str):
     # 5 second timeout
+    logger.info(f"[{datetime.datetime.now()}] In execute_query function")
     try:
         with app.state.engine.connect() as conn:
+            logger.info(f"[{datetime.datetime.now()}] Connected to database")
             result = conn.execute(text(query))
             rows = result.fetchall()
             processed_rows = []
+            logger.info(f"[{datetime.datetime.now()}] Rows fetched: {len(rows)}")
             for row in rows:
                 processed_row = {}
                 for key, value in row._mapping.items():
@@ -98,6 +118,7 @@ def execute_query(query: str):
                 processed_rows.append(processed_row)
             return processed_rows
     except OperationalError as e:
+        logger.error(f"[{datetime.datetime.now()}] Database error: {str(e)}")
         raise Exception(f"Error executing query: {e}") from e
 
 

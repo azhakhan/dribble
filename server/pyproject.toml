@@ -6,9 +6,13 @@ readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
     "alembic>=1.16.0",
+    "docker>=7.1.0",
     "fastapi[standard]>=0.115.12",
+    "orjson>=3.10.18",
     "pre-commit>=4.2.0",
     "psycopg>=3.2.9",
+    "redis>=6.1.0",
+    "requests>=2.32.3",
     "six>=1.17.0",
     "sqlalchemy>=2.0.41",
 ]
