@@ -24,7 +24,6 @@ def upgrade():
     sa.Column('container_id', sa.String(), nullable=False),
     sa.Column('port', sa.Integer(), nullable=False),
     sa.Column('host', sa.String(), nullable=False),
-    sa.Column('ip_address', sa.String(), nullable=False),
     sa.Column('status', sa.String(), nullable=False),
     sa.Column('created_at', sa.DateTime(), nullable=True),
     sa.ForeignKeyConstraint(['source_id'], ['sources.id'], ),

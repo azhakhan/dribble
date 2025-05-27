@@ -78,6 +78,5 @@ class Worker(Base):
     container_id = Column(String, nullable=False)
     port = Column(Integer, nullable=False)
     host = Column(String, nullable=False)
-    ip_address = Column(String, nullable=False)
     status = Column(String, nullable=False)
     created_at = Column(DateTime, default=datetime.now)
