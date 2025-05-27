@@ -3,6 +3,8 @@ import os
 from app.schemas.sources import PostgresCreds
 from uuid import UUID
 import random
+from sqlalchemy.orm import Session
+from app.models import Worker
 
 client = docker.from_env()
 
@@ -52,6 +54,19 @@ class WorkerContainer:
         )
         self.container_id = container.id
 
+    def save_worker(self, db: Session):
+        worker = Worker(
+            source_id=self.source_id,
+            container_id=self.container_id,
+            port=self.port,
+            host=self.container_url,
+            status="starting",
+        )
+        db.add(worker)
+        db.commit()
+        db.refresh(worker)
+        return worker
+
     def stop(self):
         container = client.containers.get(self.container_id)
         container.stop()
@@ -81,3 +96,8 @@ def stop_worker(container_id: str):
     container = client.containers.get(container_id)
     container.stop()
     container.remove()
+
+
+def is_healthy(container_id: str):
+    container = client.containers.get(container_id)
+    return container.status == "running"

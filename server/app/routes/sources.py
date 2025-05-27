@@ -15,6 +15,7 @@ from app.core.spawn_worker import WorkerContainer
 from app.schemas.sources import PostgresCreds
 import json
 from uuid import uuid4
+from app.models import Worker
 
 router = APIRouter(prefix="/sources", tags=["sources"])
 
@@ -106,13 +107,27 @@ async def connect(
             worker = WorkerContainer(source.id, creds)
             if not worker.already_exists():
                 worker.start()
+                worker.save_worker(db)
         except Exception as e:
             if worker:
                 worker.stop()
             raise HTTPException(status_code=500, detail=str(e)) from e
 
+        return {"message": "Connected"}
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@router.get("/status/{source_id}")
+async def get_status(
+    source_id: UUID,
+    db: Session = Depends(get_db),
+):
+    worker = db.query(Worker).filter_by(source_id=source_id).first()
+    if not worker:
+        raise HTTPException(status_code=404, detail="Worker not found")
+    return {"status": worker.status}
 
 
 @router.get("/schemas/{source_id}")

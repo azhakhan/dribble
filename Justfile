@@ -13,6 +13,9 @@ build-worker name:
     fi
     docker build -t dribble-worker-$actual_name:latest ./worker/$actual_name
 
+build-server:
+    docker compose build dribble-server
+
 up:
     #! /usr/bin/env bash
     if ! docker network ls | grep -q dribble-network
