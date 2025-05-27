@@ -10,7 +10,8 @@ import {
   Loader2,
   PlusCircle,
   MoreVertical,
-  AlertCircle
+  AlertCircle,
+  Power
 } from "lucide-react";
 import { PostgresIcon, MySQLIcon, SQLiteIcon } from "../icons";
 import { getColumnTypeIcon } from "./ColumnTypeIcons";
@@ -27,13 +28,20 @@ import { EditSourceDialog } from "./EditSourceDialog";
 import { RenameSourceDialog } from "./RenameSourceDialog";
 import { DeleteSourceDialog } from "./DeleteSourceDialog";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { useConnectSourceMutation } from "@/hooks/useConnectSourceMutation";
+import { useSourceStatusQuery } from "@/hooks/useSourceStatusQuery";
+import { useSourceSchemasQuery } from "@/hooks/useSourceSchemasQuery";
+import { useQueryClient } from "@tanstack/react-query";
 
 interface FileTreeProps {
   data: FileNode[];
   onSourceSelect?: (source: { id: string; name: string; dbtype: string }) => void;
   onTableDoubleClick?: (sourceId: string, tableName: string) => void;
+  onSourceConnect?: (sourceId: string) => void;
   loadingSourceId?: string;
   sourceErrors?: Record<string, string>;
+  sourceStatuses?: Record<string, string>;
+  connectedSources?: Set<string>;
 }
 
 const FileTreeItem = ({
@@ -41,34 +49,84 @@ const FileTreeItem = ({
   level = 0,
   onSourceSelect,
   onTableDoubleClick,
+  onSourceConnect,
   loadingSourceId,
   selectedNodeId,
   setSelectedNodeId,
-  sourceErrors
+  sourceErrors,
+  sourceStatuses,
+  connectedSources
 }: {
   node: FileNode;
   level?: number;
   onSourceSelect?: (source: { id: string; name: string; dbtype: string }) => void;
   onTableDoubleClick?: (sourceId: string, tableName: string) => void;
+  onSourceConnect?: (sourceId: string) => void;
   loadingSourceId?: string;
   selectedNodeId?: string;
   setSelectedNodeId: (id: string | undefined) => void;
   sourceErrors?: Record<string, string>;
+  sourceStatuses?: Record<string, string>;
+  connectedSources?: Set<string>;
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [renameDialogOpen, setRenameDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
+
   const isFolder = node.type === "folder";
   const isSource = node.type === "source";
   const isSchema = node.type === "schema";
   const isTable = node.type === "table";
   const isColumn = node.type === "column";
+
+  // React Query hooks
+  const connectMutation = useConnectSourceMutation();
+  const queryClient = useQueryClient();
+
+  // Get source status if this is a source node AND it's connected
+  const isConnected = isSource && node.id && connectedSources?.has(node.id);
+  const { data: sourceStatus } = useSourceStatusQuery(isConnected ? node.id : undefined);
+
+  // Get source schemas to check if they're loaded - only if the source is connected
+  const { data: sourceSchemas, isSuccess: schemasLoaded } = useSourceSchemasQuery(
+    isConnected ? node.id : undefined
+  );
   const hasChildren = Boolean(node.children?.length);
   const isLoading = isSource && loadingSourceId === node.id;
   const isSelected = selectedNodeId === node.id;
   const hasError = isSource && node.id && sourceErrors && sourceErrors[node.id];
+
+  // Get status from props or from query
+  const currentStatus =
+    isSource && node.id ? (sourceStatuses && sourceStatuses[node.id]) || sourceStatus : undefined;
+
+  // Handle connect button click
+  const handleConnectClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (isSource && node.id) {
+      connectMutation.mutate(node.id, {
+        onSuccess: () => {
+          // Notify parent component that source was connected
+          if (onSourceConnect && node.id) {
+            onSourceConnect(node.id);
+          }
+
+          // After successful connection, fetch the source status
+          queryClient.invalidateQueries({ queryKey: ["sourceStatus", node.id] });
+
+          // If status becomes healthy and schemas are not loaded, load them
+          setTimeout(() => {
+            // Check if schemas need to be loaded
+            if (!schemasLoaded || !sourceSchemas || Object.keys(sourceSchemas).length === 0) {
+              queryClient.invalidateQueries({ queryKey: ["sourceSchemas", node.id] });
+            }
+          }, 500);
+        }
+      });
+    }
+  };
 
   // Handle item selection (single click)
   const handleItemClick = (e: React.MouseEvent) => {
@@ -194,6 +252,56 @@ const FileTreeItem = ({
             className="ml-auto text-muted-foreground scale-75 flex items-center"
             onClick={(e) => e.stopPropagation()}
           >
+            {/* Connect button for sources */}
+            {isSource && node.id && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div className="flex items-center mr-1">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-5 w-5 p-0 opacity-0 group-hover:opacity-100"
+                        onClick={handleConnectClick}
+                        disabled={connectMutation.isPending}
+                      >
+                        <Power className="h-3 w-3" />
+                        <span className="sr-only">Connect source</span>
+                      </Button>
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Connect to source</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
+
+            {/* Status indicator */}
+            {isSource && currentStatus && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div className="flex items-center mr-1">
+                      <div
+                        className={`h-2 w-2 rounded-full ${
+                          currentStatus === "healthy"
+                            ? "bg-green-500"
+                            : currentStatus === "unhealthy"
+                              ? "bg-red-500"
+                              : "bg-yellow-500 animate-pulse"
+                        }`}
+                      />
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Status: {String(currentStatus)}</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
+
+            {/* Error indicator */}
             {hasError && (
               <TooltipProvider>
                 <Tooltip>
@@ -310,10 +418,13 @@ const FileTreeItem = ({
                 level={level + 1}
                 onSourceSelect={onSourceSelect}
                 onTableDoubleClick={onTableDoubleClick}
+                onSourceConnect={onSourceConnect}
                 loadingSourceId={loadingSourceId}
                 selectedNodeId={selectedNodeId}
                 setSelectedNodeId={setSelectedNodeId}
                 sourceErrors={sourceErrors}
+                sourceStatuses={sourceStatuses}
+                connectedSources={connectedSources}
               />
             ))}
           {isSource && (!node.children || node.children.length === 0) && !isLoading && (
@@ -334,8 +445,11 @@ export const FileTree = ({
   data,
   onSourceSelect,
   onTableDoubleClick,
+  onSourceConnect,
   loadingSourceId,
-  sourceErrors
+  sourceErrors,
+  sourceStatuses,
+  connectedSources
 }: FileTreeProps) => {
   const [selectedNodeId, setSelectedNodeId] = useState<string | undefined>(undefined);
 
@@ -352,10 +466,13 @@ export const FileTree = ({
             node={node}
             onSourceSelect={onSourceSelect}
             onTableDoubleClick={onTableDoubleClick}
+            onSourceConnect={onSourceConnect}
             loadingSourceId={loadingSourceId}
             selectedNodeId={selectedNodeId}
             setSelectedNodeId={setSelectedNodeId}
             sourceErrors={sourceErrors}
+            sourceStatuses={sourceStatuses}
+            connectedSources={connectedSources}
           />
         ))}
         {data.length === 0 && (

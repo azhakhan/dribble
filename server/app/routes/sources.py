@@ -105,9 +105,29 @@ async def connect(
 
         try:
             worker = WorkerContainer(source.id, creds)
-            if not worker.already_exists():
+            container_exists = worker.already_exists()
+
+            # Check if worker record exists in the database
+            db_worker = db.query(Worker).filter_by(source_id=source_id).first()
+
+            if not container_exists:
+                # Container doesn't exist, start it and create worker record
                 worker.start()
-                worker.save_worker(db)
+                if not db_worker:
+                    worker.save_worker(db)
+            else:
+                # Container exists, ensure worker record exists and is up-to-date
+                if not db_worker:
+                    worker.save_worker(db)
+                else:
+                    # Update existing worker record with current container info
+                    db_worker.container_id = worker.container_id
+                    db_worker.port = worker.port
+                    db_worker.host = worker.container_url
+                    db_worker.status = "running"
+                    db.commit()
+                    db.refresh(db_worker)
+
         except Exception as e:
             if worker:
                 worker.stop()

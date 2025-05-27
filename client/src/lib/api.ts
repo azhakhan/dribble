@@ -15,6 +15,9 @@ export interface Source {
   dbtype: string;
 }
 
+// Source status type
+export type SourceStatus = "healthy" | "unhealthy" | "starting";
+
 // API functions
 export const getSources = async (): Promise<Source[]> => {
   const response = await api.get<Source[]>("/sources/");
@@ -25,6 +28,17 @@ export const getSources = async (): Promise<Source[]> => {
 export const getSourceSchemas = async (sourceId: string) => {
   const response = await api.get(`/sources/schemas/${sourceId}`);
   return response.data;
+};
+
+// Connect to a source
+export const connectSource = async (sourceId: string): Promise<void> => {
+  await api.get(`/sources/connect/${sourceId}`);
+};
+
+// Get source status
+export const getSourceStatus = async (sourceId: string): Promise<SourceStatus> => {
+  const response = await api.get<{ status: SourceStatus }>(`/sources/status/${sourceId}`);
+  return response.data.status;
 };
 
 export const executeQuery = async (source_id: string, query: string) => {

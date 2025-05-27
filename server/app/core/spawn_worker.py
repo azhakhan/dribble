@@ -28,16 +28,21 @@ class WorkerContainer:
                 self.container_id = existing_container.id
                 return True
             else:
-                # remove from docker
-                existing_container.stop()
-                existing_container.remove()
-
-                return False
+                # Container exists but not running, try to restart it
+                try:
+                    existing_container.start()
+                    self.container_id = existing_container.id
+                    return True
+                except Exception:
+                    # If restart fails, remove it
+                    existing_container.stop()
+                    existing_container.remove()
+                    return False
         except docker.errors.NotFound:
             # Container doesn't exist, which is fine
             return False
         except Exception as e:
-            raise Exception(f"Error while removing existing container: {str(e)}") from e
+            raise Exception(f"Error while checking existing container: {str(e)}") from e
 
     def start(self):
         container = client.containers.run(
@@ -55,17 +60,31 @@ class WorkerContainer:
         self.container_id = container.id
 
     def save_worker(self, db: Session):
-        worker = Worker(
-            source_id=self.source_id,
-            container_id=self.container_id,
-            port=self.port,
-            host=self.container_url,
-            status="starting",
-        )
-        db.add(worker)
-        db.commit()
-        db.refresh(worker)
-        return worker
+        # Check if worker already exists for this source
+        existing_worker = db.query(Worker).filter_by(source_id=self.source_id).first()
+
+        if existing_worker:
+            # Update existing worker record
+            existing_worker.container_id = self.container_id
+            existing_worker.port = self.port
+            existing_worker.host = self.container_url
+            existing_worker.status = "running"
+            db.commit()
+            db.refresh(existing_worker)
+            return existing_worker
+        else:
+            # Create new worker record
+            worker = Worker(
+                source_id=self.source_id,
+                container_id=self.container_id,
+                port=self.port,
+                host=self.container_url,
+                status="starting",
+            )
+            db.add(worker)
+            db.commit()
+            db.refresh(worker)
+            return worker
 
     def stop(self):
         container = client.containers.get(self.container_id)
@@ -99,5 +118,12 @@ def stop_worker(container_id: str):
 
 
 def is_healthy(container_id: str):
-    container = client.containers.get(container_id)
-    return container.status == "running"
+    try:
+        container = client.containers.get(container_id)
+        return container.status == "running"
+    except docker.errors.NotFound:
+        # Container doesn't exist anymore
+        return False
+    except Exception:
+        # Any other error means the container is not healthy
+        return False

@@ -12,7 +12,9 @@ import { Editor } from "@/elements/Editor";
 import { useSourcesQuery } from "@/hooks/useSourcesQuery";
 import { useSourceSchemasQuery } from "@/hooks/useSourceSchemasQuery";
 import { useQueryQuery } from "@/hooks/useQueryQuery";
-import type { Source } from "@/lib/api";
+import { useSourceStatusQuery } from "@/hooks/useSourceStatusQuery";
+import { useQueryClient } from "@tanstack/react-query";
+import type { Source, SourceStatus } from "@/lib/api";
 
 // Interface for schema objects
 interface SchemaColumn {
@@ -76,6 +78,11 @@ function App() {
   const [queryResults, setQueryResults] = useState<object[] | null>(null);
   const [queryRunning, setQueryRunning] = useState(false);
   const [sourceSchemaErrors, setSourceSchemaErrors] = useState<Record<string, string>>({});
+  const [sourceStatuses, setSourceStatuses] = useState<Record<string, SourceStatus>>({});
+  const [connectedSources, setConnectedSources] = useState<Set<string>>(new Set());
+
+  // For React Query client
+  const queryClient = useQueryClient();
 
   // Query for all sources
   const { data: sources, isLoading: sourcesLoading, error: sourcesError } = useSourcesQuery();
@@ -86,6 +93,11 @@ function App() {
     isLoading: schemasLoading,
     error: schemasError
   } = useSourceSchemasQuery(selectedSource?.id);
+
+  // Query for selected source status - only if the source is connected
+  const { data: selectedSourceStatus } = useSourceStatusQuery(
+    selectedSource?.id && connectedSources.has(selectedSource.id) ? selectedSource.id : undefined
+  );
 
   // Query for table data using the useQueryQuery hook
   const {
@@ -148,6 +160,36 @@ function App() {
     }
   }, [schemasError, selectedSource]);
 
+  // Track source statuses
+  useEffect(() => {
+    if (selectedSourceStatus && selectedSource?.id) {
+      setSourceStatuses((prev) => ({
+        ...prev,
+        [selectedSource.id]: selectedSourceStatus
+      }));
+    }
+  }, [selectedSourceStatus, selectedSource]);
+
+  // Load connected sources from localStorage on initial load
+  useEffect(() => {
+    const savedConnectedSources = localStorage.getItem("connectedSources");
+    if (savedConnectedSources) {
+      try {
+        const parsedSources = JSON.parse(savedConnectedSources);
+        setConnectedSources(new Set(parsedSources));
+      } catch (error) {
+        console.error("Error parsing connected sources from localStorage", error);
+      }
+    }
+  }, []);
+
+  // Save connected sources to localStorage when they change
+  useEffect(() => {
+    if (connectedSources.size > 0) {
+      localStorage.setItem("connectedSources", JSON.stringify([...connectedSources]));
+    }
+  }, [connectedSources]);
+
   // Build file tree data with sources and their schemas
   let fileTreeData = sources ? sourcesToFileTreeNodes(sources) : sampleFileTree;
 
@@ -171,6 +213,19 @@ function App() {
 
   const handleSourceSelect = (source: Source) => {
     setSelectedSource(source);
+  };
+
+  // Handle source connection
+  const handleSourceConnect = (sourceId: string) => {
+    // Add to connected sources
+    setConnectedSources((prev) => {
+      const newSet = new Set(prev);
+      newSet.add(sourceId);
+      return newSet;
+    });
+
+    // Invalidate status query to fetch the status
+    queryClient.invalidateQueries({ queryKey: ["sourceStatus", sourceId] });
   };
 
   // Handle table double-click
@@ -216,8 +271,11 @@ function App() {
                       data={fileTreeData}
                       onSourceSelect={handleSourceSelect}
                       onTableDoubleClick={handleTableDoubleClick}
+                      onSourceConnect={handleSourceConnect}
                       loadingSourceId={schemasLoading ? selectedSource?.id : undefined}
                       sourceErrors={sourceSchemaErrors}
+                      sourceStatuses={sourceStatuses}
+                      connectedSources={connectedSources}
                     />
                   </div>
                 )}
