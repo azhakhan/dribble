@@ -4,10 +4,10 @@ from app.schemas.query import (
     CreateQueryRequest,
     UpdateQueryRequest,
 )
-from app.controllers.query import execute_query, execute_in_worker
+from app.controllers.query import execute_in_worker
 from app.core.db import get_db
 from sqlalchemy.orm import Session
-from app.models import Query, Source
+from app.models import Query
 from uuid import UUID
 from app.core._redis import get_result
 
@@ -57,9 +57,18 @@ async def delete(query_id: UUID, db: Session = Depends(get_db)):
 
 
 @router.post("/execute/")
-async def execute_query_string(request: ExecuteQueryRequest, db: Session = Depends(get_db)):
+async def execute_query_string(request: ExecuteQueryRequest):
     try:
-        return execute_in_worker(request.source_id, request.query, db)
+        return execute_in_worker(request.source_id, request.query)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@router.post("/{query_id}/execute/")
+async def execute_query_id(query_id: UUID, db: Session = Depends(get_db)):
+    try:
+        query = db.query(Query).filter_by(id=query_id).first()
+        execute_in_worker(query.source_id, query.query, db)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
 
@@ -82,17 +91,3 @@ async def get_query_results(query_id: UUID, response: Response):
     else:
         response.status_code = 500
         return {"status": "error", "error": "Unknown error"}
-
-
-@router.post("/{query_id}/execute/")
-async def execute_query_id(query_id: UUID, db: Session = Depends(get_db)):
-    try:
-        query = db.query(Query).filter_by(id=query_id).first()
-        if not query:
-            raise Exception("Query not found")
-        source = db.query(Source).filter_by(id=query.source_id).first()
-        if not source:
-            raise Exception("Source not found")
-        return execute_query(source, query.query)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e

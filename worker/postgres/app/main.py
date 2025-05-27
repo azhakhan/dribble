@@ -11,6 +11,7 @@ from app.helpers import set_result
 import json
 import logging
 import datetime
+import sys
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -58,16 +59,6 @@ class QueryRequest(BaseModel):
 class QueryResponse(BaseModel):
     query_id: str
     result: list[dict]
-
-
-@app.get("/test-connection/")
-def test_connection():
-    try:
-        with app.state.engine.connect() as conn:
-            conn.execute(text("SELECT 1"))
-            return {"status": "success"}
-    except OperationalError:
-        return {"status": "error", "message": "Failed to connect to database"}
 
 
 @app.post("/execute/")
@@ -207,3 +198,36 @@ def get_postgres_schemas():
 
     except OperationalError as e:
         raise Exception(f"Error getting schemas: {e}") from e
+
+
+def test_connection_cli():
+    try:
+        os_creds = os.environ.get("DB_CREDS")
+        if not os_creds:
+            raise Exception("DB_CREDS is not set")
+        creds = PostgresCreds(**json.loads(os_creds))
+        url = URL.create(
+            "postgresql+psycopg",
+            username=creds.user,
+            password=creds.password,
+            host=creds.host,
+            port=creds.port,
+            database=creds.dbname,
+        )
+        engine = create_engine(url)
+        with engine.connect() as conn:
+            res = conn.execute(text("SELECT 1")).fetchone()
+            if res:
+                print(json.dumps({"status": "success"}))
+                sys.exit(0)
+            else:
+                print(json.dumps({"status": "error", "message": "Failed to connect to database"}))
+                sys.exit(0)
+    except Exception as e:
+        print(json.dumps({"status": "error", "message": str(e)}))
+        sys.exit(0)
+
+
+if __name__ == "__main__":
+    if len(sys.argv) > 1 and sys.argv[1] == "test_connection":
+        test_connection_cli()

@@ -11,10 +11,10 @@ from app.models import Source
 from app.dependencies import get_current_workspace
 from uuid import UUID
 from app.controllers.sources import get_source_schemas
-from app.controllers.query import test_connection
-from app.core.spawn_worker import start_worker
+from app.core.spawn_worker import WorkerContainer
 from app.schemas.sources import PostgresCreds
-from app.models import Worker
+import json
+from uuid import uuid4
 
 router = APIRouter(prefix="/sources", tags=["sources"])
 
@@ -40,20 +40,23 @@ async def add_source(
 
 
 @router.post("/test/")
-async def test(request: TestSourceRequest, workspace=Depends(get_current_workspace)):
-    # check if source connected
-
-    source = Source(
-        name="Testing Source",
-        dbtype=request.dbtype,
-        creds=request.creds.model_dump(),
-        workspace_id=workspace.id,
-    )
-
+async def test(request: TestSourceRequest):
     try:
-        if not test_connection(source):
-            raise HTTPException(status_code=500, detail="Connection failed")
-        return {"message": "Connection successful"}
+        source_id = str(uuid4())
+        worker = WorkerContainer(source_id, request.creds)
+        output = worker.test()
+        result_str = output.decode("utf-8").strip()
+        try:
+            result_json = json.loads(result_str)
+
+        except json.JSONDecodeError as err:
+            raise HTTPException(status_code=500, detail="Cannot test connection") from err
+
+        if result_json["status"] == "error":
+            raise HTTPException(status_code=500, detail=result_json["message"])
+
+        return result_json
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
 
@@ -87,6 +90,31 @@ async def delete_source(
     return {"message": "Source deleted"}
 
 
+@router.get("/connect/{source_id}")
+async def connect(
+    source_id: UUID,
+    db: Session = Depends(get_db),
+):
+    try:
+        source = db.query(Source).filter_by(id=source_id).first()
+        if not source:
+            raise HTTPException(status_code=404, detail="Source not found")
+
+        creds = PostgresCreds(**source.creds)
+
+        try:
+            worker = WorkerContainer(source.id, creds)
+            if not worker.already_exists():
+                worker.start()
+        except Exception as e:
+            if worker:
+                worker.stop()
+            raise HTTPException(status_code=500, detail=str(e)) from e
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
 @router.get("/schemas/{source_id}")
 async def get_schemas(
     source_id: UUID,
@@ -94,85 +122,23 @@ async def get_schemas(
 ):
     try:
         source = db.query(Source).filter_by(id=source_id).first()
-
-        creds = PostgresCreds(**source.creds)
-        worker = start_worker(source_id, creds, db)
-        print(worker)
-
         if not source:
             raise HTTPException(status_code=404, detail="Source not found")
+
+        creds = PostgresCreds(**source.creds)
+
+        try:
+            worker = WorkerContainer(source.id, creds)
+            if not worker.already_exists():
+                worker.start()
+        except Exception as e:
+            if worker:
+                worker.stop()
+            raise HTTPException(status_code=500, detail=str(e)) from e
+
         return get_source_schemas(source)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
-
-
-# Add a test endpoint for worker connectivity
-@router.get("/worker-test/{source_id}")
-async def test_worker_connectivity(
-    source_id: UUID,
-    db: Session = Depends(get_db),
-):
-    import requests
-    import logging
-
-    logger = logging.getLogger(__name__)
-
-    worker = db.query(Worker).filter_by(source_id=source_id).first()
-    if not worker:
-        raise HTTPException(status_code=404, detail="Worker not found")
-
-    results = {}
-
-    # Try host as stored in database
-    try:
-        logger.info(f"Testing connection to {worker.host}/test-connection/")
-        response = requests.get(f"{worker.host}/test-connection/", timeout=2)
-        results["host_url"] = {
-            "success": True,
-            "status_code": response.status_code,
-            "response": response.json() if response.status_code == 200 else response.text,
-        }
-    except Exception as e:
-        results["host_url"] = {"success": False, "error": str(e)}
-
-    # Try with IP directly
-    try:
-        ip_url = f"http://{worker.ip_address}:8000/test-connection/"
-        logger.info(f"Testing connection to {ip_url}")
-        response = requests.get(ip_url, timeout=2)
-        results["ip_url"] = {
-            "success": True,
-            "status_code": response.status_code,
-            "response": response.json() if response.status_code == 200 else response.text,
-        }
-    except Exception as e:
-        results["ip_url"] = {"success": False, "error": str(e)}
-
-    # Try with container name
-    try:
-        container_name = f"dribble-worker-postgres-{source_id}"
-        container_url = f"http://{container_name}:8000/test-connection/"
-        logger.info(f"Testing connection to {container_url}")
-        response = requests.get(container_url, timeout=2)
-        results["container_url"] = {
-            "success": True,
-            "status_code": response.status_code,
-            "response": response.json() if response.status_code == 200 else response.text,
-        }
-    except Exception as e:
-        results["container_url"] = {"success": False, "error": str(e)}
-
-    return {
-        "worker_info": {
-            "id": str(worker.id),
-            "source_id": str(worker.source_id),
-            "host": worker.host,
-            "ip_address": worker.ip_address,
-            "port": worker.port,
-            "status": worker.status,
-        },
-        "connectivity_tests": results,
-    }
 
 
 # get all sources
