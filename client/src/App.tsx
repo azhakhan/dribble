@@ -1,5 +1,5 @@
 import { ThemeProvider } from "@/components/theme-provider";
-import { useState, useEffect } from "react";
+import { useEffect } from "react";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 import { ModeToggle } from "@/components/mode-toggle";
 import logo from "@/assets/logo.png";
@@ -13,31 +13,10 @@ import { useSourcesQuery } from "@/hooks/useSourcesQuery";
 import { useSourceSchemasQuery } from "@/hooks/useSourceSchemasQuery";
 import { useQueryQuery } from "@/hooks/useQueryQuery";
 import { useSourceStatusQuery } from "@/hooks/useSourceStatusQuery";
-import { useQueryClient } from "@tanstack/react-query";
-import type { Source, SourceStatus } from "@/lib/api";
+import type { Source } from "@/lib/api";
+import { useAppStore } from "@/store/useAppStore";
 
-// Interface for schema objects
-interface SchemaColumn {
-  name: string;
-  type: string;
-  nullable: boolean;
-}
-
-interface SchemaTable {
-  columns: SchemaColumn[];
-}
-
-interface SchemaView {
-  columns: SchemaColumn[];
-}
-
-interface SchemaObject {
-  tables: Record<string, SchemaTable>;
-  views: Record<string, SchemaView>;
-}
-
-// Type for the schema map
-type SourceSchemaMap = Record<string, Record<string, SchemaObject>>;
+// Schema types are now imported from useAppStore
 
 // Sample file tree data as fallback
 const sampleFileTree = [
@@ -62,27 +41,25 @@ function TopMenu() {
 }
 
 function App() {
-  const [sizes, setSizes] = useState(() => {
-    const savedSizes = localStorage.getItem("panel-sizes");
-    return savedSizes ? JSON.parse(savedSizes) : [20, 60, 20];
-  });
-
-  // State for selected source and table
-  const [selectedSource, setSelectedSource] = useState<Source | null>(null);
-  const [sourceSchemaMap, setSourceSchemaMap] = useState<SourceSchemaMap>({});
-  const [selectedTableData, setSelectedTableData] = useState<{
-    sourceId: string;
-    tableName: string;
-    query: string;
-  } | null>(null);
-  const [queryResults, setQueryResults] = useState<object[] | null>(null);
-  const [queryRunning, setQueryRunning] = useState(false);
-  const [sourceSchemaErrors, setSourceSchemaErrors] = useState<Record<string, string>>({});
-  const [sourceStatuses, setSourceStatuses] = useState<Record<string, SourceStatus>>({});
-  const [connectedSources, setConnectedSources] = useState<Set<string>>(new Set());
-
-  // For React Query client
-  const queryClient = useQueryClient();
+  // Get state and actions from Zustand store
+  const {
+    panelSizes,
+    setPanelSizes,
+    selectedSource,
+    setSelectedSource,
+    sourceSchemaMap,
+    setSourceSchema,
+    selectedTableData,
+    setSelectedTableData,
+    queryResults,
+    setQueryResults,
+    queryRunning,
+    setQueryRunning,
+    sourceSchemaErrors,
+    setSourceSchemaError,
+    setSourceStatus,
+    connectedSources
+  } = useAppStore();
 
   // Query for all sources
   const { data: sources, isLoading: sourcesLoading, error: sourcesError } = useSourcesQuery();
@@ -135,60 +112,31 @@ function App() {
   // Update schema map when new schema data is loaded
   useEffect(() => {
     if (selectedSource?.id && sourceSchemas) {
-      setSourceSchemaMap((prev) => ({
-        ...prev,
-        [selectedSource.id]: sourceSchemas
-      }));
+      setSourceSchema(selectedSource.id, sourceSchemas);
       // Clear any error for this source
       if (sourceSchemaErrors[selectedSource.id]) {
-        setSourceSchemaErrors((prev) => {
-          const newErrors = { ...prev };
-          delete newErrors[selectedSource.id];
-          return newErrors;
-        });
+        setSourceSchemaError(selectedSource.id, null);
       }
     }
-  }, [selectedSource, sourceSchemas, sourceSchemaErrors]);
+  }, [selectedSource, sourceSchemas, sourceSchemaErrors, setSourceSchema, setSourceSchemaError]);
 
   // Track schema errors by source
   useEffect(() => {
     if (schemasError && selectedSource?.id) {
-      setSourceSchemaErrors((prev) => ({
-        ...prev,
-        [selectedSource.id]: "Error loading schemas"
-      }));
+      setSourceSchemaError(selectedSource.id, "Error loading schemas");
     }
-  }, [schemasError, selectedSource]);
+  }, [schemasError, selectedSource, setSourceSchemaError]);
 
   // Track source statuses
   useEffect(() => {
     if (selectedSourceStatus && selectedSource?.id) {
-      setSourceStatuses((prev) => ({
-        ...prev,
-        [selectedSource.id]: selectedSourceStatus
-      }));
+      setSourceStatus(selectedSource.id, selectedSourceStatus);
     }
-  }, [selectedSourceStatus, selectedSource]);
+  }, [selectedSourceStatus, selectedSource, setSourceStatus]);
 
-  // Load connected sources from localStorage on initial load
-  useEffect(() => {
-    const savedConnectedSources = localStorage.getItem("connectedSources");
-    if (savedConnectedSources) {
-      try {
-        const parsedSources = JSON.parse(savedConnectedSources);
-        setConnectedSources(new Set(parsedSources));
-      } catch (error) {
-        console.error("Error parsing connected sources from localStorage", error);
-      }
-    }
-  }, []);
+  // This is now handled by Zustand persist middleware
 
-  // Save connected sources to localStorage when they change
-  useEffect(() => {
-    if (connectedSources.size > 0) {
-      localStorage.setItem("connectedSources", JSON.stringify([...connectedSources]));
-    }
-  }, [connectedSources]);
+  // This is now handled by Zustand persist middleware
 
   // Build file tree data with sources and their schemas
   let fileTreeData = sources ? sourcesToFileTreeNodes(sources) : sampleFileTree;
@@ -207,25 +155,8 @@ function App() {
     });
   }
 
-  useEffect(() => {
-    localStorage.setItem("panel-sizes", JSON.stringify(sizes));
-  }, [sizes]);
-
   const handleSourceSelect = (source: Source) => {
     setSelectedSource(source);
-  };
-
-  // Handle source connection
-  const handleSourceConnect = (sourceId: string) => {
-    // Add to connected sources
-    setConnectedSources((prev) => {
-      const newSet = new Set(prev);
-      newSet.add(sourceId);
-      return newSet;
-    });
-
-    // Invalidate status query to fetch the status
-    queryClient.invalidateQueries({ queryKey: ["sourceStatus", sourceId] });
   };
 
   // Handle table double-click
@@ -253,13 +184,8 @@ function App() {
       <div className="h-screen flex flex-col">
         <TopMenu />
         <div className="flex-1">
-          <PanelGroup
-            direction="horizontal"
-            onLayout={(sizes) => setSizes(sizes)}
-            storage={localStorage}
-            autoSaveId="main-layout"
-          >
-            <Panel defaultSize={sizes[0]} minSize={10}>
+          <PanelGroup direction="horizontal" onLayout={(newSizes) => setPanelSizes(newSizes)}>
+            <Panel defaultSize={panelSizes[0]} minSize={15}>
               <div className="h-full">
                 {sourcesLoading ? (
                   <div className="p-4 text-sm text-muted-foreground">Loading sources...</div>
@@ -271,11 +197,6 @@ function App() {
                       data={fileTreeData}
                       onSourceSelect={handleSourceSelect}
                       onTableDoubleClick={handleTableDoubleClick}
-                      onSourceConnect={handleSourceConnect}
-                      loadingSourceId={schemasLoading ? selectedSource?.id : undefined}
-                      sourceErrors={sourceSchemaErrors}
-                      sourceStatuses={sourceStatuses}
-                      connectedSources={connectedSources}
                     />
                   </div>
                 )}
@@ -284,7 +205,7 @@ function App() {
 
             <PanelResizeHandle className="w-1 bg-border hover:bg-primary transition-colors" />
 
-            <Panel defaultSize={sizes[1]} minSize={30}>
+            <Panel defaultSize={panelSizes[1]} minSize={30}>
               <PanelGroup direction="vertical" storage={localStorage} autoSaveId="editor-layout">
                 <Panel defaultSize={60} minSize={30}>
                   <TableDataDisplay
@@ -310,7 +231,7 @@ function App() {
 
             <PanelResizeHandle className="w-1 bg-border hover:bg-primary transition-colors" />
 
-            <Panel defaultSize={sizes[2]} minSize={15}>
+            <Panel defaultSize={panelSizes[2]} minSize={15}>
               <div className="h-full">
                 <ChatSidebar />
               </div>

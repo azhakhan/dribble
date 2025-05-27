@@ -16,6 +16,9 @@ build-worker name:
 build-server:
     docker compose build dribble-server
 
+build-client:
+    docker compose build dribble-client
+
 up:
     #! /usr/bin/env bash
     if ! docker network ls | grep -q dribble-network

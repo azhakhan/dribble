@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useAppStore } from "@/store/useAppStore";
 import {
   ChevronRight,
   ChevronDown,
@@ -37,38 +38,29 @@ interface FileTreeProps {
   data: FileNode[];
   onSourceSelect?: (source: { id: string; name: string; dbtype: string }) => void;
   onTableDoubleClick?: (sourceId: string, tableName: string) => void;
-  onSourceConnect?: (sourceId: string) => void;
-  loadingSourceId?: string;
-  sourceErrors?: Record<string, string>;
-  sourceStatuses?: Record<string, string>;
-  connectedSources?: Set<string>;
 }
 
 const FileTreeItem = ({
   node,
   level = 0,
   onSourceSelect,
-  onTableDoubleClick,
-  onSourceConnect,
-  loadingSourceId,
-  selectedNodeId,
-  setSelectedNodeId,
-  sourceErrors,
-  sourceStatuses,
-  connectedSources
+  onTableDoubleClick
 }: {
   node: FileNode;
   level?: number;
   onSourceSelect?: (source: { id: string; name: string; dbtype: string }) => void;
   onTableDoubleClick?: (sourceId: string, tableName: string) => void;
-  onSourceConnect?: (sourceId: string) => void;
-  loadingSourceId?: string;
-  selectedNodeId?: string;
-  setSelectedNodeId: (id: string | undefined) => void;
-  sourceErrors?: Record<string, string>;
-  sourceStatuses?: Record<string, string>;
-  connectedSources?: Set<string>;
 }) => {
+  // Get state and actions from Zustand store
+  const {
+    selectedNodeId,
+    setSelectedNodeId,
+    loadingSourceId,
+    sourceSchemaErrors: sourceErrors,
+    sourceStatuses,
+    connectedSources,
+    addConnectedSource
+  } = useAppStore();
   const [isOpen, setIsOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [renameDialogOpen, setRenameDialogOpen] = useState(false);
@@ -108,9 +100,9 @@ const FileTreeItem = ({
     if (isSource && node.id) {
       connectMutation.mutate(node.id, {
         onSuccess: () => {
-          // Notify parent component that source was connected
-          if (onSourceConnect && node.id) {
-            onSourceConnect(node.id);
+          // Add to connected sources in the store
+          if (node.id) {
+            addConnectedSource(node.id);
           }
 
           // After successful connection, fetch the source status
@@ -418,13 +410,6 @@ const FileTreeItem = ({
                 level={level + 1}
                 onSourceSelect={onSourceSelect}
                 onTableDoubleClick={onTableDoubleClick}
-                onSourceConnect={onSourceConnect}
-                loadingSourceId={loadingSourceId}
-                selectedNodeId={selectedNodeId}
-                setSelectedNodeId={setSelectedNodeId}
-                sourceErrors={sourceErrors}
-                sourceStatuses={sourceStatuses}
-                connectedSources={connectedSources}
               />
             ))}
           {isSource && (!node.children || node.children.length === 0) && !isLoading && (
@@ -441,18 +426,7 @@ const FileTreeItem = ({
   );
 };
 
-export const FileTree = ({
-  data,
-  onSourceSelect,
-  onTableDoubleClick,
-  onSourceConnect,
-  loadingSourceId,
-  sourceErrors,
-  sourceStatuses,
-  connectedSources
-}: FileTreeProps) => {
-  const [selectedNodeId, setSelectedNodeId] = useState<string | undefined>(undefined);
-
+export const FileTree = ({ data, onSourceSelect, onTableDoubleClick }: FileTreeProps) => {
   return (
     <div className="h-full overflow-auto border-r select-none">
       <div className="p-2 font-semibold border-b flex items-center justify-between">
@@ -466,13 +440,6 @@ export const FileTree = ({
             node={node}
             onSourceSelect={onSourceSelect}
             onTableDoubleClick={onTableDoubleClick}
-            onSourceConnect={onSourceConnect}
-            loadingSourceId={loadingSourceId}
-            selectedNodeId={selectedNodeId}
-            setSelectedNodeId={setSelectedNodeId}
-            sourceErrors={sourceErrors}
-            sourceStatuses={sourceStatuses}
-            connectedSources={connectedSources}
           />
         ))}
         {data.length === 0 && (
