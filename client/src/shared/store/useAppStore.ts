@@ -83,6 +83,9 @@ interface AppState extends FileTreeState, SourceChildrenState {
   setSourceSchemaError: (sourceId: string, error: string | null) => void;
   setSourceStatus: (sourceId: string, status: SourceStatus) => void;
   removeSourceStatus: (sourceId: string) => void;
+
+  // New action to clean up disconnected sources
+  cleanupDisconnectedSources: (connectedSourceIds: string[]) => void;
 }
 
 // Create the store with persistence for certain values
@@ -175,7 +178,61 @@ export const useAppStore = create<AppState>()(
             ...state.sourceHasChildren,
             [sourceId]: hasChildren
           }
-        }))
+        })),
+
+      // New action to clean up disconnected sources
+      cleanupDisconnectedSources: (connectedSourceIds) =>
+        set((state) => {
+          const connectedSet = new Set(connectedSourceIds);
+
+          // Clean up schema map
+          const newSourceSchemaMap = { ...state.sourceSchemaMap };
+          Object.keys(newSourceSchemaMap).forEach((sourceId) => {
+            if (!connectedSet.has(sourceId)) {
+              delete newSourceSchemaMap[sourceId];
+            }
+          });
+
+          // Clean up generated children
+          const newSourceGeneratedChildren = { ...state.sourceGeneratedChildren };
+          Object.keys(newSourceGeneratedChildren).forEach((sourceId) => {
+            if (!connectedSet.has(sourceId)) {
+              delete newSourceGeneratedChildren[sourceId];
+            }
+          });
+
+          // Clean up hasChildren flags
+          const newSourceHasChildren = { ...state.sourceHasChildren };
+          Object.keys(newSourceHasChildren).forEach((sourceId) => {
+            if (!connectedSet.has(sourceId)) {
+              delete newSourceHasChildren[sourceId];
+            }
+          });
+
+          // Clean up schema errors
+          const newSourceSchemaErrors = { ...state.sourceSchemaErrors };
+          Object.keys(newSourceSchemaErrors).forEach((sourceId) => {
+            if (!connectedSet.has(sourceId)) {
+              delete newSourceSchemaErrors[sourceId];
+            }
+          });
+
+          // Clean up source statuses
+          const newSourceStatuses = { ...state.sourceStatuses };
+          Object.keys(newSourceStatuses).forEach((sourceId) => {
+            if (!connectedSet.has(sourceId)) {
+              delete newSourceStatuses[sourceId];
+            }
+          });
+
+          return {
+            sourceSchemaMap: newSourceSchemaMap,
+            sourceGeneratedChildren: newSourceGeneratedChildren,
+            sourceHasChildren: newSourceHasChildren,
+            sourceSchemaErrors: newSourceSchemaErrors,
+            sourceStatuses: newSourceStatuses
+          };
+        })
     }),
     {
       name: "dribble-app-storage",

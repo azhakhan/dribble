@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { getSourceSchemas } from "@/shared/lib/api";
 import { useAppStore, type SchemaObject } from "@/shared/store/useAppStore";
@@ -16,11 +16,9 @@ export function useConnectedSourcesSchemas(connectedSources: ConnectedSource[] |
     setSourceSchema,
     setSourceGeneratedChildren,
     setSourceHasChildren,
-    setSourceSchemaError
+    setSourceSchemaError,
+    cleanupDisconnectedSources
   } = useAppStore();
-
-  // Keep track of previously connected source IDs to detect disconnections
-  const previousConnectedSourceIds = useRef<Set<string>>(new Set());
 
   // Create queries for each connected source
   const sourceQueries = useQuery({
@@ -54,23 +52,9 @@ export function useConnectedSourcesSchemas(connectedSources: ConnectedSource[] |
 
   // Update AppState when schemas are loaded and clean up disconnected sources
   useEffect(() => {
-    const currentConnectedSourceIds = new Set(connectedSources?.map((s) => s.id) || []);
-
-    // Find sources that were previously connected but are no longer connected
-    const disconnectedSourceIds = Array.from(previousConnectedSourceIds.current).filter(
-      (sourceId) => !currentConnectedSourceIds.has(sourceId)
-    );
-
-    // Clean up data for disconnected sources
-    disconnectedSourceIds.forEach((sourceId) => {
-      setSourceSchema(sourceId, {});
-      setSourceGeneratedChildren(sourceId, []);
-      setSourceHasChildren(sourceId, false);
-      setSourceSchemaError(sourceId, null);
-    });
-
-    // Update the ref with current connected source IDs
-    previousConnectedSourceIds.current = currentConnectedSourceIds;
+    // Clean up data for disconnected sources using the store action
+    const connectedSourceIds = connectedSources?.map((s) => s.id) || [];
+    cleanupDisconnectedSources(connectedSourceIds);
 
     // Update AppState for currently connected sources
     if (sourceQueries.data && connectedSources) {
@@ -108,7 +92,8 @@ export function useConnectedSourcesSchemas(connectedSources: ConnectedSource[] |
     setSourceSchema,
     setSourceGeneratedChildren,
     setSourceHasChildren,
-    setSourceSchemaError
+    setSourceSchemaError,
+    cleanupDisconnectedSources
   ]);
 
   return {
