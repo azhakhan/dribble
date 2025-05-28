@@ -11,7 +11,7 @@ from app.models import Source
 from app.dependencies import get_current_workspace
 from uuid import UUID
 from app.controllers.sources import get_source_schemas
-from app.core.spawn_worker import WorkerContainer
+from app.core.spawn_worker import WorkerContainer, stop_worker
 from app.schemas.sources import PostgresCreds
 import json
 from uuid import uuid4
@@ -196,6 +196,27 @@ async def get_connected_sources(
     # get all running workers
     workers = db.query(Worker).filter_by(workspace_id=workspace.id, status="healthy").all()
     return [{"id": worker.source_id, "source_id": worker.source_id} for worker in workers]
+
+
+# add disconnect source
+@router.delete("/disconnect/{source_id}")
+async def disconnect_source(
+    source_id: UUID,
+    db: Session = Depends(get_db),
+    workspace=Depends(get_current_workspace),
+):
+    worker = db.query(Worker).filter_by(source_id=source_id, workspace_id=workspace.id).first()
+    if not worker:
+        raise HTTPException(status_code=404, detail="Worker not found")
+
+    # stop the worker
+    if not stop_worker(worker.container_id):
+        raise HTTPException(status_code=404, detail="Worker not found")
+
+    # remove worker record
+    db.delete(worker)
+    db.commit()
+    return {"message": "Disconnected"}
 
 
 # get a source by id

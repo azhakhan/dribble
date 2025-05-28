@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type { Source, SourceStatus } from "@/shared/lib/api";
+import type { FileNode } from "@/shared/lib/fileTreeUtils";
 
 // Interface for schema objects
 interface SchemaColumn {
@@ -36,8 +37,20 @@ interface FileTreeState {
   setLoadingSourceId: (id: string | undefined) => void;
 }
 
+// Source children state
+interface SourceChildrenState {
+  // Map of sourceId to generated children
+  sourceGeneratedChildren: Record<string, FileNode[]>;
+  // Map of sourceId to hasChildren flag
+  sourceHasChildren: Record<string, boolean>;
+
+  // Actions
+  setSourceGeneratedChildren: (sourceId: string, children: FileNode[]) => void;
+  setSourceHasChildren: (sourceId: string, hasChildren: boolean) => void;
+}
+
 // App state
-interface AppState extends FileTreeState {
+interface AppState extends FileTreeState, SourceChildrenState {
   // Panel sizes
   panelSizes: number[];
 
@@ -95,6 +108,10 @@ export const useAppStore = create<AppState>()(
       sourceSchemaErrors: {},
       sourceStatuses: {},
 
+      // Source children state
+      sourceGeneratedChildren: {},
+      sourceHasChildren: {},
+
       // Panel actions
       setPanelSizes: (sizes) => set({ panelSizes: sizes }),
 
@@ -133,6 +150,23 @@ export const useAppStore = create<AppState>()(
           sourceStatuses: {
             ...state.sourceStatuses,
             [sourceId]: status
+          }
+        })),
+
+      // Source children actions
+      setSourceGeneratedChildren: (sourceId, children) =>
+        set((state) => ({
+          sourceGeneratedChildren: {
+            ...state.sourceGeneratedChildren,
+            [sourceId]: children
+          }
+        })),
+
+      setSourceHasChildren: (sourceId, hasChildren) =>
+        set((state) => ({
+          sourceHasChildren: {
+            ...state.sourceHasChildren,
+            [sourceId]: hasChildren
           }
         }))
     }),

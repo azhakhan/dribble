@@ -5,7 +5,9 @@ from uuid import UUID
 import random
 from sqlalchemy.orm import Session
 from app.models import Worker
+import logging
 
+logging.basicConfig(level=logging.INFO)
 client = docker.from_env()
 
 
@@ -114,14 +116,23 @@ class WorkerContainer:
             return e.stderr or str(e)
 
 
-def stop_worker(container_id: str):
+def stop_worker(container_id: str) -> bool:
     try:
         container = client.containers.get(container_id)
         container.stop()
         container.remove()
+        return True
     except docker.errors.NotFound:
         # Container doesn't exist anymore
-        pass
+        return True  # Consider it a success if the container is already gone
+    except docker.errors.APIError as e:
+        # Handle API errors (e.g., container is in use, permission issues)
+        logging.error(f"Docker API error when removing container {container_id}: {str(e)}")
+        return False
+    except Exception as e:
+        # Handle any other unexpected errors
+        logging.error(f"Unexpected error when removing container {container_id}: {str(e)}")
+        return False
 
 
 def is_healthy(container_id: str):

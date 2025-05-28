@@ -1,5 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
-import { schemaToFileTreeNodes } from "@/shared/lib/fileTreeUtils";
+import { useState, useEffect, useMemo } from "react";
 import { useAppStore } from "@/shared/store/useAppStore";
 import {
   ChevronRight,
@@ -28,9 +27,11 @@ import { EditSource } from "./dialogs/EditSource";
 import { RenameSource } from "./dialogs/RenameSource";
 import { DeleteSource } from "./dialogs/DeleteSource";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { useConnectSourceMutation } from "@/shared/hooks/useConnectSourceMutation";
+import {
+  useConnectSourceMutation,
+  useDisconnectSourceMutation
+} from "@/shared/hooks/useConnectSourceMutation";
 import { useSourceStatusQuery } from "@/shared/hooks/useSourceStatusQuery";
-import { useSourceSchemasQuery } from "@/shared/hooks/useSourceSchemasQuery";
 import { useConnectedSourcesQuery } from "@/shared/hooks/useConnectedSourcesQuery";
 import { useQueryClient } from "@tanstack/react-query";
 import type { ConnectedSource } from "@/shared/lib/api";
@@ -63,7 +64,9 @@ const FileTreeItem = ({
     setSelectedNodeId,
     loadingSourceId,
     sourceSchemaErrors: sourceErrors,
-    sourceStatuses
+    sourceStatuses,
+    sourceGeneratedChildren,
+    sourceHasChildren: sourceHasChildrenMap
   } = useAppStore();
 
   const [isOpen, setIsOpen] = useState(false);
@@ -80,47 +83,24 @@ const FileTreeItem = ({
 
   // React Query hooks
   const connectMutation = useConnectSourceMutation();
-  const queryClient = useQueryClient();
+  const disconnectMutation = useDisconnectSourceMutation();
 
   // Get source status if this is a source node AND it's connected
   const isConnected = isSource && node.id && connectedSourceIds.has(node.id);
   const { data: sourceStatus } = useSourceStatusQuery(isConnected ? node.id : undefined);
 
-  // Get source schemas to check if they're loaded - only if the source is connected
-  const { data: sourceSchemas, isSuccess: schemasLoaded } = useSourceSchemasQuery(
-    isConnected ? node.id : undefined
-  );
+  // Get generated children from app store if available
+  const generatedChildren = isSource && node.id ? sourceGeneratedChildren[node.id] : undefined;
 
-  // Generate children nodes from schema data when it's loaded
-  const generatedChildren = useMemo(() => {
-    if (isSource && schemasLoaded && sourceSchemas && node.id) {
-      // Use the utility function to convert schema to nodes
-      return schemaToFileTreeNodes(sourceSchemas, node.id);
-    }
-    return undefined;
-  }, [isSource, schemasLoaded, sourceSchemas, node.id]);
-
-  // Update hasChildren based on source schema data when it's loaded
-  const hasChildren = useMemo(() => {
-    // If we have generated children from schema data, use that
-    if (generatedChildren) {
-      return generatedChildren.length > 0;
-    }
-    // If it's a source and schemas are loaded, check if there are any schemas
-    if (isSource && schemasLoaded && sourceSchemas) {
-      return Object.keys(sourceSchemas).length > 0;
-    }
-    // Otherwise fall back to the original check
-    return Boolean(node.children?.length);
-  }, [isSource, schemasLoaded, sourceSchemas, node.children, generatedChildren]);
+  // Determine if node has children using app store state for sources
+  const hasChildren =
+    isSource && node.id && sourceHasChildrenMap[node.id] !== undefined
+      ? sourceHasChildrenMap[node.id] // Use app store value for sources
+      : Boolean(node.children?.length); // Fall back to original check for non-sources
 
   // Combine original children with generated schema children
-  const effectiveChildren = useMemo(() => {
-    if (generatedChildren) {
-      return generatedChildren;
-    }
-    return node.children || [];
-  }, [node.children, generatedChildren]);
+  const effectiveChildren = generatedChildren || node.children || [];
+
   const isLoading = isSource && loadingSourceId === node.id;
   const isSelected = selectedNodeId === node.id;
   const hasError = isSource && node.id && sourceErrors && sourceErrors[node.id];
@@ -133,23 +113,7 @@ const FileTreeItem = ({
   const handleConnectClick = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (isSource && node.id) {
-      connectMutation.mutate(node.id, {
-        onSuccess: () => {
-          // After successful connection, fetch the connected sources
-          queryClient.invalidateQueries({ queryKey: ["connectedSources"] });
-
-          // After successful connection, fetch the source status
-          queryClient.invalidateQueries({ queryKey: ["sourceStatus", node.id] });
-
-          // If status becomes healthy and schemas are not loaded, load them
-          setTimeout(() => {
-            // Check if schemas need to be loaded
-            if (!schemasLoaded || !sourceSchemas || Object.keys(sourceSchemas).length === 0) {
-              queryClient.invalidateQueries({ queryKey: ["sourceSchemas", node.id] });
-            }
-          }, 500);
-        }
-      });
+      connectMutation.mutate(node.id);
     }
   };
 
@@ -199,6 +163,10 @@ const FileTreeItem = ({
         onTableDoubleClick(node.sourceId, node.name);
       }
     }
+  };
+
+  const disconnectSource = async (sourceId: string) => {
+    disconnectMutation.mutate(sourceId);
   };
 
   const renderIcon = () => {
@@ -358,6 +326,11 @@ const FileTreeItem = ({
                 <DropdownMenuItem onClick={() => setDeleteDialogOpen(true)}>
                   Delete
                 </DropdownMenuItem>
+                {isConnected && node.id && (
+                  <DropdownMenuItem onClick={() => disconnectSource(node.id as string)}>
+                    Disconnect
+                  </DropdownMenuItem>
+                )}
               </DropdownMenuContent>
             </DropdownMenu>
           </div>

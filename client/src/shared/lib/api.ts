@@ -35,6 +35,11 @@ export const connectSource = async (sourceId: string): Promise<void> => {
   await api.get(`/sources/connect/${sourceId}`);
 };
 
+// Disconnect from a source
+export const disconnectSource = async (sourceId: string): Promise<void> => {
+  await api.delete(`/sources/disconnect/${sourceId}`);
+};
+
 // Get source status
 export const getSourceStatus = async (sourceId: string): Promise<SourceStatus> => {
   const response = await api.get<{ status: SourceStatus }>(`/sources/status/${sourceId}`);
