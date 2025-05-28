@@ -49,10 +49,7 @@ export function useConnectedSourcesSchemas(connectedSources: ConnectedSource[] |
 
       return results;
     },
-    enabled: Boolean(connectedSources && connectedSources.length > 0),
-    staleTime: 30 * 1000, // 30 seconds - reduced from 5 minutes
-    gcTime: 60 * 1000, // 1 minute - garbage collect cached data quickly
-    refetchOnWindowFocus: false
+    enabled: Boolean(connectedSources && connectedSources.length > 0)
   });
 
   // Update AppState when schemas are loaded and clean up disconnected sources
