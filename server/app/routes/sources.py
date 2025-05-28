@@ -10,12 +10,12 @@ from sqlalchemy.orm import Session
 from app.models import Source
 from app.dependencies import get_current_workspace
 from uuid import UUID
-from app.controllers.sources import get_source_schemas
 from app.core.spawn_worker import WorkerContainer, stop_worker
 from app.schemas.sources import PostgresCreds
 import json
 from uuid import uuid4
 from app.models import Worker
+import requests
 
 router = APIRouter(prefix="/sources", tags=["sources"])
 
@@ -169,23 +169,23 @@ async def get_schemas(
         if not source:
             raise HTTPException(status_code=404, detail="Source not found")
 
-        creds = PostgresCreds(**source.creds)
-        worker = None
+        # Check if there's already a connected worker for this source
+        db_worker = db.query(Worker).filter_by(source_id=source_id).first()
 
-        try:
-            worker = WorkerContainer(source.id, creds)
-            if not worker.already_exists():
-                worker.start()
-        except Exception as e:
-            # Clean up worker if it was created but failed
-            if worker and worker.container_id:
-                try:
-                    worker.stop()
-                except Exception:
-                    pass  # Ignore cleanup errors
-            raise HTTPException(status_code=500, detail=str(e)) from e
+        if not db_worker:
+            msg = "Source is not connected. Please connect to the source first to view schemas."
+            raise HTTPException(
+                status_code=400,
+                detail=msg,
+            )
 
-        return get_source_schemas(source)
+        container_name = f"dribble-worker-postgres-{source_id}"
+        response = requests.get(
+            f"http://{container_name}:8000/schema/",
+            timeout=5,
+        )
+        return response.json()
+
     except HTTPException:
         # Re-raise HTTP exceptions as-is
         raise
