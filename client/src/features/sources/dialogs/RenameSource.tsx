@@ -15,19 +15,14 @@ import { Loader2 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
-interface RenameSourceDialogProps {
+interface RenameSourceProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   sourceId: string;
   sourceName: string;
 }
 
-export const RenameSourceDialog = ({
-  open,
-  onOpenChange,
-  sourceId,
-  sourceName
-}: RenameSourceDialogProps) => {
+export const RenameSource = ({ open, onOpenChange, sourceId, sourceName }: RenameSourceProps) => {
   const [newName, setNewName] = useState(sourceName);
   const [loading, setLoading] = useState(false);
   const queryClient = useQueryClient();

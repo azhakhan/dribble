@@ -17,7 +17,7 @@ import {
 import { PostgresIcon, MySQLIcon, SQLiteIcon } from "../icons";
 import { getColumnTypeIcon } from "./ColumnTypeIcons";
 import type { FileNode } from "@/shared/lib/fileTreeUtils";
-import { AddSourceDialog } from "@/features/sources/AddSourceDialog";
+import { AddSource } from "@/features/sources/dialogs/AddSource";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -25,9 +25,9 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger
 } from "@/components/ui/dropdown-menu";
-import { EditSourceDialog } from "./EditSourceDialog";
-import { RenameSourceDialog } from "./RenameSourceDialog";
-import { DeleteSourceDialog } from "./DeleteSourceDialog";
+import { EditSource } from "./dialogs/EditSource";
+import { RenameSource } from "./dialogs/RenameSource";
+import { DeleteSource } from "./dialogs/DeleteSource";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useConnectSourceMutation } from "@/shared/hooks/useConnectSourceMutation";
 import { useSourceStatusQuery } from "@/shared/hooks/useSourceStatusQuery";
@@ -372,7 +372,7 @@ const FileTreeItem = ({
       {/* Separate Dialogs */}
       {isSource && node.id && (
         <>
-          <EditSourceDialog
+          <EditSource
             open={editDialogOpen}
             onOpenChange={(open) => {
               setEditDialogOpen(open);
@@ -380,7 +380,7 @@ const FileTreeItem = ({
             sourceId={node.id}
           />
 
-          <RenameSourceDialog
+          <RenameSource
             open={renameDialogOpen}
             onOpenChange={(open) => {
               setRenameDialogOpen(open);
@@ -389,7 +389,7 @@ const FileTreeItem = ({
             sourceName={node.name}
           />
 
-          <DeleteSourceDialog
+          <DeleteSource
             open={deleteDialogOpen}
             onOpenChange={(open) => {
               setDeleteDialogOpen(open);
@@ -431,7 +431,7 @@ export const FileTree = ({ data, onSourceSelect, onTableDoubleClick }: FileTreeP
     <div className="h-full overflow-auto border-r select-none">
       <div className="p-2 font-semibold border-b flex items-center justify-between">
         <span>Sources</span>
-        <AddSourceDialog className="hover:text-foreground text-muted-foreground" />
+        <AddSource className="hover:text-foreground text-muted-foreground" />
       </div>
       <div>
         {data.map((node, index) => (
@@ -451,7 +451,7 @@ export const FileTree = ({ data, onSourceSelect, onTableDoubleClick }: FileTreeP
               className="flex items-center gap-1"
               onClick={() => {
                 // This is just a placeholder to open the add source dialog
-                // The actual implementation would dispatch a click event to the AddSourceDialog
+                // The actual implementation would dispatch a click event to the AddSource
                 const addButton = document.querySelector('[data-testid="add-source-button"]');
                 if (addButton) {
                   (addButton as HTMLButtonElement).click();

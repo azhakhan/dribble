@@ -11,9 +11,9 @@ import { useSourceStatusQuery } from "@/shared/hooks/useSourceStatusQuery";
 import { useSourceSchemasQuery } from "@/shared/hooks/useSourceSchemasQuery";
 import { useQueryClient } from "@tanstack/react-query";
 import { SourceDropdown } from "./FileTreeControls";
-import { EditSourceDialog } from "./EditSourceDialog";
-import { RenameSourceDialog } from "./RenameSourceDialog";
-import { DeleteSourceDialog } from "./DeleteSourceDialog";
+import { EditSource } from "./dialogs/EditSource";
+import { RenameSource } from "./dialogs/RenameSource";
+import { DeleteSource } from "./dialogs/DeleteSource";
 import { SchemaNode } from "./SchemaNode";
 
 export const SourceNode: React.FC<NodeProps> = ({
@@ -278,7 +278,7 @@ export const SourceNode: React.FC<NodeProps> = ({
       {/* Dialogs */}
       {node.id && (
         <>
-          <EditSourceDialog
+          <EditSource
             open={editDialogOpen}
             onOpenChange={(open) => {
               setEditDialogOpen(open);
@@ -286,7 +286,7 @@ export const SourceNode: React.FC<NodeProps> = ({
             sourceId={node.id}
           />
 
-          <RenameSourceDialog
+          <RenameSource
             open={renameDialogOpen}
             onOpenChange={(open) => {
               setRenameDialogOpen(open);
@@ -295,7 +295,7 @@ export const SourceNode: React.FC<NodeProps> = ({
             sourceName={node.name}
           />
 
-          <DeleteSourceDialog
+          <DeleteSource
             open={deleteDialogOpen}
             onOpenChange={(open) => {
               setDeleteDialogOpen(open);

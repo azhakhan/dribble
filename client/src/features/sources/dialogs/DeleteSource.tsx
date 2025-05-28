@@ -15,19 +15,14 @@ import { Loader2 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
-interface DeleteSourceDialogProps {
+interface DeleteSourceProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   sourceId: string;
   sourceName: string;
 }
 
-export const DeleteSourceDialog = ({
-  open,
-  onOpenChange,
-  sourceId,
-  sourceName
-}: DeleteSourceDialogProps) => {
+export const DeleteSource = ({ open, onOpenChange, sourceId, sourceName }: DeleteSourceProps) => {
   const [confirmName, setConfirmName] = useState("");
   const [loading, setLoading] = useState(false);
   const queryClient = useQueryClient();

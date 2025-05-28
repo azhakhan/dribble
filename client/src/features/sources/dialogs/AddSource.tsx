@@ -15,12 +15,12 @@ import { Button } from "@/components/ui/button";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
-interface AddSourceDialogProps {
+interface AddSourceProps {
   className?: string;
   onSourceAdded?: () => void;
 }
 
-export const AddSourceDialog = ({ className, onSourceAdded }: AddSourceDialogProps) => {
+export const AddSource = ({ className, onSourceAdded }: AddSourceProps) => {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [testing, setTesting] = useState(false);

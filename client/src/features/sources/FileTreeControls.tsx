@@ -6,7 +6,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger
 } from "@/components/ui/dropdown-menu";
-import { AddSourceDialog } from "./AddSourceDialog";
+import { AddSource } from "./dialogs/AddSource";
 
 interface FileTreeHeaderProps {
   title?: string;
@@ -16,7 +16,7 @@ export const FileTreeHeader = ({ title = "Sources" }: FileTreeHeaderProps) => {
   return (
     <div className="p-2 font-semibold border-b flex items-center justify-between">
       <span>{title}</span>
-      <AddSourceDialog className="hover:text-foreground text-muted-foreground" />
+      <AddSource className="hover:text-foreground text-muted-foreground" />
     </div>
   );
 };

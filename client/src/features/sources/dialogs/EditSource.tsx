@@ -19,13 +19,13 @@ import { Loader2 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
-interface EditSourceDialogProps {
+interface EditSourceProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   sourceId: string;
 }
 
-export const EditSourceDialog = ({ open, onOpenChange, sourceId }: EditSourceDialogProps) => {
+export const EditSource = ({ open, onOpenChange, sourceId }: EditSourceProps) => {
   const [loading, setLoading] = useState(false);
   const [loadingCreds, setLoadingCreds] = useState(false);
   const [testing, setTesting] = useState(false);
