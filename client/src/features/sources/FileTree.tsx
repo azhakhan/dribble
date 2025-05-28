@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useAppStore } from "@/shared/store/useAppStore";
 import {
   ChevronRight,
@@ -88,6 +88,13 @@ const FileTreeItem = ({
   // Get source status if this is a source node AND it's connected
   const isConnected = isSource && node.id && connectedSourceIds.has(node.id);
   const { data: sourceStatus } = useSourceStatusQuery(isConnected ? node.id : undefined);
+
+  // Auto-collapse source when it gets disconnected
+  useEffect(() => {
+    if (isSource && !isConnected && isOpen) {
+      setIsOpen(false);
+    }
+  }, [isSource, isConnected, isOpen]);
 
   // Get generated children from app store if available
   const generatedChildren = isSource && node.id ? sourceGeneratedChildren[node.id] : undefined;
