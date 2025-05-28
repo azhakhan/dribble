@@ -21,7 +21,8 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuTrigger
+  DropdownMenuTrigger,
+  DropdownMenuSeparator
 } from "@/components/ui/dropdown-menu";
 import { EditSource } from "./dialogs/EditSource";
 import { RenameSource } from "./dialogs/RenameSource";
@@ -292,10 +293,10 @@ const FileTreeItem = ({
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="h-4 w-4 ml-1 hover:bg-accent"
+                      className="h-3 w-3 ml-1 hover:bg-accent cursor-pointer"
                       onClick={handleConnectClick}
                     >
-                      <Power className="h-2 w-2" strokeWidth={1} />
+                      <Power style={{ width: "12px", height: "12px" }} strokeWidth={1} />
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent>
@@ -318,18 +319,28 @@ const FileTreeItem = ({
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-40">
+                {isConnected && node.id && (
+                  <>
+                    <DropdownMenuItem
+                      className="text-destructive"
+                      onClick={() => disconnectSource(node.id as string)}
+                    >
+                      Disconnect
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                  </>
+                )}
+
                 <DropdownMenuItem onClick={() => setEditDialogOpen(true)}>Edit</DropdownMenuItem>
                 <DropdownMenuItem onClick={() => setRenameDialogOpen(true)}>
                   Rename
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setDeleteDialogOpen(true)}>
+                <DropdownMenuItem
+                  className="text-destructive"
+                  onClick={() => setDeleteDialogOpen(true)}
+                >
                   Delete
                 </DropdownMenuItem>
-                {isConnected && node.id && (
-                  <DropdownMenuItem onClick={() => disconnectSource(node.id as string)}>
-                    Disconnect
-                  </DropdownMenuItem>
-                )}
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
