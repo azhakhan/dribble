@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useMemo } from "react";
 import { useAppStore } from "@/shared/store/useAppStore";
 import {
   ChevronRight,
@@ -33,7 +33,7 @@ import {
 } from "@/shared/hooks/useConnectSourceMutation";
 import { useSourceStatusQuery } from "@/shared/hooks/useSourceStatusQuery";
 import { useConnectedSourcesQuery } from "@/shared/hooks/useConnectedSourcesQuery";
-import { useQueryClient } from "@tanstack/react-query";
+import { useConnectedSourcesSchemas } from "@/shared/hooks/useConnectedSourcesSchemas";
 import type { ConnectedSource } from "@/shared/lib/api";
 
 interface FileTreeProps {
@@ -388,7 +388,6 @@ const FileTreeItem = ({
 export const FileTree = ({ data, onSourceSelect, onTableDoubleClick }: FileTreeProps) => {
   // Fetch connected sources on component mount
   const { data: connectedSourcesData } = useConnectedSourcesQuery();
-  const queryClient = useQueryClient();
 
   // Create a set of connected source IDs for easy lookup
   const connectedSourceIds = useMemo(() => {
@@ -396,15 +395,8 @@ export const FileTree = ({ data, onSourceSelect, onTableDoubleClick }: FileTreeP
     return new Set(connectedSourcesData.map((source: ConnectedSource) => source.id));
   }, [connectedSourcesData]);
 
-  // When connected sources are loaded, fetch their schemas
-  useEffect(() => {
-    if (connectedSourcesData && connectedSourcesData.length > 0) {
-      // For each connected source, fetch its schema
-      connectedSourcesData.forEach((source: ConnectedSource) => {
-        queryClient.invalidateQueries({ queryKey: ["sourceSchemas", source.id] });
-      });
-    }
-  }, [connectedSourcesData, queryClient]);
+  // Fetch schemas for all connected sources and update AppState
+  useConnectedSourcesSchemas(connectedSourcesData);
 
   return (
     <div className="h-full overflow-auto border-r select-none">

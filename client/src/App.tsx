@@ -5,11 +5,7 @@ import { ModeToggle } from "@/components/mode-toggle";
 import logo from "@/assets/logo.png";
 
 import { FileTree } from "@/features/sources/FileTree";
-import {
-  sourcesToFileTreeNodes,
-  schemaToFileTreeNodes,
-  type FileNode
-} from "@/shared/lib/fileTreeUtils";
+import { sourcesToFileTreeNodes } from "@/shared/lib/fileTreeUtils";
 import { TableDataDisplay } from "@/features/tables/TableDataDisplay";
 import { ChatSidebar } from "@/features/chat/ChatSidebar";
 import { Editor } from "@/features/editor/Editor";
@@ -49,7 +45,6 @@ function App() {
     setPanelSizes,
     selectedSource,
     setSelectedSource,
-    sourceSchemaMap,
     setSourceSchema,
     selectedTableData,
     setSelectedTableData,
@@ -108,7 +103,7 @@ function App() {
       console.error("Error executing table query:", tableQueryError);
       setQueryResults([{ error: "Error loading table data" }]);
     }
-  }, [tableQueryResults, tableQueryError]);
+  }, [tableQueryResults, tableQueryError, setQueryResults]);
 
   // Update query running state based on loading state
   useEffect(() => {
@@ -117,7 +112,7 @@ function App() {
     } else {
       setQueryRunning(false);
     }
-  }, [isLoading, selectedTableData]);
+  }, [isLoading, selectedTableData, setQueryRunning]);
 
   // Update schema map when new schema data is loaded
   useEffect(() => {
@@ -144,22 +139,8 @@ function App() {
     }
   }, [selectedSourceStatus, selectedSource, setSourceStatus]);
 
-  // Build file tree data with sources and their schemas
-  let fileTreeData = sources ? sourcesToFileTreeNodes(sources) : sampleFileTree;
-
-  // Add schema children to sources that have loaded schemas
-  if (Object.keys(sourceSchemaMap).length > 0) {
-    fileTreeData = (fileTreeData as FileNode[]).map((node) => {
-      if (node.id && sourceSchemaMap[node.id]) {
-        const schemaNodes = schemaToFileTreeNodes(sourceSchemaMap[node.id], node.id);
-        return {
-          ...node,
-          children: schemaNodes
-        };
-      }
-      return node;
-    });
-  }
+  // Build file tree data with sources only - schema children are handled by FileTree component via AppState
+  const fileTreeData = sources ? sourcesToFileTreeNodes(sources) : sampleFileTree;
 
   const handleSourceSelect = (source: Source) => {
     setSelectedSource(source);
