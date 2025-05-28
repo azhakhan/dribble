@@ -1,7 +1,6 @@
-// src/store/useAppStore.ts
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import type { Source, SourceStatus } from "@/lib/api";
+import type { Source, SourceStatus } from "@/shared/lib/api";
 
 // Interface for schema objects
 interface SchemaColumn {

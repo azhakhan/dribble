@@ -5,7 +5,7 @@ import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { Toaster } from "@/components/ui/sonner";
 import "./index.css";
 import App from "./App.tsx";
-import { queryClient } from "@/lib/query-client";
+import { queryClient } from "@/shared/lib/query-client";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

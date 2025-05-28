@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { renameSource } from "@/lib/api";
+import { renameSource } from "@/shared/lib/api";
 import {
   Dialog,
   DialogContent,

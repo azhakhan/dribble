@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { connectSource } from "@/lib/api";
+import { connectSource } from "@/shared/lib/api";
 
 export function useConnectSourceMutation() {
   const queryClient = useQueryClient();

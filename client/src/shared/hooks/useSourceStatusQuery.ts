@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { getSourceStatus, type SourceStatus } from "@/lib/api";
+import { getSourceStatus, type SourceStatus } from "@/shared/lib/api";
 
 export function useSourceStatusQuery(sourceId: string | undefined) {
   return useQuery<SourceStatus, Error>({

@@ -1,5 +1,5 @@
 import { useQuery, type UseQueryOptions } from "@tanstack/react-query";
-import { executeQuery, getQueryResults } from "@/lib/api";
+import { executeQuery, getQueryResults } from "@/shared/lib/api";
 
 /**
  * Custom hook to execute a query against a database and poll for results

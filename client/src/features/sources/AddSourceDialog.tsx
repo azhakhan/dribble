@@ -9,8 +9,8 @@ import {
   DialogFooter,
   DialogTrigger
 } from "@/components/ui/dialog";
-import { createSource, testSource } from "@/lib/api";
-import type { PostgresCreds, MysqlCreds, SqliteCreds, CreateSourceRequest } from "@/lib/api";
+import { createSource, testSource } from "@/shared/lib/api";
+import type { PostgresCreds, MysqlCreds, SqliteCreds, CreateSourceRequest } from "@/shared/lib/api";
 import { Button } from "@/components/ui/button";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";

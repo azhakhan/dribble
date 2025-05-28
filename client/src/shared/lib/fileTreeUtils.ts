@@ -1,4 +1,4 @@
-import type { Source } from "@/lib/api";
+import type { Source } from "@/shared/lib/api";
 
 export interface FileNode {
   name: string;
@@ -39,14 +39,14 @@ export const sourcesToFileTreeNodes = (sources: Source[]): FileNode[] => {
     id: source.id,
     sourceId: source.id,
     dbtype: source.dbtype,
-    children: [], // Initialize empty children array for each source
+    children: [] // Initialize empty children array for each source
   }));
 };
 
 // Helper function to convert schema data to file tree nodes
 export const schemaToFileTreeNodes = (
   schemaData: Record<string, SchemaObject>,
-  sourceId: string,
+  sourceId: string
 ): FileNode[] => {
   const result: FileNode[] = [];
 
@@ -58,7 +58,7 @@ export const schemaToFileTreeNodes = (
       type: "schema",
       id: `${sourceId}_${schemaName}`,
       sourceId: sourceId,
-      children: [],
+      children: []
     };
 
     // Add Tables folder
@@ -67,7 +67,7 @@ export const schemaToFileTreeNodes = (
         name: "Tables",
         type: "folder",
         sourceId: sourceId,
-        children: [],
+        children: []
       };
 
       // Process each table
@@ -78,7 +78,7 @@ export const schemaToFileTreeNodes = (
           type: "table",
           id: `${sourceId}_${schemaName}_${tableName}`,
           sourceId: sourceId,
-          children: [],
+          children: []
         };
 
         // Process columns
@@ -88,7 +88,7 @@ export const schemaToFileTreeNodes = (
               name: column.name,
               type: "column",
               dataType: column.type,
-              nullable: column.nullable,
+              nullable: column.nullable
             });
           });
         }
@@ -105,7 +105,7 @@ export const schemaToFileTreeNodes = (
         name: "Views",
         type: "folder",
         sourceId: sourceId,
-        children: [],
+        children: []
       };
 
       // Process each view
@@ -116,7 +116,7 @@ export const schemaToFileTreeNodes = (
           type: "table", // Reusing the table type for views
           id: `${sourceId}_${schemaName}_${viewName}`,
           sourceId: sourceId,
-          children: [],
+          children: []
         };
 
         // Process columns if they exist
@@ -126,7 +126,7 @@ export const schemaToFileTreeNodes = (
               name: column.name,
               type: "column",
               dataType: column.type,
-              nullable: column.nullable,
+              nullable: column.nullable
             });
           });
         }

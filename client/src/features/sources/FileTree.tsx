@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useAppStore } from "@/store/useAppStore";
+import { useAppStore } from "@/shared/store/useAppStore";
 import {
   ChevronRight,
   ChevronDown,
@@ -16,8 +16,8 @@ import {
 } from "lucide-react";
 import { PostgresIcon, MySQLIcon, SQLiteIcon } from "../icons";
 import { getColumnTypeIcon } from "./ColumnTypeIcons";
-import type { FileNode } from "@/lib/fileTreeUtils";
-import { AddSourceDialog } from "@/elements/FileTree/AddSourceDialog";
+import type { FileNode } from "@/shared/lib/fileTreeUtils";
+import { AddSourceDialog } from "@/features/sources/AddSourceDialog";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -29,9 +29,9 @@ import { EditSourceDialog } from "./EditSourceDialog";
 import { RenameSourceDialog } from "./RenameSourceDialog";
 import { DeleteSourceDialog } from "./DeleteSourceDialog";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { useConnectSourceMutation } from "@/hooks/useConnectSourceMutation";
-import { useSourceStatusQuery } from "@/hooks/useSourceStatusQuery";
-import { useSourceSchemasQuery } from "@/hooks/useSourceSchemasQuery";
+import { useConnectSourceMutation } from "@/shared/hooks/useConnectSourceMutation";
+import { useSourceStatusQuery } from "@/shared/hooks/useSourceStatusQuery";
+import { useSourceSchemasQuery } from "@/shared/hooks/useSourceSchemasQuery";
 import { useQueryClient } from "@tanstack/react-query";
 
 interface FileTreeProps {

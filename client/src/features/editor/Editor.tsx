@@ -1,10 +1,10 @@
 import { useRef, useState, useEffect } from "react";
 import MonacoEditor from "@monaco-editor/react";
-import type { Source } from "@/lib/api";
+import type { Source } from "@/shared/lib/api";
 import { Button } from "@/components/ui/button";
 import { PlayIcon } from "lucide-react";
 import { toast } from "sonner";
-import { useQueryQuery } from "@/hooks/useQueryQuery";
+import { useQueryQuery } from "@/shared/hooks/useQueryQuery";
 
 interface EditorProps {
   selectedSource: Source | null;

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { deleteSource } from "@/lib/api";
+import { deleteSource } from "@/shared/lib/api";
 import {
   Dialog,
   DialogContent,

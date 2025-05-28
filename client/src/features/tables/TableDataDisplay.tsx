@@ -1,5 +1,5 @@
-import { EditableTable } from "@/elements/Table/EditableTable";
-import { useQueryQuery } from "@/hooks/useQueryQuery";
+import { EditableTable } from "@/features/tables/EditableTable";
+import { useQueryQuery } from "@/shared/hooks/useQueryQuery";
 
 interface TableDataDisplayProps {
   tableData: {

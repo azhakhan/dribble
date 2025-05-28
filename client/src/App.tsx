@@ -4,21 +4,22 @@ import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 import { ModeToggle } from "@/components/mode-toggle";
 import logo from "@/assets/logo.png";
 
-import { FileTree } from "@/elements/FileTree/FileTree";
-import { sourcesToFileTreeNodes, schemaToFileTreeNodes, type FileNode } from "@/lib/fileTreeUtils";
-import { TableDataDisplay } from "@/elements/Table/TableDataDisplay";
-import { ChatSidebar } from "@/elements/Chat/ChatSidebar";
-import { Editor } from "@/elements/Editor";
-import { useSourcesQuery } from "@/hooks/useSourcesQuery";
-import { useSourceSchemasQuery } from "@/hooks/useSourceSchemasQuery";
-import { useQueryQuery } from "@/hooks/useQueryQuery";
-import { useSourceStatusQuery } from "@/hooks/useSourceStatusQuery";
-import type { Source } from "@/lib/api";
-import { useAppStore } from "@/store/useAppStore";
+import { FileTree } from "@/features/sources/FileTree";
+import {
+  sourcesToFileTreeNodes,
+  schemaToFileTreeNodes,
+  type FileNode
+} from "@/shared/lib/fileTreeUtils";
+import { TableDataDisplay } from "@/features/tables/TableDataDisplay";
+import { ChatSidebar } from "@/features/chat/ChatSidebar";
+import { Editor } from "@/features/editor/Editor";
+import { useSourcesQuery } from "@/shared/hooks/useSourcesQuery";
+import { useSourceSchemasQuery } from "@/shared/hooks/useSourceSchemasQuery";
+import { useQueryQuery } from "@/shared/hooks/useQueryQuery";
+import { useSourceStatusQuery } from "@/shared/hooks/useSourceStatusQuery";
+import type { Source } from "@/shared/lib/api";
+import { useAppStore } from "@/shared/store/useAppStore";
 
-// Schema types are now imported from useAppStore
-
-// Sample file tree data as fallback
 const sampleFileTree = [
   {
     name: "Loading...",
@@ -133,10 +134,6 @@ function App() {
       setSourceStatus(selectedSource.id, selectedSourceStatus);
     }
   }, [selectedSourceStatus, selectedSource, setSourceStatus]);
-
-  // This is now handled by Zustand persist middleware
-
-  // This is now handled by Zustand persist middleware
 
   // Build file tree data with sources and their schemas
   let fileTreeData = sources ? sourcesToFileTreeNodes(sources) : sampleFileTree;

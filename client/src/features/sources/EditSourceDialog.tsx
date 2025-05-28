@@ -1,6 +1,11 @@
 import { useState, useEffect } from "react";
-import { getSourceCredentials, updateSourceCredentials } from "@/lib/api";
-import type { PostgresCreds, MysqlCreds, SqliteCreds, UpdateCredentialsRequest } from "@/lib/api";
+import { getSourceCredentials, updateSourceCredentials } from "@/shared/lib/api";
+import type {
+  PostgresCreds,
+  MysqlCreds,
+  SqliteCreds,
+  UpdateCredentialsRequest
+} from "@/shared/lib/api";
 import {
   Dialog,
   DialogContent,
