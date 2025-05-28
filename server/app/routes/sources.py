@@ -103,6 +103,7 @@ async def connect(
             raise HTTPException(status_code=404, detail="Source not found")
 
         creds = PostgresCreds(**source.creds)
+        worker = None
 
         try:
             worker = WorkerContainer(source.id, creds)
@@ -130,12 +131,19 @@ async def connect(
                     db.refresh(db_worker)
 
         except Exception as e:
-            if worker:
-                worker.stop()
+            # Clean up worker if it was created but failed
+            if worker and worker.container_id:
+                try:
+                    worker.stop()
+                except Exception:
+                    pass  # Ignore cleanup errors
             raise HTTPException(status_code=500, detail=str(e)) from e
 
         return {"message": "Connected"}
 
+    except HTTPException:
+        # Re-raise HTTP exceptions as-is
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
 
@@ -162,17 +170,25 @@ async def get_schemas(
             raise HTTPException(status_code=404, detail="Source not found")
 
         creds = PostgresCreds(**source.creds)
+        worker = None
 
         try:
             worker = WorkerContainer(source.id, creds)
             if not worker.already_exists():
                 worker.start()
         except Exception as e:
-            if worker:
-                worker.stop()
+            # Clean up worker if it was created but failed
+            if worker and worker.container_id:
+                try:
+                    worker.stop()
+                except Exception:
+                    pass  # Ignore cleanup errors
             raise HTTPException(status_code=500, detail=str(e)) from e
 
         return get_source_schemas(source)
+    except HTTPException:
+        # Re-raise HTTP exceptions as-is
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
 
