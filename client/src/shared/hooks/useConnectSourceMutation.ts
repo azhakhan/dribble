@@ -118,8 +118,17 @@ export function useDisconnectSourceMutation() {
       return disconnectSource(sourceId);
     },
     onSuccess: async (_, sourceId) => {
+      // Cancel any in-flight queries for this source to prevent race conditions
+      await queryClient.cancelQueries({ queryKey: ["sourceSchemas", sourceId] });
+
+      // Cancel any in-flight connectedSourcesSchemas queries that might include this source
+      await queryClient.cancelQueries({ queryKey: ["connectedSourcesSchemas"] });
+
       // Invalidate connected sources query to update UI
       await queryClient.invalidateQueries({ queryKey: ["connectedSources"] });
+
+      // Remove the old connectedSourcesSchemas query completely before invalidating
+      queryClient.removeQueries({ queryKey: ["connectedSourcesSchemas"] });
 
       // Clear source status from cache and app store
       queryClient.removeQueries({ queryKey: ["sourceStatus", sourceId] });

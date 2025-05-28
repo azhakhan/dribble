@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { getSourceSchemas } from "@/shared/lib/api";
 import { useAppStore, type SchemaObject } from "@/shared/store/useAppStore";
@@ -18,6 +18,9 @@ export function useConnectedSourcesSchemas(connectedSources: ConnectedSource[] |
     setSourceHasChildren,
     setSourceSchemaError
   } = useAppStore();
+
+  // Keep track of previously connected source IDs to detect disconnections
+  const previousConnectedSourceIds = useRef<Set<string>>(new Set());
 
   // Create queries for each connected source
   const sourceQueries = useQuery({
@@ -47,12 +50,32 @@ export function useConnectedSourcesSchemas(connectedSources: ConnectedSource[] |
       return results;
     },
     enabled: Boolean(connectedSources && connectedSources.length > 0),
-    staleTime: 5 * 60 * 1000, // 5 minutes
+    staleTime: 30 * 1000, // 30 seconds - reduced from 5 minutes
+    gcTime: 60 * 1000, // 1 minute - garbage collect cached data quickly
     refetchOnWindowFocus: false
   });
 
-  // Update AppState when schemas are loaded
+  // Update AppState when schemas are loaded and clean up disconnected sources
   useEffect(() => {
+    const currentConnectedSourceIds = new Set(connectedSources?.map((s) => s.id) || []);
+
+    // Find sources that were previously connected but are no longer connected
+    const disconnectedSourceIds = Array.from(previousConnectedSourceIds.current).filter(
+      (sourceId) => !currentConnectedSourceIds.has(sourceId)
+    );
+
+    // Clean up data for disconnected sources
+    disconnectedSourceIds.forEach((sourceId) => {
+      setSourceSchema(sourceId, {});
+      setSourceGeneratedChildren(sourceId, []);
+      setSourceHasChildren(sourceId, false);
+      setSourceSchemaError(sourceId, null);
+    });
+
+    // Update the ref with current connected source IDs
+    previousConnectedSourceIds.current = currentConnectedSourceIds;
+
+    // Update AppState for currently connected sources
     if (sourceQueries.data && connectedSources) {
       connectedSources.forEach((source) => {
         const result = sourceQueries.data[source.id];

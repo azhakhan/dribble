@@ -60,13 +60,6 @@ function App() {
   // Query for all sources
   const { data: sources, isLoading: sourcesLoading, error: sourcesError } = useSourcesQuery();
 
-  // Query for selected source schemas
-  const {
-    data: sourceSchemas,
-    isLoading: schemasLoading,
-    error: schemasError
-  } = useSourceSchemasQuery(selectedSource?.id);
-
   // Get connected sources
   const { data: connectedSourcesData } = useConnectedSourcesQuery();
 
@@ -75,6 +68,15 @@ function App() {
     if (!connectedSourcesData) return new Set<string>();
     return new Set(connectedSourcesData.map((source: ConnectedSource) => source.id));
   }, [connectedSourcesData]);
+
+  // Query for selected source schemas - only if the source is connected
+  const {
+    data: sourceSchemas,
+    isLoading: schemasLoading,
+    error: schemasError
+  } = useSourceSchemasQuery(
+    selectedSource?.id && connectedSourceIds.has(selectedSource.id) ? selectedSource.id : undefined
+  );
 
   // Query for selected source status - only if the source is connected
   const { data: selectedSourceStatus } = useSourceStatusQuery(
