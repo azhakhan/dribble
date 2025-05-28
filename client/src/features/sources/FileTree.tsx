@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
+import { schemaToFileTreeNodes } from "@/shared/lib/fileTreeUtils";
 import { useAppStore } from "@/shared/store/useAppStore";
 import {
   ChevronRight,
@@ -89,7 +90,37 @@ const FileTreeItem = ({
   const { data: sourceSchemas, isSuccess: schemasLoaded } = useSourceSchemasQuery(
     isConnected ? node.id : undefined
   );
-  const hasChildren = Boolean(node.children?.length);
+
+  // Generate children nodes from schema data when it's loaded
+  const generatedChildren = useMemo(() => {
+    if (isSource && schemasLoaded && sourceSchemas && node.id) {
+      // Use the utility function to convert schema to nodes
+      return schemaToFileTreeNodes(sourceSchemas, node.id);
+    }
+    return undefined;
+  }, [isSource, schemasLoaded, sourceSchemas, node.id]);
+
+  // Update hasChildren based on source schema data when it's loaded
+  const hasChildren = useMemo(() => {
+    // If we have generated children from schema data, use that
+    if (generatedChildren) {
+      return generatedChildren.length > 0;
+    }
+    // If it's a source and schemas are loaded, check if there are any schemas
+    if (isSource && schemasLoaded && sourceSchemas) {
+      return Object.keys(sourceSchemas).length > 0;
+    }
+    // Otherwise fall back to the original check
+    return Boolean(node.children?.length);
+  }, [isSource, schemasLoaded, sourceSchemas, node.children, generatedChildren]);
+
+  // Combine original children with generated schema children
+  const effectiveChildren = useMemo(() => {
+    if (generatedChildren) {
+      return generatedChildren;
+    }
+    return node.children || [];
+  }, [node.children, generatedChildren]);
   const isLoading = isSource && loadingSourceId === node.id;
   const isSelected = selectedNodeId === node.id;
   const hasError = isSource && node.id && sourceErrors && sourceErrors[node.id];
@@ -151,8 +182,16 @@ const FileTreeItem = ({
   const handleDoubleClick = (e: React.MouseEvent) => {
     e.stopPropagation();
 
-    if ((isSource || isSchema || isFolder) && hasChildren) {
-      // For sources, schemas, and folders (including Tables folder), show children on double-click
+    if (isSource) {
+      // If source is not connected, connect to it first
+      if (!isConnected && node.id) {
+        handleConnectClick(e);
+      } else if (hasChildren) {
+        // If source is already connected, open its children
+        setIsOpen(!isOpen);
+      }
+    } else if ((isSchema || isFolder) && hasChildren) {
+      // For schemas and folders, show children on double-click
       setIsOpen(!isOpen);
     } else if (isTable && onTableDoubleClick && node.id) {
       // For tables and views, query them (both are "table" type)
@@ -251,28 +290,52 @@ const FileTreeItem = ({
             )}
 
             {/* Show status indicator */}
-            {currentStatus && (
-              <div
-                className={`ml-1 w-2 h-2 rounded-full ${
-                  currentStatus === "healthy"
-                    ? "bg-green-500"
-                    : currentStatus === "unhealthy"
-                      ? "bg-red-500"
-                      : "bg-yellow-500"
-                }`}
-              />
+            {isConnected && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div
+                      className={`ml-1 w-2 h-2 rounded-full ${
+                        currentStatus === "healthy"
+                          ? "bg-green-500"
+                          : currentStatus === "unhealthy"
+                            ? "bg-red-500"
+                            : "bg-yellow-500"
+                      }`}
+                    />
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>
+                      {currentStatus === "healthy"
+                        ? "Connected"
+                        : currentStatus === "unhealthy"
+                          ? "Connection error"
+                          : "Connecting..."}
+                    </p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
             )}
 
             {/* Connect button for sources that aren't connected */}
             {isSource && !isConnected && !isLoading && (
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-6 w-6 ml-1 hover:bg-accent"
-                onClick={handleConnectClick}
-              >
-                <Power className="h-3.5 w-3.5" strokeWidth={1.5} />
-              </Button>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-4 w-4 ml-1 hover:bg-accent"
+                      onClick={handleConnectClick}
+                    >
+                      <Power className="h-2 w-2" strokeWidth={1} />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Connect to source</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
             )}
 
             {/* Actions dropdown */}
@@ -281,10 +344,10 @@ const FileTreeItem = ({
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-6 w-6 ml-1 hover:bg-accent"
+                  className="h-4 w-4 ml-1 hover:bg-accent"
                   onClick={(e) => e.stopPropagation()}
                 >
-                  <MoreVertical className="h-3.5 w-3.5" strokeWidth={1.5} />
+                  <MoreVertical className="h-2 w-2" strokeWidth={1} />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-40">
@@ -323,9 +386,9 @@ const FileTreeItem = ({
       {/* Children */}
       {isOpen && hasChildren && (
         <div>
-          {node.children?.map((childNode, childIndex) => (
+          {effectiveChildren.map((childNode: FileNode, index: number) => (
             <FileTreeItem
-              key={childNode.id || `${childNode.name}-${childIndex}`}
+              key={`${childNode.id || childNode.name}-${index}`}
               node={childNode}
               level={level + 1}
               onSourceSelect={onSourceSelect}
@@ -333,14 +396,16 @@ const FileTreeItem = ({
               connectedSourceIds={connectedSourceIds}
             />
           ))}
-          {isSource && node.children?.length === 0 && (
-            <div
-              className="py-1 px-2 text-muted-foreground"
-              style={{ paddingLeft: `${(level + 1) * 12 + 8}px` }}
-            >
-              <span className="text-sm font-light">No schemas found</span>
-            </div>
-          )}
+        </div>
+      )}
+
+      {/* Show message when no schemas are found */}
+      {isOpen && isSource && effectiveChildren.length === 0 && (
+        <div
+          className="py-1 px-2 text-muted-foreground"
+          style={{ paddingLeft: `${(level + 1) * 12 + 8}px` }}
+        >
+          <span className="text-sm font-light">No schemas found</span>
         </div>
       )}
     </div>
