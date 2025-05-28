@@ -1,5 +1,5 @@
 import { ThemeProvider } from "@/components/theme-provider";
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 import { ModeToggle } from "@/components/mode-toggle";
 import logo from "@/assets/logo.png";
@@ -17,7 +17,8 @@ import { useSourcesQuery } from "@/shared/hooks/useSourcesQuery";
 import { useSourceSchemasQuery } from "@/shared/hooks/useSourceSchemasQuery";
 import { useQueryQuery } from "@/shared/hooks/useQueryQuery";
 import { useSourceStatusQuery } from "@/shared/hooks/useSourceStatusQuery";
-import type { Source } from "@/shared/lib/api";
+import { useConnectedSourcesQuery } from "@/shared/hooks/useConnectedSourcesQuery";
+import type { Source, ConnectedSource } from "@/shared/lib/api";
 import { useAppStore } from "@/shared/store/useAppStore";
 
 const sampleFileTree = [
@@ -58,8 +59,7 @@ function App() {
     setQueryRunning,
     sourceSchemaErrors,
     setSourceSchemaError,
-    setSourceStatus,
-    connectedSources
+    setSourceStatus
   } = useAppStore();
 
   // Query for all sources
@@ -72,9 +72,18 @@ function App() {
     error: schemasError
   } = useSourceSchemasQuery(selectedSource?.id);
 
+  // Get connected sources
+  const { data: connectedSourcesData } = useConnectedSourcesQuery();
+
+  // Create a set of connected source IDs for easy lookup
+  const connectedSourceIds = useMemo(() => {
+    if (!connectedSourcesData) return new Set<string>();
+    return new Set(connectedSourcesData.map((source: ConnectedSource) => source.id));
+  }, [connectedSourcesData]);
+
   // Query for selected source status - only if the source is connected
   const { data: selectedSourceStatus } = useSourceStatusQuery(
-    selectedSource?.id && connectedSources.has(selectedSource.id) ? selectedSource.id : undefined
+    selectedSource?.id && connectedSourceIds.has(selectedSource.id) ? selectedSource.id : undefined
   );
 
   // Query for table data using the useQueryQuery hook

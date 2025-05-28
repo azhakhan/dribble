@@ -135,4 +135,15 @@ export const deleteSource = async (sourceId: string): Promise<void> => {
   await api.delete(`/sources/${sourceId}/`);
 };
 
+// Get connected sources
+export interface ConnectedSource {
+  id: string;
+  source_id: string;
+}
+
+export const getConnectedSources = async (): Promise<ConnectedSource[]> => {
+  const response = await api.get<ConnectedSource[]>("/sources/connected/");
+  return response.data;
+};
+
 export default api;

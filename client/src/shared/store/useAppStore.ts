@@ -57,7 +57,6 @@ interface AppState extends FileTreeState {
   // Error and status tracking
   sourceSchemaErrors: Record<string, string>;
   sourceStatuses: Record<string, SourceStatus>;
-  connectedSources: Set<string>;
 
   // Actions for App state
   setPanelSizes: (sizes: number[]) => void;
@@ -70,14 +69,7 @@ interface AppState extends FileTreeState {
   setQueryRunning: (isRunning: boolean) => void;
   setSourceSchemaError: (sourceId: string, error: string | null) => void;
   setSourceStatus: (sourceId: string, status: SourceStatus) => void;
-  addConnectedSource: (sourceId: string) => void;
-  removeConnectedSource: (sourceId: string) => void;
-  clearConnectedSources: () => void;
 }
-
-// Helper function to convert Set to array for persistence
-const setToArray = (set: Set<string>) => Array.from(set);
-const arrayToSet = (array: string[]) => new Set(array);
 
 // Create the store with persistence for certain values
 export const useAppStore = create<AppState>()(
@@ -102,7 +94,6 @@ export const useAppStore = create<AppState>()(
       // Error and status tracking
       sourceSchemaErrors: {},
       sourceStatuses: {},
-      connectedSources: new Set<string>(),
 
       // Panel actions
       setPanelSizes: (sizes) => set({ panelSizes: sizes }),
@@ -143,36 +134,14 @@ export const useAppStore = create<AppState>()(
             ...state.sourceStatuses,
             [sourceId]: status
           }
-        })),
-
-      // Connected sources actions
-      addConnectedSource: (sourceId) =>
-        set((state) => {
-          const newSet = new Set(state.connectedSources);
-          newSet.add(sourceId);
-          return { connectedSources: newSet };
-        }),
-      removeConnectedSource: (sourceId) =>
-        set((state) => {
-          const newSet = new Set(state.connectedSources);
-          newSet.delete(sourceId);
-          return { connectedSources: newSet };
-        }),
-      clearConnectedSources: () => set({ connectedSources: new Set() })
+        }))
     }),
     {
       name: "dribble-app-storage",
       // Only persist certain values
       partialize: (state) => ({
-        panelSizes: state.panelSizes,
-        connectedSources: setToArray(state.connectedSources)
-      }),
-      // Handle Set serialization during hydration
-      onRehydrateStorage: () => (state) => {
-        if (state && state.connectedSources && Array.isArray(state.connectedSources)) {
-          state.connectedSources = arrayToSet(state.connectedSources);
-        }
-      }
+        panelSizes: state.panelSizes
+      })
     }
   )
 );

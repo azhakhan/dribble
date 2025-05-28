@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useAppStore } from "@/shared/store/useAppStore";
 import {
   ChevronRight,
@@ -7,9 +7,7 @@ import {
   File,
   Database,
   Table,
-  Columns,
   Loader2,
-  PlusCircle,
   MoreVertical,
   AlertCircle,
   Power
@@ -32,7 +30,9 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { useConnectSourceMutation } from "@/shared/hooks/useConnectSourceMutation";
 import { useSourceStatusQuery } from "@/shared/hooks/useSourceStatusQuery";
 import { useSourceSchemasQuery } from "@/shared/hooks/useSourceSchemasQuery";
+import { useConnectedSourcesQuery } from "@/shared/hooks/useConnectedSourcesQuery";
 import { useQueryClient } from "@tanstack/react-query";
+import type { ConnectedSource } from "@/shared/lib/api";
 
 interface FileTreeProps {
   data: FileNode[];
@@ -40,27 +40,31 @@ interface FileTreeProps {
   onTableDoubleClick?: (sourceId: string, tableName: string) => void;
 }
 
-const FileTreeItem = ({
-  node,
-  level = 0,
-  onSourceSelect,
-  onTableDoubleClick
-}: {
+interface FileTreeItemProps {
   node: FileNode;
   level?: number;
   onSourceSelect?: (source: { id: string; name: string; dbtype: string }) => void;
   onTableDoubleClick?: (sourceId: string, tableName: string) => void;
-}) => {
+  connectedSourceIds: Set<string>;
+}
+
+const FileTreeItem = ({
+  node,
+  level = 0,
+  onSourceSelect,
+  onTableDoubleClick,
+  connectedSourceIds
+}: FileTreeItemProps) => {
+  console.log(node);
   // Get state and actions from Zustand store
   const {
     selectedNodeId,
     setSelectedNodeId,
     loadingSourceId,
     sourceSchemaErrors: sourceErrors,
-    sourceStatuses,
-    connectedSources,
-    addConnectedSource
+    sourceStatuses
   } = useAppStore();
+
   const [isOpen, setIsOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [renameDialogOpen, setRenameDialogOpen] = useState(false);
@@ -78,7 +82,7 @@ const FileTreeItem = ({
   const queryClient = useQueryClient();
 
   // Get source status if this is a source node AND it's connected
-  const isConnected = isSource && node.id && connectedSources?.has(node.id);
+  const isConnected = isSource && node.id && connectedSourceIds.has(node.id);
   const { data: sourceStatus } = useSourceStatusQuery(isConnected ? node.id : undefined);
 
   // Get source schemas to check if they're loaded - only if the source is connected
@@ -100,10 +104,8 @@ const FileTreeItem = ({
     if (isSource && node.id) {
       connectMutation.mutate(node.id, {
         onSuccess: () => {
-          // Add to connected sources in the store
-          if (node.id) {
-            addConnectedSource(node.id);
-          }
+          // After successful connection, fetch the connected sources
+          queryClient.invalidateQueries({ queryKey: ["connectedSources"] });
 
           // After successful connection, fetch the source status
           queryClient.invalidateQueries({ queryKey: ["sourceStatus", node.id] });
@@ -199,168 +201,98 @@ const FileTreeItem = ({
       return <Table className="h-4 w-4" strokeWidth={1} />;
     } else if (isColumn) {
       // If it's a column, use the column type icon instead of the generic Columns icon
-      if (node.dataType) {
-        return getColumnTypeIcon(node.dataType);
-      }
-      return <Columns className="h-4 w-4" strokeWidth={1} />;
+      return getColumnTypeIcon(node.dataType || "");
+    } else {
+      return <File className="h-4 w-4" strokeWidth={1} />;
     }
-    return <File className="h-4 w-4" strokeWidth={1} />;
-  };
-
-  const renderChevron = () => {
-    if ((isFolder || isSchema || isTable || isSource) && hasChildren) {
-      return (
-        <div onClick={handleChevronClick}>
-          {isOpen ? (
-            <ChevronDown className="h-4 w-4 cursor-pointer" />
-          ) : (
-            <ChevronRight className="h-4 w-4 cursor-pointer" />
-          )}
-        </div>
-      );
-    }
-    // Return null or empty div with same width to maintain alignment
-    return <div className="w-4"></div>;
   };
 
   return (
     <div>
       <div
-        className={`flex items-center gap-1 px-2 py-1 hover:bg-accent cursor-pointer select-none group ${
+        className={`flex items-center py-1 px-2 text-sm cursor-pointer hover:bg-accent/50 ${
           isSelected ? "bg-accent" : ""
         }`}
-        style={{ paddingLeft: `${level * 12 + 8}px` }}
+        style={{ paddingLeft: `${level * 12}px` }}
         onClick={handleItemClick}
         onDoubleClick={handleDoubleClick}
       >
-        {renderChevron()}
-        {renderIcon()}
-        <span className={`text-sm font-light ${hasError ? "text-red-500" : ""}`}>{node.name}</span>
-        {isColumn && node.nullable === false && (
-          <span className="text-xs text-red-500 ml-1">*</span>
-        )}
+        {/* Chevron for expandable items */}
+        <div className="w-4 h-4 mr-1 flex items-center justify-center" onClick={handleChevronClick}>
+          {hasChildren &&
+            (isOpen ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />)}
+        </div>
+
+        {/* Icon for the item type */}
+        <div className="mr-1.5 flex items-center">{renderIcon()}</div>
+
+        {/* Item name */}
+        <span className="flex-grow truncate">{node.name}</span>
+
+        {/* Status indicator for sources */}
         {isSource && (
-          <div
-            className="ml-auto text-muted-foreground scale-75 flex items-center"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Connect button for sources */}
-            {isSource && node.id && (
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <div className="flex items-center mr-1">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-5 w-5 p-0 opacity-0 group-hover:opacity-100"
-                        onClick={handleConnectClick}
-                        disabled={connectMutation.isPending}
-                      >
-                        <Power className="h-3 w-3" />
-                        <span className="sr-only">Connect source</span>
-                      </Button>
-                    </div>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>Connect to source</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            )}
-
-            {/* Status indicator */}
-            {isSource && currentStatus && (
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <div className="flex items-center mr-1">
-                      <div
-                        className={`h-2 w-2 rounded-full ${
-                          currentStatus === "healthy"
-                            ? "bg-green-500"
-                            : currentStatus === "unhealthy"
-                              ? "bg-red-500"
-                              : "bg-yellow-500 animate-pulse"
-                        }`}
-                      />
-                    </div>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>Status: {String(currentStatus)}</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            )}
-
-            {/* Error indicator */}
+          <div className="flex items-center">
+            {/* Show error icon if there's an error */}
             {hasError && (
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <div className="flex items-center mr-1">
-                      <AlertCircle className="h-4 w-4 text-red-500" />
+                    <div className="ml-1">
+                      <AlertCircle className="h-3.5 w-3.5 text-destructive" strokeWidth={1.5} />
                     </div>
                   </TooltipTrigger>
                   <TooltipContent>
-                    <p>{sourceErrors?.[node.id!]}</p>
+                    <p>
+                      {sourceErrors && node.id ? sourceErrors[node.id] : "Error loading schema"}
+                    </p>
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>
             )}
+
+            {/* Show status indicator */}
+            {currentStatus && (
+              <div
+                className={`ml-1 w-2 h-2 rounded-full ${
+                  currentStatus === "healthy"
+                    ? "bg-green-500"
+                    : currentStatus === "unhealthy"
+                      ? "bg-red-500"
+                      : "bg-yellow-500"
+                }`}
+              />
+            )}
+
+            {/* Connect button for sources that aren't connected */}
+            {isSource && !isConnected && !isLoading && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6 ml-1 hover:bg-accent"
+                onClick={handleConnectClick}
+              >
+                <Power className="h-3.5 w-3.5" strokeWidth={1.5} />
+              </Button>
+            )}
+
+            {/* Actions dropdown */}
             <DropdownMenu open={dropdownOpen} onOpenChange={setDropdownOpen}>
               <DropdownMenuTrigger asChild>
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-5 w-5 p-0 opacity-0 group-hover:opacity-100"
+                  className="h-6 w-6 ml-1 hover:bg-accent"
+                  onClick={(e) => e.stopPropagation()}
                 >
-                  <MoreVertical className="h-3 w-3" />
-                  <span className="sr-only">Source options</span>
+                  <MoreVertical className="h-3.5 w-3.5" strokeWidth={1.5} />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    setDropdownOpen(false);
-
-                    // Small delay to ensure dropdown is closed before opening dialog
-                    setTimeout(() => {
-                      setEditDialogOpen(true);
-                    }, 100);
-                  }}
-                >
-                  Edit Credentials
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    setDropdownOpen(false);
-
-                    // Small delay to ensure dropdown is closed before opening dialog
-                    setTimeout(() => {
-                      setRenameDialogOpen(true);
-                    }, 100);
-                  }}
-                >
+              <DropdownMenuContent align="end" className="w-40">
+                <DropdownMenuItem onClick={() => setEditDialogOpen(true)}>Edit</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setRenameDialogOpen(true)}>
                   Rename
                 </DropdownMenuItem>
-                <DropdownMenuItem
-                  variant="destructive"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    setDropdownOpen(false);
-
-                    // Small delay to ensure dropdown is closed before opening dialog
-                    setTimeout(() => {
-                      setDeleteDialogOpen(true);
-                    }, 100);
-                  }}
-                >
+                <DropdownMenuItem onClick={() => setDeleteDialogOpen(true)}>
                   Delete
                 </DropdownMenuItem>
               </DropdownMenuContent>
@@ -369,52 +301,41 @@ const FileTreeItem = ({
         )}
       </div>
 
-      {/* Separate Dialogs */}
+      {/* Dialogs */}
       {isSource && node.id && (
         <>
-          <EditSource
-            open={editDialogOpen}
-            onOpenChange={(open) => {
-              setEditDialogOpen(open);
-            }}
-            sourceId={node.id}
-          />
-
+          <EditSource open={editDialogOpen} onOpenChange={setEditDialogOpen} sourceId={node.id} />
           <RenameSource
             open={renameDialogOpen}
-            onOpenChange={(open) => {
-              setRenameDialogOpen(open);
-            }}
+            onOpenChange={setRenameDialogOpen}
             sourceId={node.id}
             sourceName={node.name}
           />
-
           <DeleteSource
             open={deleteDialogOpen}
-            onOpenChange={(open) => {
-              setDeleteDialogOpen(open);
-            }}
+            onOpenChange={setDeleteDialogOpen}
             sourceId={node.id}
             sourceName={node.name}
           />
         </>
       )}
 
-      {(isFolder || isSchema || isTable || isSource) && isOpen && (
+      {/* Children */}
+      {isOpen && hasChildren && (
         <div>
-          {node.children &&
-            node.children.map((child, index) => (
-              <FileTreeItem
-                key={index}
-                node={child}
-                level={level + 1}
-                onSourceSelect={onSourceSelect}
-                onTableDoubleClick={onTableDoubleClick}
-              />
-            ))}
-          {isSource && (!node.children || node.children.length === 0) && !isLoading && (
+          {node.children?.map((childNode, childIndex) => (
+            <FileTreeItem
+              key={childNode.id || `${childNode.name}-${childIndex}`}
+              node={childNode}
+              level={level + 1}
+              onSourceSelect={onSourceSelect}
+              onTableDoubleClick={onTableDoubleClick}
+              connectedSourceIds={connectedSourceIds}
+            />
+          ))}
+          {isSource && node.children?.length === 0 && (
             <div
-              className="flex items-center gap-1 px-2 py-1 text-muted-foreground select-none"
+              className="py-1 px-2 text-muted-foreground"
               style={{ paddingLeft: `${(level + 1) * 12 + 8}px` }}
             >
               <span className="text-sm font-light">No schemas found</span>
@@ -427,6 +348,26 @@ const FileTreeItem = ({
 };
 
 export const FileTree = ({ data, onSourceSelect, onTableDoubleClick }: FileTreeProps) => {
+  // Fetch connected sources on component mount
+  const { data: connectedSourcesData } = useConnectedSourcesQuery();
+  const queryClient = useQueryClient();
+
+  // Create a set of connected source IDs for easy lookup
+  const connectedSourceIds = useMemo(() => {
+    if (!connectedSourcesData) return new Set<string>();
+    return new Set(connectedSourcesData.map((source: ConnectedSource) => source.id));
+  }, [connectedSourcesData]);
+
+  // When connected sources are loaded, fetch their schemas
+  useEffect(() => {
+    if (connectedSourcesData && connectedSourcesData.length > 0) {
+      // For each connected source, fetch its schema
+      connectedSourcesData.forEach((source: ConnectedSource) => {
+        queryClient.invalidateQueries({ queryKey: ["sourceSchemas", source.id] });
+      });
+    }
+  }, [connectedSourcesData, queryClient]);
+
   return (
     <div className="h-full overflow-auto border-r select-none">
       <div className="p-2 font-semibold border-b flex items-center justify-between">
@@ -440,29 +381,9 @@ export const FileTree = ({ data, onSourceSelect, onTableDoubleClick }: FileTreeP
             node={node}
             onSourceSelect={onSourceSelect}
             onTableDoubleClick={onTableDoubleClick}
+            connectedSourceIds={connectedSourceIds}
           />
         ))}
-        {data.length === 0 && (
-          <div className="flex flex-col items-center justify-center text-muted-foreground p-4 text-sm">
-            <p className="mb-2">No sources found</p>
-            <Button
-              variant="outline"
-              size="sm"
-              className="flex items-center gap-1"
-              onClick={() => {
-                // This is just a placeholder to open the add source dialog
-                // The actual implementation would dispatch a click event to the AddSource
-                const addButton = document.querySelector('[data-testid="add-source-button"]');
-                if (addButton) {
-                  (addButton as HTMLButtonElement).click();
-                }
-              }}
-            >
-              <PlusCircle className="h-4 w-4" />
-              Add Source
-            </Button>
-          </div>
-        )}
       </div>
     </div>
   );
