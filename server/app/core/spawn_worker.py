@@ -59,9 +59,11 @@ class WorkerContainer:
         )
         self.container_id = container.id
 
-    def save_worker(self, db: Session):
+    def save_worker(self, workspace_id: UUID, db: Session):
         # Check if worker already exists for this source
-        existing_worker = db.query(Worker).filter_by(source_id=self.source_id).first()
+        existing_worker = (
+            db.query(Worker).filter_by(source_id=self.source_id, workspace_id=workspace_id).first()
+        )
 
         if existing_worker:
             # Update existing worker record
@@ -79,6 +81,7 @@ class WorkerContainer:
                 container_id=self.container_id,
                 port=self.port,
                 host=self.container_url,
+                workspace_id=workspace_id,
                 status="starting",
             )
             db.add(worker)
@@ -112,9 +115,13 @@ class WorkerContainer:
 
 
 def stop_worker(container_id: str):
-    container = client.containers.get(container_id)
-    container.stop()
-    container.remove()
+    try:
+        container = client.containers.get(container_id)
+        container.stop()
+        container.remove()
+    except docker.errors.NotFound:
+        # Container doesn't exist anymore
+        pass
 
 
 def is_healthy(container_id: str):

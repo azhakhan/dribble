@@ -25,6 +25,7 @@ class Workspace(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     name = Column(String, nullable=False)
     sources = relationship("Source", back_populates="workspace")
+    workers = relationship("Worker", back_populates="workspace")
     created_at = Column(DateTime, default=datetime.now)
 
 
@@ -79,4 +80,6 @@ class Worker(Base):
     port = Column(Integer, nullable=False)
     host = Column(String, nullable=False)
     status = Column(String, nullable=False)
+    workspace_id = Column(UUID(as_uuid=True), ForeignKey("workspaces.id"), nullable=False)
+    workspace = relationship("Workspace", back_populates="workers")
     created_at = Column(DateTime, default=datetime.now)

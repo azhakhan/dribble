@@ -94,6 +94,7 @@ async def delete_source(
 @router.get("/connect/{source_id}")
 async def connect(
     source_id: UUID,
+    workspace=Depends(get_current_workspace),
     db: Session = Depends(get_db),
 ):
     try:
@@ -114,11 +115,11 @@ async def connect(
                 # Container doesn't exist, start it and create worker record
                 worker.start()
                 if not db_worker:
-                    worker.save_worker(db)
+                    worker.save_worker(workspace.id, db)
             else:
                 # Container exists, ensure worker record exists and is up-to-date
                 if not db_worker:
-                    worker.save_worker(db)
+                    worker.save_worker(workspace.id, db)
                 else:
                     # Update existing worker record with current container info
                     db_worker.container_id = worker.container_id
@@ -185,6 +186,16 @@ async def get_sources(
     # only return name and id
     sources = db.query(Source).filter_by(workspace_id=workspace.id).all()
     return [{"id": source.id, "name": source.name, "dbtype": source.dbtype} for source in sources]
+
+
+@router.get("/connected/")
+async def get_connected_sources(
+    db: Session = Depends(get_db),
+    workspace=Depends(get_current_workspace),
+):
+    # get all running workers
+    workers = db.query(Worker).filter_by(workspace_id=workspace.id, status="healthy").all()
+    return [{"id": worker.source_id, "source_id": worker.source_id} for worker in workers]
 
 
 # get a source by id
