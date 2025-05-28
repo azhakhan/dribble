@@ -82,6 +82,7 @@ interface AppState extends FileTreeState, SourceChildrenState {
   setQueryRunning: (isRunning: boolean) => void;
   setSourceSchemaError: (sourceId: string, error: string | null) => void;
   setSourceStatus: (sourceId: string, status: SourceStatus) => void;
+  removeSourceStatus: (sourceId: string) => void;
 }
 
 // Create the store with persistence for certain values
@@ -152,6 +153,12 @@ export const useAppStore = create<AppState>()(
             [sourceId]: status
           }
         })),
+      removeSourceStatus: (sourceId) =>
+        set((state) => {
+          const newStatuses = { ...state.sourceStatuses };
+          delete newStatuses[sourceId];
+          return { sourceStatuses: newStatuses };
+        }),
 
       // Source children actions
       setSourceGeneratedChildren: (sourceId, children) =>

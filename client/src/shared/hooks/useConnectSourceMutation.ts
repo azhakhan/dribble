@@ -26,8 +26,11 @@ export function useConnectSourceMutation() {
     },
     onSuccess: async (_, sourceId) => {
       try {
-        // Immediately invalidate connected sources to update UI
-        queryClient.invalidateQueries({ queryKey: ["connectedSources"] });
+        // Immediately invalidate and refetch connected sources to update UI
+        await queryClient.invalidateQueries({ queryKey: ["connectedSources"] });
+
+        // Wait a moment for the UI to update
+        await new Promise((resolve) => setTimeout(resolve, 100));
 
         // Set initial status to "starting"
         setSourceStatus(sourceId, "starting");
@@ -101,15 +104,35 @@ export function useConnectSourceMutation() {
 }
 
 export function useDisconnectSourceMutation() {
-  const { setSourceGeneratedChildren, setSourceHasChildren } = useAppStore();
+  const queryClient = useQueryClient();
+  const {
+    setSourceGeneratedChildren,
+    setSourceHasChildren,
+    setSourceSchema,
+    setSourceSchemaError,
+    removeSourceStatus
+  } = useAppStore();
 
   return useMutation({
     mutationFn: (sourceId: string) => {
       return disconnectSource(sourceId);
     },
-    onSuccess: (_, sourceId) => {
+    onSuccess: async (_, sourceId) => {
+      // Invalidate connected sources query to update UI
+      await queryClient.invalidateQueries({ queryKey: ["connectedSources"] });
+
+      // Clear source status from cache and app store
+      queryClient.removeQueries({ queryKey: ["sourceStatus", sourceId] });
+      removeSourceStatus(sourceId);
+
+      // Clear schema data from cache and app store
+      queryClient.removeQueries({ queryKey: ["sourceSchemas", sourceId] });
+      setSourceSchema(sourceId, {});
+
+      // Clear generated children and error state
       setSourceGeneratedChildren(sourceId, []);
       setSourceHasChildren(sourceId, false);
+      setSourceSchemaError(sourceId, null);
     },
     onError: () => {
       console.error("Error disconnecting source");

@@ -57,7 +57,6 @@ const FileTreeItem = ({
   onTableDoubleClick,
   connectedSourceIds
 }: FileTreeItemProps) => {
-  console.log(node);
   // Get state and actions from Zustand store
   const {
     selectedNodeId,
@@ -392,7 +391,8 @@ export const FileTree = ({ data, onSourceSelect, onTableDoubleClick }: FileTreeP
   // Create a set of connected source IDs for easy lookup
   const connectedSourceIds = useMemo(() => {
     if (!connectedSourcesData) return new Set<string>();
-    return new Set(connectedSourcesData.map((source: ConnectedSource) => source.id));
+    const ids = new Set(connectedSourcesData.map((source: ConnectedSource) => source.id));
+    return ids;
   }, [connectedSourcesData]);
 
   // Fetch schemas for all connected sources and update AppState

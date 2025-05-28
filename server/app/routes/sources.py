@@ -193,8 +193,15 @@ async def get_connected_sources(
     db: Session = Depends(get_db),
     workspace=Depends(get_current_workspace),
 ):
-    # get all running workers
-    workers = db.query(Worker).filter_by(workspace_id=workspace.id, status="healthy").all()
+    # get all workers that are running, starting, or healthy
+    workers = (
+        db.query(Worker)
+        .filter(
+            Worker.workspace_id == workspace.id,
+            Worker.status.in_(["healthy", "running", "starting"]),
+        )
+        .all()
+    )
     return [{"id": worker.source_id, "source_id": worker.source_id} for worker in workers]
 
 
