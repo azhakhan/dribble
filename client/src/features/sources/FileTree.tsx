@@ -65,8 +65,7 @@ const FileTreeItem = ({
     loadingSourceId,
     sourceSchemaErrors: sourceErrors,
     sourceStatuses,
-    sourceGeneratedChildren,
-    sourceHasChildren: sourceHasChildrenMap
+    sourceGeneratedChildren
   } = useAppStore();
 
   const [isOpen, setIsOpen] = useState(false);
@@ -101,8 +100,8 @@ const FileTreeItem = ({
 
   // Determine if node has children using app store state for sources
   const hasChildren =
-    isSource && node.id && sourceHasChildrenMap[node.id] !== undefined
-      ? sourceHasChildrenMap[node.id] // Use app store value for sources
+    isSource && node.id && sourceGeneratedChildren[node.id] !== undefined
+      ? sourceGeneratedChildren[node.id].length > 0 // Use generated children length for sources
       : Boolean(node.children?.length); // Fall back to original check for non-sources
 
   // Combine original children with generated schema children

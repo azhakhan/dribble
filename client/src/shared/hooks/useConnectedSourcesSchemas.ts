@@ -15,7 +15,6 @@ export function useConnectedSourcesSchemas(connectedSources: ConnectedSource[] |
   const {
     setSourceSchema,
     setSourceGeneratedChildren,
-    setSourceHasChildren,
     setSourceSchemaError,
     cleanupDisconnectedSources
   } = useAppStore();
@@ -71,9 +70,6 @@ export function useConnectedSourcesSchemas(connectedSources: ConnectedSource[] |
           // Update the app store with generated children
           setSourceGeneratedChildren(source.id, generatedChildren);
 
-          // Set hasChildren flag based on generated children
-          setSourceHasChildren(source.id, generatedChildren.length > 0);
-
           // Clear any existing error
           setSourceSchemaError(source.id, null);
         } else if (result?.error) {
@@ -82,7 +78,6 @@ export function useConnectedSourcesSchemas(connectedSources: ConnectedSource[] |
 
           // Clear children for errored sources
           setSourceGeneratedChildren(source.id, []);
-          setSourceHasChildren(source.id, false);
         }
       });
     }
@@ -91,7 +86,6 @@ export function useConnectedSourcesSchemas(connectedSources: ConnectedSource[] |
     connectedSources,
     setSourceSchema,
     setSourceGeneratedChildren,
-    setSourceHasChildren,
     setSourceSchemaError,
     cleanupDisconnectedSources
   ]);

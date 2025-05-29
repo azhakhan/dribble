@@ -41,12 +41,9 @@ interface FileTreeState {
 interface SourceChildrenState {
   // Map of sourceId to generated children
   sourceGeneratedChildren: Record<string, FileNode[]>;
-  // Map of sourceId to hasChildren flag
-  sourceHasChildren: Record<string, boolean>;
 
   // Actions
   setSourceGeneratedChildren: (sourceId: string, children: FileNode[]) => void;
-  setSourceHasChildren: (sourceId: string, hasChildren: boolean) => void;
 }
 
 // App state
@@ -114,7 +111,6 @@ export const useAppStore = create<AppState>()(
 
       // Source children state
       sourceGeneratedChildren: {},
-      sourceHasChildren: {},
 
       // Panel actions
       setPanelSizes: (sizes) => set({ panelSizes: sizes }),
@@ -172,14 +168,6 @@ export const useAppStore = create<AppState>()(
           }
         })),
 
-      setSourceHasChildren: (sourceId, hasChildren) =>
-        set((state) => ({
-          sourceHasChildren: {
-            ...state.sourceHasChildren,
-            [sourceId]: hasChildren
-          }
-        })),
-
       // New action to clean up disconnected sources
       cleanupDisconnectedSources: (connectedSourceIds) =>
         set((state) => {
@@ -198,14 +186,6 @@ export const useAppStore = create<AppState>()(
           Object.keys(newSourceGeneratedChildren).forEach((sourceId) => {
             if (!connectedSet.has(sourceId)) {
               delete newSourceGeneratedChildren[sourceId];
-            }
-          });
-
-          // Clean up hasChildren flags
-          const newSourceHasChildren = { ...state.sourceHasChildren };
-          Object.keys(newSourceHasChildren).forEach((sourceId) => {
-            if (!connectedSet.has(sourceId)) {
-              delete newSourceHasChildren[sourceId];
             }
           });
 
@@ -228,7 +208,6 @@ export const useAppStore = create<AppState>()(
           return {
             sourceSchemaMap: newSourceSchemaMap,
             sourceGeneratedChildren: newSourceGeneratedChildren,
-            sourceHasChildren: newSourceHasChildren,
             sourceSchemaErrors: newSourceSchemaErrors,
             sourceStatuses: newSourceStatuses
           };

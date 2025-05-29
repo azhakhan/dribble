@@ -10,13 +10,8 @@ import { schemaToFileTreeNodes } from "@/shared/lib/fileTreeUtils";
 
 export function useConnectSourceMutation() {
   const queryClient = useQueryClient();
-  const {
-    setLoadingSourceId,
-    setSourceStatus,
-    setSourceSchema,
-    setSourceGeneratedChildren,
-    setSourceHasChildren
-  } = useAppStore();
+  const { setLoadingSourceId, setSourceSchema, setSourceGeneratedChildren, setSourceStatus } =
+    useAppStore();
 
   return useMutation({
     mutationFn: (sourceId: string) => {
@@ -75,9 +70,6 @@ export function useConnectSourceMutation() {
 
                 // Update the app store with generated children
                 setSourceGeneratedChildren(sourceId, generatedChildren);
-
-                // Set hasChildren flag based on generated children
-                setSourceHasChildren(sourceId, generatedChildren.length > 0);
               } catch (error) {
                 console.error("Error fetching source schemas:", error);
               }
@@ -105,13 +97,8 @@ export function useConnectSourceMutation() {
 
 export function useDisconnectSourceMutation() {
   const queryClient = useQueryClient();
-  const {
-    setSourceGeneratedChildren,
-    setSourceHasChildren,
-    setSourceSchema,
-    setSourceSchemaError,
-    removeSourceStatus
-  } = useAppStore();
+  const { setSourceGeneratedChildren, setSourceSchema, setSourceSchemaError, removeSourceStatus } =
+    useAppStore();
 
   return useMutation({
     mutationFn: (sourceId: string) => {
@@ -140,7 +127,6 @@ export function useDisconnectSourceMutation() {
 
       // Clear generated children and error state
       setSourceGeneratedChildren(sourceId, []);
-      setSourceHasChildren(sourceId, false);
       setSourceSchemaError(sourceId, null);
     },
     onError: () => {
