@@ -11,6 +11,8 @@ import time
 logging.basicConfig(level=logging.INFO)
 client = docker.from_env()
 
+network_name = os.environ.get("DOCKER_NETWORK", "dribble-network")
+
 
 class WorkerContainer:
     def __init__(self, source_id: UUID, creds: PostgresCreds):
@@ -18,7 +20,7 @@ class WorkerContainer:
         self.creds = creds
         self.container_name = f"dribble-worker-postgres-{self.source_id}"
         self.port = 8000 + (int(random.randint(1, 999)))
-        self.network_name = "dribble-network"
+        self.network_name = network_name
         self.container_url = f"http://{self.container_name}:8000"
         self.redis_url = os.environ.get("REDIS_URL", "redis://redis:6379")
         self.container_id = None

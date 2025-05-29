@@ -1,0 +1,95 @@
+version: "3.9"
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=dribble
+    ports:
+      - "5432:5432"
+    networks:
+      - test-dribble-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    networks:
+      - test-dribble-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  migrations:
+    build:
+      context: ../../server
+      dockerfile: Dockerfile.migrations
+    environment:
+      - DATABASE_URL=postgresql+psycopg://postgres:postgres@postgres:5432/dribble
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - test-dribble-network
+    command: upgrade head
+
+  server:
+    build:
+      context: ../../server
+      dockerfile: Dockerfile
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    ports:
+      - "8000:8000"
+    environment:
+      - IN_DOCKER=1
+      - PYTHONPATH=/app
+      - ENVIRONMENT=development
+      - WATCHFILES_FORCE_POLLING=1
+      - DATABASE_URL=postgresql+psycopg://postgres:postgres@postgres:5432/dribble
+      - REDIS_URL=redis://redis:6379/0
+      - DOCKER_NETWORK=test-dribble-network
+    networks:
+      - test-dribble-network
+    depends_on:
+      migrations:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  user-db-pg:
+    image: postgres:16-alpine
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=dribble
+    ports:
+      - "5433:5432"
+    networks:
+      - test-dribble-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+networks:
+  test-dribble-network:
+    external: true
+    name: test-dribble-network
