@@ -170,24 +170,22 @@ function App() {
 
   return (
     <ThemeProvider defaultTheme="dark" storageKey="vite-ui-theme">
-      <div className="h-screen flex flex-col">
+      <div className="h-screen flex flex-col overflow-hidden">
         <TopMenu />
-        <div className="flex-1">
+        <div className="flex-1 min-h-0">
           <PanelGroup direction="horizontal" onLayout={(newSizes) => setPanelSizes(newSizes)}>
             <Panel defaultSize={panelSizes[0]} minSize={15}>
-              <div className="h-full">
+              <div className="h-full border-r select-none">
                 {sourcesLoading ? (
                   <div className="p-4 text-sm text-muted-foreground">Loading sources...</div>
                 ) : sourcesError ? (
                   <div className="p-4 text-sm text-red-500">Error loading sources</div>
                 ) : (
-                  <div className="h-full">
-                    <FileTree
-                      data={fileTreeData}
-                      onSourceSelect={handleSourceSelect}
-                      onTableDoubleClick={handleTableDoubleClick}
-                    />
-                  </div>
+                  <FileTree
+                    data={fileTreeData}
+                    onSourceSelect={handleSourceSelect}
+                    onTableDoubleClick={handleTableDoubleClick}
+                  />
                 )}
               </div>
             </Panel>

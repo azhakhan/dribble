@@ -107,7 +107,7 @@ export function Editor({
   };
 
   return (
-    <div ref={editorContainerRef} className="h-full relative flex flex-col">
+    <div ref={editorContainerRef} className="h-full flex flex-col">
       {!isEditorActive && (
         <div className="absolute inset-0 flex items-center justify-center bg-background/80 z-10">
           <p className="text-muted-foreground text-sm">
@@ -121,13 +121,13 @@ export function Editor({
           </p>
         </div>
       )}
-      <div className="flex justify-end gap-2 p-2 border-b">
+      <div className="flex-shrink-0 flex justify-end gap-2 p-2 border-b">
         <Button onClick={handleRunQuery} disabled={!isEditorActive || isRunning} className="gap-1">
           <PlayIcon size={16} />
           Run SQL
         </Button>
       </div>
-      <div className="flex-grow">
+      <div className="flex-1 min-h-0">
         <MonacoEditor
           height="100%"
           defaultLanguage="sql"

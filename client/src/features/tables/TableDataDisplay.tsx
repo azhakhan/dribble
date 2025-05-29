@@ -31,14 +31,16 @@ export const TableDataDisplay = ({
   const title = tableData ? tableData.tableName : queryResults ? "Query Results" : "";
 
   return (
-    <div className="h-full">
+    <div className="h-full flex flex-col">
       {tableData || queryResults ? (
-        <div className="h-full flex flex-col">
-          <div className="p-2 font-semibold border-b">{title}</div>
-          <div className="flex-1">
+        <>
+          {/* Fixed header */}
+          <div className="flex-shrink-0 p-2 font-semibold border-b">{title}</div>
+          {/* Scrollable content */}
+          <div className="flex-1 min-h-0">
             <EditableTable data={displayData as Record<string, unknown>[]} isLoading={isLoading} />
           </div>
-        </div>
+        </>
       ) : (
         <div className="h-full flex items-center justify-center text-gray-400">
           Double-click on a table in the file tree to view data or run a SQL query
