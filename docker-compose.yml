@@ -34,7 +34,7 @@ services:
       timeout: 5s
       retries: 5
 
-  dribble-server:
+  server:
     build:
       context: ./server
       dockerfile: Dockerfile
@@ -60,7 +60,7 @@ services:
       redis:
         condition: service_healthy
 
-  dribble-client:
+  client:
     build:
       context: ./client
       dockerfile: Dockerfile
@@ -70,10 +70,10 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - VITE_API_URL=http://dribble-server:8000
+      - VITE_API_URL=http://server:8000
       - NODE_ENV=development
     depends_on:
-      - dribble-server
+      - server
     networks:
       - dribble-network
 

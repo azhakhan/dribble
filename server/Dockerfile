@@ -12,7 +12,7 @@ ENV PYTHONPATH=/app
 ENV UV_LINK_MODE=copy
 
 # Install PostgreSQL client libraries
-RUN apt-get update && apt-get install -y libpq-dev && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y libpq-dev curl && rm -rf /var/lib/apt/lists/*
 
 # Install the project's dependencies using the settings
 RUN --mount=type=cache,target=/root/.cache/uv \
