@@ -20,3 +20,15 @@ alembic upgrade head
 ```
 
 you might need to restart docker compose after running migrations
+
+## Building worker
+
+```bash
+docker compose build worker-postgres
+```
+
+## Creating network
+
+```bash
+docker network create dribble-network
+```

@@ -42,7 +42,8 @@
     "tailwindcss": "^4.1.7",
     "vscode-jsonrpc": "^8.2.1",
     "vscode-languageserver-protocol": "^3.17.5",
-    "vscode-ws-jsonrpc": "^3.4.0"
+    "vscode-ws-jsonrpc": "^3.4.0",
+    "zustand": "^5.0.5"
   },
   "devDependencies": {
     "@eslint/js": "^9.25.0",
@@ -54,6 +55,7 @@
     "eslint-plugin-react-hooks": "^5.2.0",
     "eslint-plugin-react-refresh": "^0.4.19",
     "globals": "^16.0.0",
+    "prettier": "3.1.0",
     "tw-animate-css": "^1.3.0",
     "typescript": "~5.8.3",
     "typescript-eslint": "^8.30.1",

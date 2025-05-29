@@ -1,42 +1,22 @@
 import { ThemeProvider } from "@/components/theme-provider";
-import { useState, useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 import { ModeToggle } from "@/components/mode-toggle";
 import logo from "@/assets/logo.png";
 
-import { FileTree } from "@/elements/FileTree/FileTree";
-import { sourcesToFileTreeNodes, schemaToFileTreeNodes, type FileNode } from "@/lib/fileTreeUtils";
-import { TableDataDisplay } from "@/elements/Table/TableDataDisplay";
-import { ChatSidebar } from "@/elements/Chat/ChatSidebar";
-import { Editor } from "@/elements/Editor";
-import { useSourcesQuery } from "@/hooks/useSourcesQuery";
-import { useSourceSchemasQuery } from "@/hooks/useSourceSchemasQuery";
-import type { Source } from "@/lib/api";
+import { FileTree } from "@/features/sources/FileTree";
+import { sourcesToFileTreeNodes } from "@/shared/lib/fileTreeUtils";
+import { TableDataDisplay } from "@/features/tables/TableDataDisplay";
+import { ChatSidebar } from "@/features/chat/ChatSidebar";
+import { Editor } from "@/features/editor/Editor";
+import { useSourcesQuery } from "@/shared/hooks/useSourcesQuery";
+import { useSourceSchemasQuery } from "@/shared/hooks/useSourceSchemasQuery";
+import { useQueryQuery } from "@/shared/hooks/useQueryQuery";
+import { useSourceStatusQuery } from "@/shared/hooks/useSourceStatusQuery";
+import { useConnectedSourcesQuery } from "@/shared/hooks/useConnectedSourcesQuery";
+import type { Source, ConnectedSource } from "@/shared/lib/api";
+import { useAppStore } from "@/shared/store/useAppStore";
 
-// Interface for schema objects
-interface SchemaColumn {
-  name: string;
-  type: string;
-  nullable: boolean;
-}
-
-interface SchemaTable {
-  columns: SchemaColumn[];
-}
-
-interface SchemaView {
-  columns: SchemaColumn[];
-}
-
-interface SchemaObject {
-  tables: Record<string, SchemaTable>;
-  views: Record<string, SchemaView>;
-}
-
-// Type for the schema map
-type SourceSchemaMap = Record<string, Record<string, SchemaObject>>;
-
-// Sample file tree data as fallback
 const sampleFileTree = [
   {
     name: "Loading...",
@@ -59,90 +39,126 @@ function TopMenu() {
 }
 
 function App() {
-  const [sizes, setSizes] = useState(() => {
-    const savedSizes = localStorage.getItem("panel-sizes");
-    return savedSizes ? JSON.parse(savedSizes) : [20, 60, 20];
-  });
-
-  // State for selected source and table
-  const [selectedSource, setSelectedSource] = useState<Source | null>(null);
-  const [sourceSchemaMap, setSourceSchemaMap] = useState<SourceSchemaMap>({});
-  const [selectedTableData, setSelectedTableData] = useState<{
-    sourceId: string;
-    tableName: string;
-  } | null>(null);
-  const [queryResults, setQueryResults] = useState<object[] | null>(null);
-  const [queryRunning, setQueryRunning] = useState(false);
-  const [sourceSchemaErrors, setSourceSchemaErrors] = useState<Record<string, string>>({});
+  // Get state and actions from Zustand store
+  const {
+    panelSizes,
+    setPanelSizes,
+    selectedSource,
+    setSelectedSource,
+    setSourceSchema,
+    selectedTableData,
+    setSelectedTableData,
+    queryResults,
+    setQueryResults,
+    queryRunning,
+    setQueryRunning,
+    sourceSchemaErrors,
+    setSourceSchemaError,
+    setSourceStatus
+  } = useAppStore();
 
   // Query for all sources
   const { data: sources, isLoading: sourcesLoading, error: sourcesError } = useSourcesQuery();
 
-  // Query for selected source schemas
+  // Get connected sources
+  const { data: connectedSourcesData } = useConnectedSourcesQuery();
+
+  // Create a set of connected source IDs for easy lookup
+  const connectedSourceIds = useMemo(() => {
+    if (!connectedSourcesData) return new Set<string>();
+    return new Set(connectedSourcesData.map((source: ConnectedSource) => source.id));
+  }, [connectedSourcesData]);
+
+  // Query for selected source schemas - only if the source is connected
   const {
     data: sourceSchemas,
     isLoading: schemasLoading,
     error: schemasError
-  } = useSourceSchemasQuery(selectedSource?.id);
+  } = useSourceSchemasQuery(
+    selectedSource?.id && connectedSourceIds.has(selectedSource.id) ? selectedSource.id : undefined
+  );
+
+  // Query for selected source status - only if the source is connected
+  const { data: selectedSourceStatus } = useSourceStatusQuery(
+    selectedSource?.id && connectedSourceIds.has(selectedSource.id) ? selectedSource.id : undefined
+  );
+
+  // Query for table data using the useQueryQuery hook
+  const {
+    data: tableQueryResults,
+    isLoading,
+    error: tableQueryError
+  } = useQueryQuery(
+    selectedTableData?.sourceId || "",
+    selectedTableData?.query || "",
+    {
+      enabled: !!selectedTableData
+    },
+    "table"
+  );
+
+  // Update query results when the table query completes
+  useEffect(() => {
+    if (tableQueryResults) {
+      setQueryResults(tableQueryResults);
+    } else if (tableQueryError) {
+      console.error("Error executing table query:", tableQueryError);
+      setQueryResults([{ error: "Error loading table data" }]);
+    }
+  }, [tableQueryResults, tableQueryError, setQueryResults]);
+
+  // Update query running state based on loading state
+  useEffect(() => {
+    if (selectedTableData) {
+      setQueryRunning(isLoading);
+    } else {
+      setQueryRunning(false);
+    }
+  }, [isLoading, selectedTableData, setQueryRunning]);
 
   // Update schema map when new schema data is loaded
   useEffect(() => {
     if (selectedSource?.id && sourceSchemas) {
-      setSourceSchemaMap((prev) => ({
-        ...prev,
-        [selectedSource.id]: sourceSchemas
-      }));
+      setSourceSchema(selectedSource.id, sourceSchemas);
       // Clear any error for this source
       if (sourceSchemaErrors[selectedSource.id]) {
-        setSourceSchemaErrors((prev) => {
-          const newErrors = { ...prev };
-          delete newErrors[selectedSource.id];
-          return newErrors;
-        });
+        setSourceSchemaError(selectedSource.id, null);
       }
     }
-  }, [selectedSource, sourceSchemas, sourceSchemaErrors]);
+  }, [selectedSource, sourceSchemas, sourceSchemaErrors, setSourceSchema, setSourceSchemaError]);
 
   // Track schema errors by source
   useEffect(() => {
     if (schemasError && selectedSource?.id) {
-      setSourceSchemaErrors((prev) => ({
-        ...prev,
-        [selectedSource.id]: "Error loading schemas"
-      }));
+      setSourceSchemaError(selectedSource.id, "Error loading schemas");
     }
-  }, [schemasError, selectedSource]);
+  }, [schemasError, selectedSource, setSourceSchemaError]);
 
-  // Build file tree data with sources and their schemas
-  let fileTreeData = sources ? sourcesToFileTreeNodes(sources) : sampleFileTree;
-
-  // Add schema children to sources that have loaded schemas
-  if (Object.keys(sourceSchemaMap).length > 0) {
-    fileTreeData = (fileTreeData as FileNode[]).map((node) => {
-      if (node.id && sourceSchemaMap[node.id]) {
-        const schemaNodes = schemaToFileTreeNodes(sourceSchemaMap[node.id], node.id);
-        return {
-          ...node,
-          children: schemaNodes
-        };
-      }
-      return node;
-    });
-  }
-
+  // Track source statuses
   useEffect(() => {
-    localStorage.setItem("panel-sizes", JSON.stringify(sizes));
-  }, [sizes]);
+    if (selectedSourceStatus && selectedSource?.id) {
+      setSourceStatus(selectedSource.id, selectedSourceStatus);
+    }
+  }, [selectedSourceStatus, selectedSource, setSourceStatus]);
+
+  // Build file tree data with sources only - schema children are handled by FileTree component via AppState
+  const fileTreeData = sources ? sourcesToFileTreeNodes(sources) : sampleFileTree;
 
   const handleSourceSelect = (source: Source) => {
     setSelectedSource(source);
   };
 
   // Handle table double-click
-  const handleTableDoubleClick = (sourceId: string, tableName: string) => {
-    setSelectedTableData({ sourceId, tableName });
-    // Clear query results when selecting a table
+  const handleTableDoubleClick = async (sourceId: string, tableName: string) => {
+    // Build the query to select all data from the table with a limit
+    const query = `SELECT * FROM ${tableName} LIMIT 101`;
+
+    // Set the selected table data with the query
+    setSelectedTableData({ sourceId, tableName, query });
+
+    // Clear previous query results and set loading state
     setQueryResults(null);
+    setQueryRunning(true);
   };
 
   // Handle SQL query execution
@@ -154,38 +170,29 @@ function App() {
 
   return (
     <ThemeProvider defaultTheme="dark" storageKey="vite-ui-theme">
-      <div className="h-screen flex flex-col">
+      <div className="h-screen flex flex-col overflow-hidden">
         <TopMenu />
-        <div className="flex-1">
-          <PanelGroup
-            direction="horizontal"
-            onLayout={(sizes) => setSizes(sizes)}
-            storage={localStorage}
-            autoSaveId="main-layout"
-          >
-            <Panel defaultSize={sizes[0]} minSize={10}>
-              <div className="h-full">
+        <div className="flex-1 min-h-0">
+          <PanelGroup direction="horizontal" onLayout={(newSizes) => setPanelSizes(newSizes)}>
+            <Panel defaultSize={panelSizes[0]} minSize={15}>
+              <div className="h-full border-r select-none">
                 {sourcesLoading ? (
                   <div className="p-4 text-sm text-muted-foreground">Loading sources...</div>
                 ) : sourcesError ? (
                   <div className="p-4 text-sm text-red-500">Error loading sources</div>
                 ) : (
-                  <div className="h-full">
-                    <FileTree
-                      data={fileTreeData}
-                      onSourceSelect={handleSourceSelect}
-                      onTableDoubleClick={handleTableDoubleClick}
-                      loadingSourceId={schemasLoading ? selectedSource?.id : undefined}
-                      sourceErrors={sourceSchemaErrors}
-                    />
-                  </div>
+                  <FileTree
+                    data={fileTreeData}
+                    onSourceSelect={handleSourceSelect}
+                    onTableDoubleClick={handleTableDoubleClick}
+                  />
                 )}
               </div>
             </Panel>
 
             <PanelResizeHandle className="w-1 bg-border hover:bg-primary transition-colors" />
 
-            <Panel defaultSize={sizes[1]} minSize={30}>
+            <Panel defaultSize={panelSizes[1]} minSize={30}>
               <PanelGroup direction="vertical" storage={localStorage} autoSaveId="editor-layout">
                 <Panel defaultSize={60} minSize={30}>
                   <TableDataDisplay
@@ -211,7 +218,7 @@ function App() {
 
             <PanelResizeHandle className="w-1 bg-border hover:bg-primary transition-colors" />
 
-            <Panel defaultSize={sizes[2]} minSize={15}>
+            <Panel defaultSize={panelSizes[2]} minSize={15}>
               <div className="h-full">
                 <ChatSidebar />
               </div>

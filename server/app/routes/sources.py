@@ -10,8 +10,12 @@ from sqlalchemy.orm import Session
 from app.models import Source
 from app.dependencies import get_current_workspace
 from uuid import UUID
-from app.controllers.sources import get_source_schemas
-from app.controllers.query import test_connection
+from app.core.spawn_worker import WorkerContainer, stop_worker
+from app.schemas.sources import PostgresCreds
+import json
+from uuid import uuid4
+from app.models import Worker
+import requests
 
 router = APIRouter(prefix="/sources", tags=["sources"])
 
@@ -37,18 +41,23 @@ async def add_source(
 
 
 @router.post("/test/")
-async def test(request: TestSourceRequest, workspace=Depends(get_current_workspace)):
-    source = Source(
-        name="Testing Source",
-        dbtype=request.dbtype,
-        creds=request.creds.model_dump(),
-        workspace_id=workspace.id,
-    )
-
+async def test(request: TestSourceRequest):
     try:
-        if not test_connection(source):
-            raise HTTPException(status_code=500, detail="Connection failed")
-        return {"message": "Connection successful"}
+        source_id = str(uuid4())
+        worker = WorkerContainer(source_id, request.creds)
+        output = worker.test()
+        result_str = output.decode("utf-8").strip()
+        try:
+            result_json = json.loads(result_str)
+
+        except json.JSONDecodeError as err:
+            raise HTTPException(status_code=500, detail="Cannot test connection") from err
+
+        if result_json["status"] == "error":
+            raise HTTPException(status_code=500, detail=result_json["message"])
+
+        return result_json
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
 
@@ -82,6 +91,74 @@ async def delete_source(
     return {"message": "Source deleted"}
 
 
+@router.get("/connect/{source_id}")
+async def connect(
+    source_id: UUID,
+    workspace=Depends(get_current_workspace),
+    db: Session = Depends(get_db),
+):
+    try:
+        source = db.query(Source).filter_by(id=source_id).first()
+        if not source:
+            raise HTTPException(status_code=404, detail="Source not found")
+
+        creds = PostgresCreds(**source.creds)
+        worker = None
+
+        try:
+            worker = WorkerContainer(source.id, creds)
+            container_exists = worker.already_exists()
+
+            # Check if worker record exists in the database
+            db_worker = db.query(Worker).filter_by(source_id=source_id).first()
+
+            if not container_exists:
+                # Container doesn't exist, start it and create worker record
+                worker.start()
+                if not db_worker:
+                    worker.save_worker(workspace.id, db)
+            else:
+                # Container exists, ensure worker record exists and is up-to-date
+                if not db_worker:
+                    worker.save_worker(workspace.id, db)
+                else:
+                    # Update existing worker record with current container info
+                    db_worker.container_id = worker.container_id
+                    db_worker.port = worker.port
+                    db_worker.host = worker.container_url
+                    db_worker.status = "running"
+                    db.commit()
+                    db.refresh(db_worker)
+
+        except Exception as e:
+            # Clean up worker if it was created but failed
+            if worker and worker.container_id:
+                try:
+                    worker.stop()
+                except Exception:
+                    pass  # Ignore cleanup errors
+            raise HTTPException(status_code=500, detail=str(e)) from e
+
+        return {"message": "Connected"}
+
+    except HTTPException:
+        # Re-raise HTTP exceptions as-is
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@router.get("/status/{source_id}")
+async def get_status(
+    source_id: UUID,
+    db: Session = Depends(get_db),
+):
+    worker = db.query(Worker).filter_by(source_id=source_id).first()
+    if not worker:
+        raise HTTPException(status_code=404, detail="Worker not found")
+    return {"status": worker.status}
+
+
 @router.get("/schemas/{source_id}")
 async def get_schemas(
     source_id: UUID,
@@ -91,7 +168,27 @@ async def get_schemas(
         source = db.query(Source).filter_by(id=source_id).first()
         if not source:
             raise HTTPException(status_code=404, detail="Source not found")
-        return get_source_schemas(source)
+
+        # Check if there's already a connected worker for this source
+        db_worker = db.query(Worker).filter_by(source_id=source_id).first()
+
+        if not db_worker:
+            msg = "Source is not connected. Please connect to the source first to view schemas."
+            raise HTTPException(
+                status_code=400,
+                detail=msg,
+            )
+
+        container_name = f"dribble-worker-postgres-{source_id}"
+        response = requests.get(
+            f"http://{container_name}:8000/schema/",
+            timeout=5,
+        )
+        return response.json()
+
+    except HTTPException:
+        # Re-raise HTTP exceptions as-is
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
 
@@ -105,6 +202,44 @@ async def get_sources(
     # only return name and id
     sources = db.query(Source).filter_by(workspace_id=workspace.id).all()
     return [{"id": source.id, "name": source.name, "dbtype": source.dbtype} for source in sources]
+
+
+@router.get("/connected/")
+async def get_connected_sources(
+    db: Session = Depends(get_db),
+    workspace=Depends(get_current_workspace),
+):
+    # get all workers that are running, starting, or healthy
+    workers = (
+        db.query(Worker)
+        .filter(
+            Worker.workspace_id == workspace.id,
+            Worker.status.in_(["healthy", "running", "starting"]),
+        )
+        .all()
+    )
+    return [{"id": worker.source_id, "source_id": worker.source_id} for worker in workers]
+
+
+# add disconnect source
+@router.delete("/disconnect/{source_id}")
+async def disconnect_source(
+    source_id: UUID,
+    db: Session = Depends(get_db),
+    workspace=Depends(get_current_workspace),
+):
+    worker = db.query(Worker).filter_by(source_id=source_id, workspace_id=workspace.id).first()
+    if not worker:
+        raise HTTPException(status_code=404, detail="Worker not found")
+
+    # stop the worker
+    if not stop_worker(worker.container_id):
+        raise HTTPException(status_code=404, detail="Worker not found")
+
+    # remove worker record
+    db.delete(worker)
+    db.commit()
+    return {"message": "Disconnected"}
 
 
 # get a source by id
