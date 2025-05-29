@@ -10,13 +10,18 @@ import { schemaToFileTreeNodes } from "@/shared/lib/fileTreeUtils";
 
 export function useConnectSourceMutation() {
   const queryClient = useQueryClient();
-  const { setLoadingSourceId, setSourceSchema, setSourceGeneratedChildren, setSourceStatus } =
-    useAppStore();
+  const {
+    addLoadingSourceId,
+    removeLoadingSourceId,
+    setSourceSchema,
+    setSourceGeneratedChildren,
+    setSourceStatus
+  } = useAppStore();
 
   return useMutation({
     mutationFn: (sourceId: string) => {
       // Set loading state when connection starts
-      setLoadingSourceId(sourceId);
+      addLoadingSourceId(sourceId);
       return connectSource(sourceId);
     },
     onSuccess: async (_, sourceId) => {
@@ -34,7 +39,7 @@ export function useConnectSourceMutation() {
         // Start polling for source status
         let isHealthy = false;
         let attempts = 0;
-        const maxAttempts = 30; // Prevent infinite polling
+        const maxAttempts = 30;
 
         while (!isHealthy && attempts < maxAttempts) {
           try {
@@ -83,12 +88,12 @@ export function useConnectSourceMutation() {
         }
       } finally {
         // Clear loading state when done, regardless of outcome
-        setLoadingSourceId(undefined);
+        removeLoadingSourceId(sourceId);
       }
     },
     onError: (_, sourceId) => {
       // Clear loading state on error
-      setLoadingSourceId(undefined);
+      removeLoadingSourceId(sourceId);
       // Set status to unhealthy on error
       setSourceStatus(sourceId, "unhealthy");
     }

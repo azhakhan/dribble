@@ -30,11 +30,12 @@ export type SourceSchemaMap = Record<string, Record<string, SchemaObject>>;
 interface FileTreeState {
   // From FileTree.tsx
   selectedNodeId: string | undefined;
-  loadingSourceId: string | undefined;
+  loadingSourceIds: Set<string>;
 
   // Actions
   setSelectedNodeId: (id: string | undefined) => void;
-  setLoadingSourceId: (id: string | undefined) => void;
+  addLoadingSourceId: (id: string) => void;
+  removeLoadingSourceId: (id: string) => void;
 }
 
 // Source children state
@@ -94,7 +95,7 @@ export const useAppStore = create<AppState>()(
 
       // FileTree state
       selectedNodeId: undefined,
-      loadingSourceId: undefined,
+      loadingSourceIds: new Set(),
 
       // Source and schema state
       selectedSource: null,
@@ -117,7 +118,16 @@ export const useAppStore = create<AppState>()(
 
       // FileTree actions
       setSelectedNodeId: (id) => set({ selectedNodeId: id }),
-      setLoadingSourceId: (id) => set({ loadingSourceId: id }),
+      addLoadingSourceId: (id) =>
+        set((state) => ({
+          loadingSourceIds: new Set(state.loadingSourceIds).add(id)
+        })),
+      removeLoadingSourceId: (id) =>
+        set((state) => {
+          const newSet = new Set(state.loadingSourceIds);
+          newSet.delete(id);
+          return { loadingSourceIds: newSet };
+        }),
 
       // Source and schema actions
       setSelectedSource: (source) => set({ selectedSource: source }),

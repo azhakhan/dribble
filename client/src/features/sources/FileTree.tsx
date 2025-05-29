@@ -62,7 +62,7 @@ const FileTreeItem = ({
   const {
     selectedNodeId,
     setSelectedNodeId,
-    loadingSourceId,
+    loadingSourceIds,
     sourceSchemaErrors: sourceErrors,
     sourceStatuses,
     sourceGeneratedChildren
@@ -107,7 +107,7 @@ const FileTreeItem = ({
   // Combine original children with generated schema children
   const effectiveChildren = generatedChildren || node.children || [];
 
-  const isLoading = isSource && loadingSourceId === node.id;
+  const isLoading = isSource && node.id && loadingSourceIds.has(node.id);
   const isSelected = selectedNodeId === node.id;
   const hasError = isSource && node.id && sourceErrors && sourceErrors[node.id];
 
