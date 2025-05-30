@@ -41,9 +41,7 @@ services:
     command: upgrade head
 
   server:
-    build:
-      context: ../../server
-      dockerfile: Dockerfile
+    image: dribble-server:latest
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     ports:

@@ -58,3 +58,7 @@ setup-test:
     # stop worker container
     docker stop dribble-worker-postgres-84cd6fb6-2ad9-4f8b-8f95-b8701c09ea38
     
+test-cov:
+    #! /usr/bin/env bash
+    cd server
+    coverage html && open htmlcov/index.html
