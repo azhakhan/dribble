@@ -1,6 +1,6 @@
 services:
   postgres:
-    image: postgres:16-alpine
+    image: postgres:17-alpine
     environment:
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=postgres
@@ -71,13 +71,15 @@ services:
       start_period: 30s
 
   user-db-pg:
-    image: postgres:16-alpine
+    image: postgres:17-alpine
     environment:
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=postgres
       - POSTGRES_DB=dribble
     ports:
       - "5433:5432"
+    volumes:
+      - ./seed/data.sql:/docker-entrypoint-initdb.d/init.sql
     networks:
       - test-dribble-network
     healthcheck:

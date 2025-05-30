@@ -12,7 +12,6 @@ from app.dependencies import get_current_workspace
 from uuid import UUID
 from app.core.spawn_worker import WorkerContainer, stop_worker
 from app.schemas.sources import PostgresCreds
-import json
 from uuid import uuid4
 from app.models import Worker
 import requests
@@ -45,19 +44,7 @@ async def test(request: TestSourceRequest):
     try:
         source_id = str(uuid4())
         worker = WorkerContainer(source_id, request.creds)
-        output = worker.test()
-        result_str = output.decode("utf-8").strip()
-        try:
-            result_json = json.loads(result_str)
-
-        except json.JSONDecodeError as err:
-            raise HTTPException(status_code=500, detail="Cannot test connection") from err
-
-        if result_json["status"] == "error":
-            raise HTTPException(status_code=500, detail=result_json["message"])
-
-        return result_json
-
+        return worker.test()
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
 
