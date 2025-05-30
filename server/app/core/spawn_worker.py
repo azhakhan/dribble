@@ -38,7 +38,7 @@ class WorkerContainer:
         except docker.errors.NotFound:
             return False
 
-    def start(self):
+    def start(self, workspace_id: UUID = None, db: Session = None):
         # Test credentials first
         test_result = self.test()
         if test_result.get("status") != "success":
@@ -59,12 +59,48 @@ class WorkerContainer:
         )
         self.container_id = container.id
 
-        # Wait and verify container is running
-        time.sleep(2)
-        container.reload()
-        if container.status != "running":
-            container.remove(force=True)
-            raise Exception("Container failed to start")
+        # Save worker record immediately to prevent race conditions with cleanup
+        if workspace_id and db:
+            self.save_worker(workspace_id, db)
+
+        # Wait for container to be running and healthy (up to 10 seconds)
+        max_wait_time = 10
+        wait_interval = 1
+        elapsed_time = 0
+
+        while elapsed_time < max_wait_time:
+            time.sleep(wait_interval)
+            elapsed_time += wait_interval
+
+            try:
+                container.reload()
+                if container.status == "running":
+                    # Container is running, that's sufficient
+                    break
+                elif container.status in ["exited", "dead"]:
+                    # Container failed to start
+                    logs = container.logs().decode("utf-8")
+                    container.remove(force=True)
+                    raise Exception(f"Container failed to start. Logs: {logs}")
+            except Exception as e:
+                if "No such container" in str(e):
+                    raise Exception("Container was removed unexpectedly") from e
+                # For other exceptions, continue waiting
+                continue
+
+        # Final check
+        try:
+            container.reload()
+            if container.status != "running":
+                logs = container.logs().decode("utf-8")
+                container.remove(force=True)
+                raise Exception(
+                    f"Container failed to start within {max_wait_time} seconds. Status: {container.status}. Logs: {logs}"
+                )
+        except Exception as e:
+            if "No such container" not in str(e):
+                raise
+            raise Exception("Container was removed during startup") from e
 
     def save_worker(self, workspace_id: UUID, db: Session):
         existing_worker = (

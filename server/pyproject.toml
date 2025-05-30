@@ -25,6 +25,7 @@ dev = [
     "httpx>=0.27.0",
     "pytest-mock>=3.14.0",
     "pytest-cov>=6.0.0",
+    "ruff>=0.11.10",
 ]
 
 [build-system]
@@ -35,8 +36,6 @@ build-backend = "hatchling.build"
 packages = ["app"]
 
 [tool.ruff]
-# Enable flake8-bugbear (`B`) rules.
-select = ["E", "F", "B"]
 # Exclude a variety of commonly ignored directories.
 exclude = [
     ".git",
@@ -49,8 +48,12 @@ exclude = [
 target-version = "py313"
 # Allow lines to be as long as 100 characters
 line-length = 100
+
+[tool.ruff.lint]
+# Enable flake8-bugbear (`B`) rules.
+select = ["E", "F", "B"]
 # Ignore specific rules
-ignore = ["B008"]
+ignore = ["B008", "E501"] # E501 is line-too-long, handled by formatter
 
 [tool.ruff.format]
 # Enable auto-formatting

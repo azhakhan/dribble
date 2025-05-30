@@ -16,7 +16,7 @@ export interface Source {
 }
 
 // Source status type
-export type SourceStatus = "healthy" | "unhealthy" | "starting";
+export type SourceStatus = "healthy" | "unhealthy" | "starting" | "running";
 
 // API functions
 export const getSources = async (): Promise<Source[]> => {

@@ -51,7 +51,7 @@ def reconcile_workers():
                     source = db.query(Source).filter_by(id=worker.source_id).first()
                     if not source:
                         logger.error(
-                            f"Could not find source {worker.source_id} for worker {worker.id}"
+                            f"Could not find source {worker.source_id}" + " for worker {worker.id}"
                         )
                         continue
 
@@ -60,7 +60,7 @@ def reconcile_workers():
 
                     # Create and start a new container
                     worker_container = WorkerContainer(source_id=source.id, creds=creds)
-                    worker_container.start()
+                    worker_container.start(worker.workspace_id, db)
 
                     # Update worker record with new container info
                     worker.container_id = worker_container.container_id

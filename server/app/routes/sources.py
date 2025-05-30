@@ -101,9 +101,7 @@ async def connect(
 
             if not container_exists:
                 # Container doesn't exist, start it and create worker record
-                worker.start()
-                if not db_worker:
-                    worker.save_worker(workspace.id, db)
+                worker.start(workspace.id, db)
             else:
                 # Container exists, ensure worker record exists and is up-to-date
                 if not db_worker:
