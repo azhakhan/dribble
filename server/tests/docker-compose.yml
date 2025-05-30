@@ -7,6 +7,8 @@ services:
       - POSTGRES_DB=dribble
     ports:
       - "5432:5432"
+    tmpfs:
+      - /var/lib/postgresql/data
     networks:
       - test-dribble-network
     healthcheck:
@@ -19,6 +21,8 @@ services:
     image: redis:7-alpine
     ports:
       - "6379:6379"
+    tmpfs:
+      - /data
     networks:
       - test-dribble-network
     healthcheck:
@@ -75,11 +79,12 @@ services:
     environment:
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=postgres
-      - POSTGRES_DB=dribble
+      - POSTGRES_DB=postgres
     ports:
       - "5433:5432"
     volumes:
-      - ./seed/data.sql:/docker-entrypoint-initdb.d/init.sql
+      - ../../worker/samples/postgres/data.sql:/docker-entrypoint-initdb.d/init.sql
+      - user_postgres_test_data:/var/lib/postgresql/data
     networks:
       - test-dribble-network
     healthcheck:
@@ -92,3 +97,6 @@ networks:
   test-dribble-network:
     external: true
     name: test-dribble-network
+
+volumes:
+  user_postgres_test_data:
