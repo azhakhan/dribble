@@ -51,3 +51,10 @@ setup-test:
 
     # # run tests
     pytest server/tests/
+
+    # # stop server stack
+    docker compose -f server/tests/docker-compose.yml down
+
+    # stop worker container
+    docker stop dribble-worker-postgres-84cd6fb6-2ad9-4f8b-8f95-b8701c09ea38
+    

@@ -10,12 +10,18 @@ def ensure_user_and_workspace():
             user_workspace = db.query(WorkspaceUser).first()
             if not user_workspace:
                 # create workspace
-                workspace = Workspace(name="Default Workspace")
+                workspace = Workspace(
+                    id="00000000-0000-0000-0000-000000000000", name="Default Workspace"
+                )
                 db.add(workspace)
                 db.commit()
                 db.refresh(workspace)
                 # create user
-                user = User(name="Admin", email="admin@example.com")
+                user = User(
+                    id="00000000-0000-0000-0000-000000000000",
+                    name="Admin",
+                    email="admin@example.com",
+                )
                 db.add(user)
                 db.commit()
                 db.refresh(user)
