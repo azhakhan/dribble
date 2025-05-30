@@ -7,6 +7,9 @@ from app.core.worker_health_check import start_health_check, stop_health_check
 from app.core.reconcile import reconcile_workers
 import logging
 
+# Suppress APScheduler logs to reduce noise
+logging.getLogger("apscheduler").setLevel(logging.WARNING)
+
 logger = logging.getLogger(__name__)
 
 

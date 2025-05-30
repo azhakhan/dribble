@@ -6,6 +6,9 @@ import logging
 
 from apscheduler.schedulers.background import BackgroundScheduler
 
+# Suppress APScheduler logs to reduce noise
+logging.getLogger("apscheduler").setLevel(logging.WARNING)
+
 scheduler = BackgroundScheduler()
 logger = logging.getLogger(__name__)
 client = docker.from_env()
