@@ -49,11 +49,11 @@ setup-test:
     # wait for server to be ready using our reliable script
     bash server/tests/wait-for-server.sh
 
-    # # run tests
-    pytest server/tests/
+    # run tests from server directory so coverage can find the app module
+    cd server && pytest tests/
 
     # # stop server stack
-    docker compose -f server/tests/docker-compose.yml down
+    docker compose -f tests/docker-compose.yml down
 
     # stop worker container
     docker stop dribble-worker-postgres-84cd6fb6-2ad9-4f8b-8f95-b8701c09ea38
