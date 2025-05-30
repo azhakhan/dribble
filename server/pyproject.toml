@@ -1,5 +1,5 @@
 [project]
-name = "dribble-server"
+name = "server"
 version = "0.1.0"
 description = "dribble server"
 readme = "README.md"

@@ -8,8 +8,8 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   resolve: {
     alias: {
-      "@": path.resolve(__dirname, "./src"),
-    },
+      "@": path.resolve(__dirname, "./src")
+    }
   },
   server: {
     port: 3000,
@@ -17,10 +17,10 @@ export default defineConfig({
     host: true, // Listen on all addresses, including network and LAN
     proxy: {
       "/api": {
-        target: "http://dribble-server:8000", // Target the Docker service name
+        target: "http://server:8000", // Target the Docker service name
         changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api/, ""),
-      },
-    },
-  },
+        rewrite: (path) => path.replace(/^\/api/, "")
+      }
+    }
+  }
 });
