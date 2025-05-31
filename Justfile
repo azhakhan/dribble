@@ -60,3 +60,8 @@ test-cov:
     #! /usr/bin/env bash
     cd server
     coverage html && open htmlcov/index.html
+
+
+user-db +ARGS:
+    #! /usr/bin/env bash
+    docker compose -f worker/samples/docker-compose.yml {{ARGS}}
