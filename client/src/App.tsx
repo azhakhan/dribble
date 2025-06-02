@@ -1,9 +1,9 @@
 import { ThemeProvider } from "@/components/theme-provider";
-import { BrowserRouter as Router, Routes, Route, useNavigate } from "react-router-dom";
+import { BrowserRouter as Router, Routes, Route, useNavigate, Link } from "react-router-dom";
 import { ModeToggle } from "@/components/mode-toggle";
 import logo from "@/assets/logo.png";
 import { IdePage, SettingsPage } from "@/pages";
-
+import { SettingsIcon } from "lucide-react";
 function TopMenu() {
   const navigate = useNavigate();
 
@@ -22,6 +22,9 @@ function TopMenu() {
         />
       </div>
       <div className="flex items-center gap-2">
+        <Link className="text-sm " to="/settings">
+          <SettingsIcon className="w-4 h-4 text-muted-foreground hover:text-foreground transition-colors" />
+        </Link>
         <ModeToggle />
       </div>
     </div>
