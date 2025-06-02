@@ -84,11 +84,11 @@ async def connect(
     workspace=Depends(get_current_workspace),
     db: Session = Depends(get_db),
 ):
-    try:
-        source = db.query(Source).filter_by(id=source_id).first()
-        if not source:
-            raise HTTPException(status_code=404, detail="Source not found")
+    source = db.query(Source).filter_by(id=source_id).first()
+    if not source:
+        raise HTTPException(status_code=404, detail="Source not found")
 
+    try:
         creds = PostgresCreds(**source.creds)
         worker = None
 
@@ -149,11 +149,11 @@ async def get_schemas(
     source_id: UUID,
     db: Session = Depends(get_db),
 ):
-    try:
-        source = db.query(Source).filter_by(id=source_id).first()
-        if not source:
-            raise HTTPException(status_code=404, detail="Source not found")
+    source = db.query(Source).filter_by(id=source_id).first()
+    if not source:
+        raise HTTPException(status_code=404, detail="Source not found")
 
+    try:
         # Check if there's already a connected worker for this source
         db_worker = db.query(Worker).filter_by(source_id=source_id).first()
 
@@ -252,6 +252,7 @@ async def edit_source(
     source = db.query(Source).filter_by(id=source_id).first()
     if not source:
         raise HTTPException(status_code=404, detail="Source not found")
+
     source.creds = request.creds.model_dump()
     db.commit()
     db.refresh(source)
