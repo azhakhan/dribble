@@ -44,36 +44,6 @@ services:
       - test-dribble-network
     command: upgrade head
 
-  server:
-    image: dribble-server:latest
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-    ports:
-      - "8000:8000"
-    environment:
-      - IN_DOCKER=1
-      - PYTHONPATH=/app
-      - ENVIRONMENT=development
-      - WATCHFILES_FORCE_POLLING=1
-      - DATABASE_URL=postgresql+psycopg://postgres:postgres@postgres:5432/dribble
-      - REDIS_URL=redis://redis:6379/0
-      - DOCKER_NETWORK=test-dribble-network
-    networks:
-      - test-dribble-network
-    depends_on:
-      migrations:
-        condition: service_completed_successfully
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 30s
-
   user-db-pg:
     image: postgres:17-alpine
     environment:
