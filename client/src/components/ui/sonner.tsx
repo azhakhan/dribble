@@ -16,7 +16,7 @@ const Toaster = ({ ...props }: ToasterProps) => {
       icons={{
         success: <CheckCircle size={16} className="text-success" />,
         error: <AlertCircle size={16} className="text-destructive" />,
-        warning: <AlertTriangle size={16} className="text-warning" />,
+        warning: <AlertTriangle size={16} className="text-warning" />
       }}
       style={
         {
@@ -31,7 +31,7 @@ const Toaster = ({ ...props }: ToasterProps) => {
           "--warning-bg": "var(--background)",
           "--warning-text": "var(--foreground)",
           "--toast-radius": "var(--radius)",
-          "--toast-shadow": "var(--shadow)",
+          "--toast-shadow": "var(--shadow)"
         } as React.CSSProperties
       }
       {...props}
