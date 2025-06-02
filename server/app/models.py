@@ -25,6 +25,7 @@ class Workspace(Base):
     name = Column(String, nullable=False)
     sources = relationship("Source", back_populates="workspace")
     workers = relationship("Worker", back_populates="workspace")
+    llms = relationship("LLM", back_populates="workspace")
     created_at = Column(DateTime, default=datetime.now)
 
 
@@ -81,4 +82,19 @@ class Worker(Base):
     status = Column(String, nullable=False)
     workspace_id = Column(UUID(as_uuid=True), ForeignKey("workspaces.id"), nullable=False)
     workspace = relationship("Workspace", back_populates="workers")
+    created_at = Column(DateTime, default=datetime.now)
+
+
+class LLM(Base):
+    __tablename__ = "llms"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name = Column(String, nullable=False)
+    model = Column(String, nullable=False)
+    api_key = Column(String, nullable=True)
+    base_url = Column(String, nullable=True)
+    api_version = Column(String, nullable=True)
+    settings = Column(JSON, nullable=True)
+    workspace_id = Column(UUID(as_uuid=True), ForeignKey("workspaces.id"), nullable=False)
+    workspace = relationship("Workspace", back_populates="llms")
     created_at = Column(DateTime, default=datetime.now)
