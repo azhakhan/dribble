@@ -7,8 +7,11 @@ from sqlalchemy.orm import sessionmaker
 TEST_DATABASE_URL = "postgresql+psycopg://postgres:postgres@localhost:5432/dribble"
 
 seed_data = """
-INSERT INTO public.sources VALUES ('84cd6fb6-2ad9-4f8b-8f95-b8701c09ea38', 'test', 'postgres', '{"host": "6.tcp.ngrok.io", "port": 15311, "user": "postgres", "password": "postgres", "dbname": "dribble"}', '00000000-0000-0000-0000-000000000000', '2025-05-21 21:27:15.928878');
-INSERT INTO public.workers VALUES ('285070b9-3a8a-4143-8912-d0932fd56fc3', '84cd6fb6-2ad9-4f8b-8f95-b8701c09ea38', '51aa4c4508dbcb6241d9790ab5f7672ec815a93202cd40086fe655264693b622', 8029, 'http://dribble-worker-postgres-84cd6fb6-2ad9-4f8b-8f95-b8701c09ea38:8000', 'healthy', '2025-05-29 20:24:28.665124', '00000000-0000-0000-0000-000000000000');
+INSERT INTO public.workspaces VALUES ('00000000-0000-0000-0000-000000000000', 'Default Workspace', '2025-05-21 16:19:59.854465') ON CONFLICT (id) DO NOTHING;
+INSERT INTO public.users VALUES ('00000000-0000-0000-0000-000000000000', 'Admin', 'admin@example.com', '2025-05-21 16:19:59.854465') ON CONFLICT (id) DO NOTHING;
+INSERT INTO public.workspace_users VALUES ('00000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000000', '00000000-0000-0000-0000-000000000000', 'admin', '2025-05-21 16:19:59.854465') ON CONFLICT (id) DO NOTHING;
+INSERT INTO public.sources VALUES ('84cd6fb6-2ad9-4f8b-8f95-b8701c09ea38', 'test', 'postgres', '{"host": "6.tcp.ngrok.io", "port": 15311, "user": "postgres", "password": "postgres", "dbname": "dribble"}', '00000000-0000-0000-0000-000000000000', '2025-05-21 21:27:15.928878') ON CONFLICT (id) DO NOTHING;
+INSERT INTO public.workers VALUES ('285070b9-3a8a-4143-8912-d0932fd56fc3', '84cd6fb6-2ad9-4f8b-8f95-b8701c09ea38', '51aa4c4508dbcb6241d9790ab5f7672ec815a93202cd40086fe655264693b622', 8029, 'http://dribble-worker-postgres-84cd6fb6-2ad9-4f8b-8f95-b8701c09ea38:8000', 'healthy', '2025-05-29 20:24:28.665124', '00000000-0000-0000-0000-000000000000') ON CONFLICT (id) DO NOTHING;
 """  # noqa
 
 

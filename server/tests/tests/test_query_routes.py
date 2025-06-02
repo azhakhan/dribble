@@ -5,30 +5,12 @@ import os
 # Set up test environment variables BEFORE any app imports
 os.environ["DATABASE_URL"] = "postgresql+psycopg://postgres:postgres@localhost:5432/dribble"
 os.environ["REDIS_URL"] = "redis://localhost:6379"
+os.environ["ENVIRONMENT"] = "development"
 
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
 from app.main import app
-from app.core.db import get_db
 
-
-# Override the database dependency for testing
-def override_get_db():
-    """Override database dependency to use test database."""
-    # Use the same database URL as in docker-compose for consistency
-    TEST_DATABASE_URL = "postgresql+psycopg://postgres:postgres@localhost:5432/dribble"
-    engine = create_engine(TEST_DATABASE_URL)
-    TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
-    db = TestingSessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-
-
-app.dependency_overrides[get_db] = override_get_db
+# No need to override the database dependency - use the same DB as the app
 client = TestClient(app)
 
 
