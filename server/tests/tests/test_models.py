@@ -1,13 +1,7 @@
-import sys
-import pathlib
 import uuid
 from datetime import datetime
 
-# Add the server app directory to the Python path so we can import models
-server_dir = pathlib.Path(__file__).parent.parent.parent / "app"
-sys.path.insert(0, str(server_dir))
-
-from models import User, Workspace, Source, Worker, Query, RoleEnum, WorkspaceUser  # noqa
+from app.models import User, Workspace, Source, Worker, Query, RoleEnum, WorkspaceUser  # noqa
 
 
 def test_user_model():

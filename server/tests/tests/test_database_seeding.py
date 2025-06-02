@@ -1,11 +1,4 @@
-import sys
-import pathlib
-
-# Add the server app directory to the Python path so we can import models
-server_dir = pathlib.Path(__file__).parent.parent.parent / "app"
-sys.path.insert(0, str(server_dir))
-
-from models import Source, Worker  # noqa
+from app.models import Source, Worker  # noqa
 from sqlalchemy import text  # noqa
 
 

@@ -29,11 +29,13 @@ async def query(request: CreateQueryRequest, db: Session = Depends(get_db)):
 
 @router.put("/{query_id}")
 async def update(query_id: UUID, request: UpdateQueryRequest, db: Session = Depends(get_db)):
+    # Check if query exists first
+    query = db.query(Query).filter_by(id=query_id).first()
+    if not query:
+        raise HTTPException(status_code=404, detail="Query not found")
+
     try:
         # update query
-        query = db.query(Query).filter_by(id=query_id).first()
-        if not query:
-            raise HTTPException(status_code=404, detail="Query not found")
         query.name = request.name if request.name else query.name
         query.query = request.query if request.query else query.query
         db.commit()
@@ -45,10 +47,12 @@ async def update(query_id: UUID, request: UpdateQueryRequest, db: Session = Depe
 
 @router.delete("/{query_id}")
 async def delete(query_id: UUID, db: Session = Depends(get_db)):
+    # Check if query exists first
+    query = db.query(Query).filter_by(id=query_id).first()
+    if not query:
+        raise HTTPException(status_code=404, detail="Query not found")
+
     try:
-        query = db.query(Query).filter_by(id=query_id).first()
-        if not query:
-            raise HTTPException(status_code=404, detail="Query not found")
         db.delete(query)
         db.commit()
         return {"message": "Query deleted successfully"}
@@ -75,19 +79,25 @@ async def execute_query_id(query_id: UUID, db: Session = Depends(get_db)):
 
 @router.get("/results/{query_id}/")
 async def get_query_results(query_id: UUID, response: Response):
-    # check for results in redis
-    result = await get_result(query_id)
-    if not result:
-        response.status_code = 500
-        return {"status": "error", "error": "Query not found"}
-    if result.get("status") == "running":
-        response.status_code = 202
-        return {"status": "running"}
-    if result.get("status") == "error":
-        response.status_code = 500
-        return {"status": "error", "error": result["error"]}
-    if result.get("status") == "success" and result.get("data"):
-        return result["data"]
-    else:
-        response.status_code = 500
-        return {"status": "error", "error": "Unknown error"}
+    try:
+        # check for results in redis
+        result = await get_result(query_id)
+        if not result:
+            raise HTTPException(status_code=404, detail="Query results not found")
+        if result.get("status") == "running":
+            response.status_code = 202
+            return {"status": "running"}
+        if result.get("status") == "error":
+            response.status_code = 500
+            return {"status": "error", "error": result["error"]}
+        if result.get("status") == "success" and result.get("data"):
+            return result["data"]
+        else:
+            response.status_code = 500
+            return {"status": "error", "error": "Unknown error"}
+    except HTTPException:
+        # Re-raise HTTPExceptions (like 404) without converting to 500
+        raise
+    except Exception as e:
+        # Only catch non-HTTP exceptions and convert to 500
+        raise HTTPException(status_code=500, detail=str(e)) from e

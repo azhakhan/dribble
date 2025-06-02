@@ -1,7 +1,10 @@
 import redis.asyncio as redis
 import orjson
+import os
 
-REDIS = redis.from_url("redis://redis:6379", decode_responses=True, encoding="utf-8")
+REDIS = redis.from_url(
+    os.environ.get("REDIS_URL", "redis://redis:6379"), decode_responses=True, encoding="utf-8"
+)
 
 
 async def set_result(query_id, result: dict, ttl=900):

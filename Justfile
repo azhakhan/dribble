@@ -30,7 +30,7 @@ up:
 down:
     docker compose down
 
-setup-test:
+test:
     #! /usr/bin/env bash
 
     echo "🌐 Setting up test network..."
@@ -52,7 +52,7 @@ setup-test:
     # run tests from server directory so coverage can find the app module
     cd server && pytest tests/
 
-    echo "🧹 Cleaning up..."
+    # echo "🧹 Cleaning up..."
     # stop server stack (tmpfs data will be automatically cleaned)
     docker compose -f tests/docker-compose.yml down
 

@@ -1,8 +1,7 @@
 from sqlalchemy import Column, DateTime, String, JSON, ForeignKey, Integer
-from sqlalchemy.orm import declarative_base
+from sqlalchemy.orm import declarative_base, relationship
 from sqlalchemy import Enum as SqlEnum
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import relationship
 import enum
 import uuid
 from datetime import datetime
