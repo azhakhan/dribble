@@ -270,7 +270,7 @@ const FileTreeItem = ({
                   <TooltipTrigger asChild>
                     <div
                       className={`ml-1 w-2 h-2 rounded-full ${
-                        currentStatus === "healthy"
+                        currentStatus === "running"
                           ? "bg-green-500"
                           : currentStatus === "unhealthy"
                             ? "bg-red-500"
@@ -280,7 +280,7 @@ const FileTreeItem = ({
                   </TooltipTrigger>
                   <TooltipContent>
                     <p>
-                      {currentStatus === "healthy"
+                      {currentStatus === "running"
                         ? "Connected"
                         : currentStatus === "unhealthy"
                           ? "Connection error"

@@ -7,6 +7,9 @@ from app.core.worker_health_check import start_health_check, stop_health_check
 from app.core.reconcile import reconcile_workers
 import logging
 
+# Suppress APScheduler logs to reduce noise
+logging.getLogger("apscheduler").setLevel(logging.WARNING)
+
 logger = logging.getLogger(__name__)
 
 
@@ -23,6 +26,11 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan)
+
+
+@app.get("/health")
+async def health():
+    return {"status": "healthy"}
 
 
 app.include_router(sources_router)

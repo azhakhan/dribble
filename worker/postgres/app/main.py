@@ -12,6 +12,8 @@ import json
 import logging
 import datetime
 import sys
+import decimal
+import uuid
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -42,6 +44,17 @@ async def lifespan(app: FastAPI):
         database=creds.dbname,
     )
     app.state.engine = create_engine(url)
+
+    # Test the connection immediately to catch credential issues early
+    try:
+        with app.state.engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+        logger.info("Database connection test successful during startup")
+    except OperationalError as e:
+        logger.error(f"Database connection failed during startup: {str(e)}")
+        app.state.engine.dispose()
+        raise Exception(f"Database connection failed: {e}") from e
+
     yield
     # Teardown
     # Since this is a synchronous engine, we don't await its disposal
@@ -94,6 +107,24 @@ def execute_query(query: str):
                     if isinstance(value, bytes):
                         hex_value = "0x" + binascii.hexlify(value).decode("ascii")
                         processed_row[key] = hex_value
+                    # Handle decimal values by converting to float
+                    elif isinstance(value, decimal.Decimal):
+                        processed_row[key] = float(value)
+                    # Handle datetime objects by converting to ISO format string
+                    elif isinstance(value, (datetime.datetime, datetime.date, datetime.time)):
+                        processed_row[key] = value.isoformat()
+                    # Handle UUID objects by converting to string
+                    elif isinstance(value, uuid.UUID):
+                        processed_row[key] = str(value)
+                    # Handle timedelta objects by converting to total seconds
+                    elif isinstance(value, datetime.timedelta):
+                        processed_row[key] = value.total_seconds()
+                    # Handle sets by converting to list
+                    elif isinstance(value, set):
+                        processed_row[key] = list(value)
+                    # Handle any other non-JSON serializable types by converting to string
+                    elif not isinstance(value, (str, int, float, bool, list, dict, type(None))):
+                        processed_row[key] = str(value)
                     else:
                         processed_row[key] = value
                 processed_rows.append(processed_row)

@@ -1,7 +1,6 @@
-version: "3.9"
 services:
   postgres:
-    image: postgres:16-alpine
+    image: postgres:17-alpine
     restart: always
     environment:
       - POSTGRES_USER=postgres
@@ -33,8 +32,23 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+  
+  migrations:
+    image: dribble-migrations:latest
+    build:
+      context: ./server
+      dockerfile: Dockerfile.migrations
+    environment:
+      - DATABASE_URL=postgresql+psycopg://postgres:postgres@postgres:5432/dribble
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - dribble-network
+    command: upgrade head
 
-  dribble-server:
+  server:
+    image: dribble-server:latest
     build:
       context: ./server
       dockerfile: Dockerfile
@@ -55,12 +69,21 @@ services:
     networks:
       - dribble-network
     depends_on:
+      migrations:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
+    
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
-  dribble-client:
+  client:
     build:
       context: ./client
       dockerfile: Dockerfile
@@ -70,10 +93,10 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - VITE_API_URL=http://dribble-server:8000
+      - VITE_API_URL=http://server:8000
       - NODE_ENV=development
     depends_on:
-      - dribble-server
+      - server
     networks:
       - dribble-network
 

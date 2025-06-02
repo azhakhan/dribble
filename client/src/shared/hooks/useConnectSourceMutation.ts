@@ -54,7 +54,7 @@ export function useConnectSourceMutation() {
             setSourceStatus(sourceId, status);
 
             // If the source is healthy, stop polling and load schemas
-            if (status === "healthy") {
+            if (status === "running") {
               isHealthy = true;
 
               try {

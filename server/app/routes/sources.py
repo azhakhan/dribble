@@ -12,7 +12,6 @@ from app.dependencies import get_current_workspace
 from uuid import UUID
 from app.core.spawn_worker import WorkerContainer, stop_worker
 from app.schemas.sources import PostgresCreds
-import json
 from uuid import uuid4
 from app.models import Worker
 import requests
@@ -45,19 +44,7 @@ async def test(request: TestSourceRequest):
     try:
         source_id = str(uuid4())
         worker = WorkerContainer(source_id, request.creds)
-        output = worker.test()
-        result_str = output.decode("utf-8").strip()
-        try:
-            result_json = json.loads(result_str)
-
-        except json.JSONDecodeError as err:
-            raise HTTPException(status_code=500, detail="Cannot test connection") from err
-
-        if result_json["status"] == "error":
-            raise HTTPException(status_code=500, detail=result_json["message"])
-
-        return result_json
-
+        return worker.test()
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
 
@@ -97,11 +84,11 @@ async def connect(
     workspace=Depends(get_current_workspace),
     db: Session = Depends(get_db),
 ):
-    try:
-        source = db.query(Source).filter_by(id=source_id).first()
-        if not source:
-            raise HTTPException(status_code=404, detail="Source not found")
+    source = db.query(Source).filter_by(id=source_id).first()
+    if not source:
+        raise HTTPException(status_code=404, detail="Source not found")
 
+    try:
         creds = PostgresCreds(**source.creds)
         worker = None
 
@@ -114,9 +101,7 @@ async def connect(
 
             if not container_exists:
                 # Container doesn't exist, start it and create worker record
-                worker.start()
-                if not db_worker:
-                    worker.save_worker(workspace.id, db)
+                worker.start(workspace.id, db)
             else:
                 # Container exists, ensure worker record exists and is up-to-date
                 if not db_worker:
@@ -164,11 +149,11 @@ async def get_schemas(
     source_id: UUID,
     db: Session = Depends(get_db),
 ):
-    try:
-        source = db.query(Source).filter_by(id=source_id).first()
-        if not source:
-            raise HTTPException(status_code=404, detail="Source not found")
+    source = db.query(Source).filter_by(id=source_id).first()
+    if not source:
+        raise HTTPException(status_code=404, detail="Source not found")
 
+    try:
         # Check if there's already a connected worker for this source
         db_worker = db.query(Worker).filter_by(source_id=source_id).first()
 
@@ -267,6 +252,7 @@ async def edit_source(
     source = db.query(Source).filter_by(id=source_id).first()
     if not source:
         raise HTTPException(status_code=404, detail="Source not found")
+
     source.creds = request.creds.model_dump()
     db.commit()
     db.refresh(source)
