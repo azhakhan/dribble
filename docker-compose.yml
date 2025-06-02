@@ -66,6 +66,7 @@ services:
       - DATABASE_URL=postgresql+psycopg://postgres:postgres@postgres:5432/postgres
       - REDIS_URL=redis://redis:6379/0
       - DOCKER_NETWORK=dribble-network
+      - ENCRYPTION_KEY=dribble_encryption_key
     networks:
       - dribble-network
     depends_on:

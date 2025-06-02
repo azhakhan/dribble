@@ -7,6 +7,7 @@ requires-python = ">=3.13"
 dependencies = [
     "alembic>=1.16.0",
     "apscheduler>=3.11.0",
+    "cryptography>=43.0.0",
     "docker>=7.1.0",
     "fastapi[standard]>=0.115.12",
     "orjson>=3.10.18",
@@ -83,3 +84,6 @@ markers = [
 ]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
+
+[dependency-groups]
+dev = ["ipykernel>=6.29.5"]
