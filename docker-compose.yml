@@ -5,7 +5,7 @@ services:
     environment:
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=postgres
-      - POSTGRES_DB=dribble
+      - POSTGRES_DB=postgres
     ports:
       - "5432:5432"
     volumes:
@@ -32,14 +32,14 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
-  
+
   migrations:
     image: dribble-migrations:latest
     build:
       context: ./server
       dockerfile: Dockerfile.migrations
     environment:
-      - DATABASE_URL=postgresql+psycopg://postgres:postgres@postgres:5432/dribble
+      - DATABASE_URL=postgresql+psycopg://postgres:postgres@postgres:5432/postgres
     depends_on:
       postgres:
         condition: service_healthy
@@ -63,7 +63,7 @@ services:
       - PYTHONPATH=/app
       - ENVIRONMENT=development
       - WATCHFILES_FORCE_POLLING=1
-      - DATABASE_URL=postgresql+psycopg://postgres:postgres@postgres:5432/dribble
+      - DATABASE_URL=postgresql+psycopg://postgres:postgres@postgres:5432/postgres
       - REDIS_URL=redis://redis:6379/0
       - DOCKER_NETWORK=dribble-network
     networks:
@@ -75,7 +75,7 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    
+
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 10s

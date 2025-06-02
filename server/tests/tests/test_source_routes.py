@@ -1,11 +1,5 @@
 import pytest
 import uuid
-import os
-
-# Set up test environment variables BEFORE any app imports
-os.environ["DATABASE_URL"] = "postgresql+psycopg://postgres:postgres@localhost:5432/dribble"
-os.environ["REDIS_URL"] = "redis://localhost:6379"
-os.environ["ENVIRONMENT"] = "development"
 
 from fastapi.testclient import TestClient
 from app.main import app
@@ -367,9 +361,8 @@ class TestTestSource:
 
         assert response.status_code == 422  # Validation error
 
+    @pytest.mark.skip(reason="Requires a running worker container")
     def test_test_source_invalid_connection(self):
-        # skip this test for now
-        pytest.skip("Skipping invalid connection test")
         """Test source connection test with invalid connection details."""
         invalid_connection_data = {
             "dbtype": "postgres",
