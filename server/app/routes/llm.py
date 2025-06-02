@@ -28,7 +28,7 @@ async def create_llm(
     if existing_llm:
         raise HTTPException(
             status_code=400,
-            detail=f"LLM with name '{request.name}' already exists in this workspace",
+            detail=f"LLM with name '{request.name.value}' already exists in this workspace",
         )
 
     llm = LLM(
@@ -54,8 +54,7 @@ async def get_llms(
 ):
     """Get all LLMs in the current workspace"""
     llms = db.query(LLM).filter_by(workspace_id=workspace.id).all()
-    llms = [llm.model_dump(exclude={"api_key"}) for llm in llms]
-    return llms
+    return [LLMListResponse.model_validate(llm) for llm in llms]
 
 
 @router.get("/{llm_id}", response_model=LLMResponse)
@@ -68,8 +67,7 @@ async def get_llm(
     llm = db.query(LLM).filter_by(id=llm_id, workspace_id=workspace.id).first()
     if not llm:
         raise HTTPException(status_code=404, detail="LLM not found")
-    llm = llm.model_dump(exclude={"api_key"})
-    return llm
+    return LLMResponse.model_validate(llm)
 
 
 @router.put("/{llm_id}", response_model=LLMResponse)

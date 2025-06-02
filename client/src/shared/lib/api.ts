@@ -125,9 +125,12 @@ export interface UpdateCredentialsRequest {
 
 export const updateSourceCredentials = async (
   sourceId: string,
-  sourceData: UpdateCredentialsRequest
-): Promise<Source> => {
-  const response = await api.put<Source>(`/sources/credentials/${sourceId}/`, sourceData);
+  credentials: Partial<SourceCredentials>
+): Promise<SourceCredentials> => {
+  const response = await api.put<SourceCredentials>(
+    `/sources/credentials/${sourceId}/`,
+    credentials
+  );
   return response.data;
 };
 
@@ -149,6 +152,67 @@ export interface ConnectedSource {
 export const getConnectedSources = async (): Promise<ConnectedSource[]> => {
   const response = await api.get<ConnectedSource[]>("/sources/connected/");
   return response.data;
+};
+
+// LLM Types
+export interface LLM {
+  id: string;
+  name: "openai" | "anthropic" | "gemini" | "ollama";
+  model: string;
+  base_url?: string;
+  api_version?: string;
+  settings?: Record<string, unknown>;
+  workspace_id: string;
+  created_at: string;
+}
+
+export interface LLMListItem {
+  id: string;
+  name: "openai" | "anthropic" | "gemini" | "ollama";
+  model: string;
+}
+
+export interface CreateLLMRequest {
+  name: "openai" | "anthropic" | "gemini" | "ollama";
+  model: string;
+  api_key?: string;
+  base_url?: string;
+  api_version?: string;
+  settings?: Record<string, unknown>;
+}
+
+export interface UpdateLLMRequest {
+  name?: "openai" | "anthropic" | "gemini" | "ollama";
+  model?: string;
+  api_key?: string;
+  base_url?: string;
+  api_version?: string;
+  settings?: Record<string, unknown>;
+}
+
+// LLM API functions
+export const getLLMs = async (): Promise<LLMListItem[]> => {
+  const response = await api.get<LLMListItem[]>("/llms/");
+  return response.data;
+};
+
+export const getLLM = async (llmId: string): Promise<LLM> => {
+  const response = await api.get<LLM>(`/llms/${llmId}`);
+  return response.data;
+};
+
+export const createLLM = async (data: CreateLLMRequest): Promise<LLM> => {
+  const response = await api.post<LLM>("/llms/", data);
+  return response.data;
+};
+
+export const updateLLM = async (llmId: string, data: UpdateLLMRequest): Promise<LLM> => {
+  const response = await api.put<LLM>(`/llms/${llmId}`, data);
+  return response.data;
+};
+
+export const deleteLLM = async (llmId: string): Promise<void> => {
+  await api.delete(`/llms/${llmId}`);
 };
 
 export default api;
