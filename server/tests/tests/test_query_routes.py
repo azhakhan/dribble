@@ -1,11 +1,5 @@
 import pytest
 import uuid
-import os
-
-# Set up test environment variables BEFORE any app imports
-os.environ["DATABASE_URL"] = "postgresql+psycopg://postgres:postgres@localhost:5432/dribble"
-os.environ["REDIS_URL"] = "redis://localhost:6379"
-os.environ["ENVIRONMENT"] = "development"
 
 from fastapi.testclient import TestClient
 from app.main import app

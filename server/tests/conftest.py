@@ -1,10 +1,14 @@
 import pytest
 import os
+
+# Set up test environment variables BEFORE any app imports
+os.environ["DATABASE_URL"] = "postgresql+psycopg://postgres:postgres@localhost:5432/postgres"
+os.environ["REDIS_URL"] = "redis://localhost:6379"
+os.environ["ENVIRONMENT"] = "development"
+
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 
-# Test database configuration
-TEST_DATABASE_URL = "postgresql+psycopg://postgres:postgres@localhost:5432/dribble"
 
 seed_data = """
 INSERT INTO public.workspaces VALUES ('00000000-0000-0000-0000-000000000000', 'Default Workspace', '2025-05-21 16:19:59.854465') ON CONFLICT (id) DO NOTHING;
@@ -18,8 +22,8 @@ INSERT INTO public.workers VALUES ('285070b9-3a8a-4143-8912-d0932fd56fc3', '84cd
 @pytest.fixture(scope="session")
 def test_engine():
     """Create a test database engine for the entire test session."""
-    # Use the test database URL from environment or default
-    database_url = os.getenv("TEST_DATABASE_URL", TEST_DATABASE_URL)
+    # Use the DATABASE_URL that we set up in the environment variables
+    database_url = os.getenv("DATABASE_URL")
 
     engine = create_engine(database_url, echo=False)
     yield engine

@@ -4,7 +4,7 @@ services:
     environment:
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=postgres
-      - POSTGRES_DB=dribble
+      - POSTGRES_DB=postgres
     ports:
       - "5432:5432"
     tmpfs:
@@ -36,7 +36,7 @@ services:
       context: ../../server
       dockerfile: Dockerfile.migrations
     environment:
-      - DATABASE_URL=postgresql+psycopg://postgres:postgres@postgres:5432/dribble
+      - DATABASE_URL=postgresql+psycopg://postgres:postgres@postgres:5432/postgres
     depends_on:
       postgres:
         condition: service_healthy
