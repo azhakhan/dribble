@@ -2,9 +2,10 @@ import pytest
 import os
 
 # Set up test environment variables BEFORE any app imports
-os.environ["DATABASE_URL"] = "postgresql+psycopg://postgres:postgres@localhost:5432/postgres"
-os.environ["REDIS_URL"] = "redis://localhost:6379"
+os.environ["DATABASE_URL"] = "postgresql+psycopg://postgres:postgres@localhost:5433/postgres"
+os.environ["REDIS_URL"] = "redis://localhost:6380"
 os.environ["ENVIRONMENT"] = "development"
+os.environ["ENCRYPTION_SECRET"] = "test-secret"
 
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
