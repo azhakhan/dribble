@@ -77,7 +77,7 @@ interface AppState extends FileTreeState, SourceChildrenState {
   // Source and schema state
   selectedSource: Source | null;
   sourceSchemaMap: Record<string, Record<string, SchemaObject>>;
-  selectedTableData: object[] | null;
+  selectedTableData: { sourceId: string; tableName: string; query: string } | null;
 
   // Query state
   queryResults: object[] | null;
@@ -99,7 +99,9 @@ interface AppState extends FileTreeState, SourceChildrenState {
   setPanelSizes: (sizes: number[]) => void;
   setSelectedSource: (source: Source | null) => void;
   setSourceSchema: (sourceId: string, schema: Record<string, SchemaObject>) => void;
-  setSelectedTableData: (data: object[] | null) => void;
+  setSelectedTableData: (
+    data: { sourceId: string; tableName: string; query: string } | null
+  ) => void;
   setQueryResults: (results: object[] | null) => void;
   setQueryRunning: (isRunning: boolean) => void;
   setSourceSchemaError: (sourceId: string, error: string | null) => void;
