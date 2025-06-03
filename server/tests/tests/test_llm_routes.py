@@ -4,6 +4,7 @@ from fastapi.testclient import TestClient
 from app.main import app
 from app.models import LLM
 from app.core.db import SessionLocal
+from app.controllers.llm import is_safe_query
 
 client = TestClient(app)
 
@@ -173,3 +174,61 @@ class TestLLMWorkflow:
         # Verify deletion
         final_check = client.get(f"/llms/{llm_id}")
         assert final_check.status_code == 404
+
+
+class TestLLMTools:
+    """Test the LLM tool functionality and safety checks."""
+
+    def test_is_safe_query_select_allowed(self):
+        """Test that SELECT queries are allowed."""
+        safe_queries = [
+            "SELECT * FROM users",
+            "select name, email from users where active = true",
+            "SELECT COUNT(*) FROM orders",
+            "WITH recent_orders AS (SELECT * FROM orders WHERE created_at > '2023-01-01') SELECT * FROM recent_orders",
+        ]
+
+        for query in safe_queries:
+            assert is_safe_query(query), f"Query should be safe: {query}"
+
+    def test_is_safe_query_dangerous_blocked(self):
+        """Test that dangerous queries are blocked."""
+        dangerous_queries = [
+            "DELETE FROM users",
+            "DROP TABLE users",
+            "INSERT INTO users (name) VALUES ('test')",
+            "UPDATE users SET active = false",
+            "TRUNCATE TABLE orders",
+            "ALTER TABLE users ADD COLUMN test VARCHAR(50)",
+            "CREATE TABLE test (id INT)",
+            "GRANT ALL ON users TO public",
+            "EXEC sp_delete_user",
+            "EXECUTE IMMEDIATE 'DROP TABLE users'",
+        ]
+
+        for query in dangerous_queries:
+            assert not is_safe_query(query), f"Query should be blocked: {query}"
+
+    def test_is_safe_query_with_comments(self):
+        """Test that queries with comments are handled correctly."""
+        queries_with_comments = [
+            "-- This is a comment\nSELECT * FROM users",
+            "SELECT * FROM users -- inline comment",
+            "/* multi\nline\ncomment */ SELECT * FROM users",
+            "SELECT * FROM users /* inline block comment */ WHERE active = true",
+        ]
+
+        for query in queries_with_comments:
+            assert is_safe_query(query), f"Query with comments should be safe: {query}"
+
+    def test_is_safe_query_case_insensitive(self):
+        """Test that safety checks are case insensitive."""
+        unsafe_queries = [
+            "delete from users",
+            "Delete From Users",
+            "DELETE from USERS",
+            "dElEtE fRoM uSeRs",
+        ]
+
+        for query in unsafe_queries:
+            assert not is_safe_query(query), f"Query should be blocked regardless of case: {query}"

@@ -1,6 +1,7 @@
 from uuid import UUID
 import requests
 import logging
+from app.core._redis import get_result
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -14,3 +15,18 @@ def execute_in_worker(source_id: UUID, query: str):
         timeout=5,
     )
     return response.json()
+
+
+async def get_query_results(query_id: UUID):
+    # check for results in redis
+    result = await get_result(query_id)
+    if not result:
+        raise Exception("Query results not found")
+    if result.get("status") == "running":
+        return {"status": "running"}
+    if result.get("status") == "error":
+        return {"status": "error", "error": result["error"]}
+    if result.get("status") == "success" and result.get("data"):
+        return result["data"]
+    else:
+        return {"status": "error", "error": "Unknown error"}
