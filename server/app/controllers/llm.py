@@ -23,11 +23,11 @@ async def chat_llm(llm: LLM, source: Source, request: ChatLLMRequest):
             top_p=1,
         )
         print(response)
-        response = response.choices[0].message.content
+        content = response.choices[0].message.content
     else:
         raise ValueError(f"Unsupported LLM: {llm.name}")
 
-    return response
+    return {"response": content}
 
 
 def compose_system_prompt(schema: dict, dialect: str, query: str | None = None):

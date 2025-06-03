@@ -215,4 +215,21 @@ export const deleteLLM = async (llmId: string): Promise<void> => {
   await api.delete(`/llms/${llmId}`);
 };
 
+// Chat LLM types and functions
+export interface ChatLLMRequest {
+  source_id: string;
+  llm_id: string;
+  message: string;
+  query?: string;
+}
+
+export interface ChatLLMResponse {
+  response: string;
+}
+
+export const chatLLM = async (data: ChatLLMRequest): Promise<ChatLLMResponse> => {
+  const response = await api.post<ChatLLMResponse>("/llms/chat", data);
+  return response.data;
+};
+
 export default api;

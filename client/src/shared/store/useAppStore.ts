@@ -10,8 +10,30 @@ interface SchemaColumn {
   nullable: boolean;
 }
 
+interface SchemaForeignKey {
+  column: string;
+  constraint_name: string;
+  references_table: string;
+  references_column: string;
+}
+
+interface SchemaRelationshipReference {
+  foreign_column: string;
+  local_column: string;
+  table: string;
+  type: string;
+}
+
+interface SchemaRelationship {
+  referenced_by: SchemaRelationshipReference[];
+  references: SchemaRelationshipReference[];
+}
+
 interface SchemaTable {
   columns: SchemaColumn[];
+  primary_keys: string[];
+  foreign_keys: SchemaForeignKey[];
+  relationships?: SchemaRelationship;
 }
 
 interface SchemaView {
@@ -54,12 +76,8 @@ interface AppState extends FileTreeState, SourceChildrenState {
 
   // Source and schema state
   selectedSource: Source | null;
-  sourceSchemaMap: SourceSchemaMap;
-  selectedTableData: {
-    sourceId: string;
-    tableName: string;
-    query: string;
-  } | null;
+  sourceSchemaMap: Record<string, SchemaTable[]>;
+  selectedTableData: object[] | null;
 
   // Query state
   queryResults: object[] | null;
@@ -69,18 +87,33 @@ interface AppState extends FileTreeState, SourceChildrenState {
   sourceSchemaErrors: Record<string, string>;
   sourceStatuses: Record<string, SourceStatus>;
 
+  // Editor state
+  editorContent: string;
+
+  // Chat state
+  selectedLLM: string | null;
+  messages: Array<{ role: "user" | "assistant"; content: string }>;
+  chatLoading: boolean;
+
   // Actions for App state
   setPanelSizes: (sizes: number[]) => void;
   setSelectedSource: (source: Source | null) => void;
-  setSourceSchema: (sourceId: string, schema: Record<string, SchemaObject>) => void;
-  setSelectedTableData: (
-    data: { sourceId: string; tableName: string; query: string } | null
-  ) => void;
+  setSourceSchema: (sourceId: string, schema: SchemaTable[]) => void;
+  setSelectedTableData: (data: object[] | null) => void;
   setQueryResults: (results: object[] | null) => void;
   setQueryRunning: (isRunning: boolean) => void;
   setSourceSchemaError: (sourceId: string, error: string | null) => void;
   setSourceStatus: (sourceId: string, status: SourceStatus) => void;
   removeSourceStatus: (sourceId: string) => void;
+
+  // Editor actions
+  setEditorContent: (content: string) => void;
+
+  // Chat actions
+  setSelectedLLM: (llmId: string | null) => void;
+  addMessage: (message: { role: "user" | "assistant"; content: string }) => void;
+  setChatLoading: (loading: boolean) => void;
+  clearMessages: () => void;
 
   // New action to clean up disconnected sources
   cleanupDisconnectedSources: (connectedSourceIds: string[]) => void;
@@ -112,6 +145,14 @@ export const useAppStore = create<AppState>()(
 
       // Source children state
       sourceGeneratedChildren: {},
+
+      // Editor state
+      editorContent: "-- Write your SQL query here\n",
+
+      // Chat state
+      selectedLLM: null,
+      messages: [],
+      chatLoading: false,
 
       // Panel actions
       setPanelSizes: (sizes) => set({ panelSizes: sizes }),
@@ -178,6 +219,18 @@ export const useAppStore = create<AppState>()(
           }
         })),
 
+      // Editor actions
+      setEditorContent: (content) => set({ editorContent: content }),
+
+      // Chat actions
+      setSelectedLLM: (llmId) => set({ selectedLLM: llmId }),
+      addMessage: (message) =>
+        set((state) => ({
+          messages: [...state.messages, message]
+        })),
+      setChatLoading: (loading) => set({ chatLoading: loading }),
+      clearMessages: () => set({ messages: [] }),
+
       // New action to clean up disconnected sources
       cleanupDisconnectedSources: (connectedSourceIds) =>
         set((state) => {
@@ -227,7 +280,8 @@ export const useAppStore = create<AppState>()(
       name: "dribble-app-storage",
       // Only persist certain values
       partialize: (state) => ({
-        panelSizes: state.panelSizes
+        panelSizes: state.panelSizes,
+        editorContent: state.editorContent
       })
     }
   )

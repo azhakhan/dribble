@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { PlayIcon } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryQuery } from "@/shared/hooks/useQueryQuery";
+import { useAppStore } from "@/shared/store/useAppStore";
 
 interface EditorProps {
   selectedSource: Source | null;
@@ -22,9 +23,11 @@ export function Editor({
   onQueryStatusChange
 }: EditorProps) {
   const editorContainerRef = useRef<HTMLDivElement>(null);
-  const [sqlContent, setSqlContent] = useState<string>("-- Write your SQL query here\n");
   const [isRunning, setIsRunning] = useState(false);
   const [activeQuery, setActiveQuery] = useState<{ sourceId: string; sql: string } | null>(null);
+
+  // Get editor content from appStore
+  const { editorContent, setEditorContent } = useAppStore();
 
   // Use the query hook with enabled set to false by default
   // We'll enable it manually when the user clicks the Run button
@@ -80,14 +83,14 @@ export function Editor({
 
   const handleEditorChange = (value: string | undefined) => {
     if (value !== undefined) {
-      setSqlContent(value);
+      setEditorContent(value);
     }
   };
 
   const isEditorActive = selectedSource && !schemasLoading && !schemasError;
 
   const handleRunQuery = () => {
-    if (!selectedSource || !sqlContent.trim()) return;
+    if (!selectedSource || !editorContent.trim()) return;
 
     setIsRunning(true);
     if (onQueryStatusChange) {
@@ -102,7 +105,7 @@ export function Editor({
     // Set the active query which will trigger the useQueryQuery hook
     setActiveQuery({
       sourceId: selectedSource.id,
-      sql: sqlContent
+      sql: editorContent
     });
   };
 
@@ -134,7 +137,7 @@ export function Editor({
           height="100%"
           defaultLanguage="sql"
           theme="vs-dark"
-          value={sqlContent}
+          value={editorContent}
           onChange={handleEditorChange}
           options={{
             minimap: { enabled: false },
