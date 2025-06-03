@@ -8,6 +8,20 @@ a web based database manager
 docker compose up --build
 ```
 
+## Features
+
+- 🎨 **Rich SQL Editor**: Monaco Editor with intelligent auto-complete
+- 🧠 **Schema-Aware Completions**: Table and column suggestions from your database
+- 🔍 **Multi-Database Support**: PostgreSQL and MySQL
+- 🌙 **Dark Theme**: Professional coding environment
+- 📊 **Query Results**: Interactive data tables
+- 🐳 **Docker-Based**: Isolated database connections
+
+## Documentation
+
+- **[SQL Editor & Auto-Complete](docs/EDITOR.md)** - Comprehensive guide to the SQL editor and intelligent completion system
+- **[Workers](docs/WORKERS.md)** - Database connection management and worker architecture
+
 ## DB Migrations
 
 ```bash
