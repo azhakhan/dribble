@@ -122,6 +122,12 @@
   body {
     @apply bg-background text-foreground;
   }
+
+  /* Prevent horizontal scrolling in the data editor to trigger back/forward navigation */
+  .dvn-scroller {
+    overscroll-behavior-x: none !important;
+  }
+
   #root {
     height: 100%;
   }
