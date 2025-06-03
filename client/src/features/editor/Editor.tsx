@@ -1,18 +1,11 @@
 import { useRef, useState, useEffect } from "react";
 import type { Source } from "@/shared/lib/api";
 import { Button } from "@/components/ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from "@/components/ui/select";
 import { PlayIcon } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryQuery } from "@/shared/hooks/useQueryQuery";
 import { useAppStore } from "@/shared/store/useAppStore";
-import { LanguageIdEnum, getAvailableSQLDialects } from "@/shared/lib/monaco-setup";
+import { LanguageIdEnum } from "@/shared/lib/monaco-setup";
 import { MonacoSQLEditor } from "./MonacoSQLEditor";
 
 interface EditorProps {
@@ -33,13 +26,23 @@ export function Editor({
   const editorContainerRef = useRef<HTMLDivElement>(null);
   const [isRunning, setIsRunning] = useState(false);
   const [activeQuery, setActiveQuery] = useState<{ sourceId: string; sql: string } | null>(null);
-  const [selectedDialect, setSelectedDialect] = useState<string>(LanguageIdEnum.MYSQL);
-
-  // Get available SQL dialects
-  const availableDialects = getAvailableSQLDialects();
 
   // Get editor content from appStore
   const { editorContent, setEditorContent } = useAppStore();
+
+  // Helper to map dbtype to Monaco language
+  function getMonacoLanguage(dbtype?: string): string {
+    if (!dbtype) return LanguageIdEnum.MYSQL;
+    switch (dbtype.toLowerCase()) {
+      case "postgres":
+        return LanguageIdEnum.PG;
+      case "mysql":
+        return LanguageIdEnum.MYSQL;
+      // Add more mappings if needed
+      default:
+        return LanguageIdEnum.MYSQL;
+    }
+  }
 
   // Use the query hook with enabled set to false by default
   // We'll enable it manually when the user clicks the Run button
@@ -93,14 +96,6 @@ export function Editor({
     }
   }, [queryResults, queryError, onQueryExecution]);
 
-  const handleEditorChange = (value: string) => {
-    setEditorContent(value);
-  };
-
-  const handleDialectChange = (value: string) => {
-    setSelectedDialect(value);
-  };
-
   const isEditorActive = selectedSource && !schemasLoading && !schemasError;
 
   const handleRunQuery = () => {
@@ -125,23 +120,8 @@ export function Editor({
 
   return (
     <div ref={editorContainerRef} className="h-full flex flex-col">
-      {/* Fixed header with dialect selector and run button */}
-      <div className="flex-shrink-0 flex justify-between items-center gap-2 p-2 border-b">
-        <div className="flex items-center gap-2">
-          <span className="text-sm text-muted-foreground">SQL Dialect:</span>
-          <Select value={selectedDialect} onValueChange={handleDialectChange}>
-            <SelectTrigger className="w-40">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {availableDialects.map((dialect) => (
-                <SelectItem key={dialect.value} value={dialect.value}>
-                  {dialect.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+      {/* Fixed header with run button only */}
+      <div className="flex-shrink-0 flex justify-end items-center gap-2 p-2 border-b">
         <Button onClick={handleRunQuery} disabled={!isEditorActive || isRunning} className="gap-1">
           <PlayIcon size={16} />
           Run SQL
@@ -164,8 +144,8 @@ export function Editor({
         )}
         <MonacoSQLEditor
           value={editorContent}
-          onChange={handleEditorChange}
-          language={selectedDialect}
+          onChange={setEditorContent}
+          language={getMonacoLanguage(selectedSource?.dbtype)}
           readOnly={!isEditorActive}
         />
       </div>
