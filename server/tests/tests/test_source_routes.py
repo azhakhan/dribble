@@ -1,5 +1,6 @@
 import pytest
 import uuid
+from unittest.mock import AsyncMock, patch
 
 from fastapi.testclient import TestClient
 from app.main import app
@@ -74,6 +75,12 @@ def existing_source_id():
     """Get an existing source ID from the seeded test data."""
     # This should match the source ID from your conftest.py seed data
     return "84cd6fb6-2ad9-4f8b-8f95-b8701c09ea38"
+
+
+@pytest.fixture(autouse=True)
+def patch_invalidate_source_schema_cache():
+    with patch("app.routes.sources.invalidate_source_schema_cache", new=AsyncMock()) as _fixture:
+        yield
 
 
 class TestCreateSource:

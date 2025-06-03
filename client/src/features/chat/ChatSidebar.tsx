@@ -2,32 +2,90 @@ import { useState } from "react";
 import type { KeyboardEvent, ChangeEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-
-interface Message {
-  role: "user" | "assistant";
-  content: string;
-}
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from "@/components/ui/select";
+import { useAppStore } from "@/shared/store/useAppStore";
+import { useChatLLMQuery } from "@/shared/hooks/useChatLLMQuery";
+import { useLLMsQuery, useLLMQuery } from "@/shared/hooks/useLLMsQuery";
+import { toast } from "sonner";
 
 export function ChatSidebar() {
-  const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
 
-  const handleSend = () => {
+  const {
+    selectedSource,
+    selectedLLM: selectedLLMId,
+    setSelectedLLM,
+    messages,
+    addMessage,
+    chatLoading,
+    setChatLoading,
+    editorContent,
+    setEditorContent
+  } = useAppStore();
+
+  const { data: llms = [] } = useLLMsQuery();
+  const { data: selectedLLM } = useLLMQuery(selectedLLMId || undefined);
+  const chatMutation = useChatLLMQuery();
+
+  const handleSend = async () => {
     if (!input.trim()) return;
+    if (!selectedSource) {
+      toast.error("Please select a source first");
+      return;
+    }
+    if (!selectedLLM) {
+      toast.error("Please select an LLM first");
+      return;
+    }
 
-    // Add user message
-    const userMessage: Message = { role: "user", content: input };
-    setMessages((prev) => [...prev, userMessage]);
+    // Add user message to chat
+    const userMessage = { role: "user" as const, content: input };
+    addMessage(userMessage);
     setInput("");
+    setChatLoading(true);
 
-    // Simulate AI response
-    setTimeout(() => {
-      const aiResponse: Message = {
-        role: "assistant",
-        content: `This is a simulated response to: "${input}"`
-      };
-      setMessages((prev) => [...prev, aiResponse]);
-    }, 500);
+    try {
+      // Send chat request with editor content as query if not empty
+      const response = await chatMutation.mutateAsync({
+        source_id: selectedSource.id,
+        llm_id: selectedLLM.id,
+        message: input,
+        query:
+          editorContent.trim() !== "-- Write your SQL query here\n" && editorContent.trim()
+            ? editorContent
+            : undefined
+      });
+
+      // Add AI response to chat
+      const responseContent = response?.response || "No response received";
+      const aiMessage = { role: "assistant" as const, content: responseContent };
+      addMessage(aiMessage);
+
+      // If response looks like SQL/code, update editor content
+      if (
+        typeof responseContent === "string" &&
+        (responseContent.includes("SELECT") ||
+          responseContent.includes("CREATE") ||
+          responseContent.includes("INSERT") ||
+          responseContent.includes("UPDATE") ||
+          responseContent.includes("DELETE"))
+      ) {
+        setEditorContent(responseContent);
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Failed to send message";
+      toast.error(errorMessage);
+      const errorResponse = { role: "assistant" as const, content: `Error: ${errorMessage}` };
+      addMessage(errorResponse);
+    } finally {
+      setChatLoading(false);
+    }
   };
 
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -39,8 +97,41 @@ export function ChatSidebar() {
 
   return (
     <div className="h-full flex flex-col border-l">
+      {/* LLM Selection */}
+      <div className="flex-shrink-0 p-4 border-b">
+        <div className="space-y-2">
+          <label className="text-sm font-medium">Select LLM:</label>
+          <Select
+            value={selectedLLMId || ""}
+            onValueChange={(value) => {
+              setSelectedLLM(value || null);
+            }}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Choose an LLM..." />
+            </SelectTrigger>
+            <SelectContent>
+              {llms.map((llm) => (
+                <SelectItem key={llm.id} value={llm.id}>
+                  {llm.name} - {llm.model}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
       {/* Scrollable messages area */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4 min-h-0">
+        {messages.length === 0 && (
+          <div className="text-center text-muted-foreground text-sm py-8">
+            {!selectedSource
+              ? "Select a source to start chatting"
+              : !selectedLLM
+                ? "Select an LLM to start chatting"
+                : "Start a conversation with your AI assistant"}
+          </div>
+        )}
         {messages.map((message, index) => (
           <div
             key={index}
@@ -48,10 +139,19 @@ export function ChatSidebar() {
               message.role === "user" ? "bg-primary text-primary-foreground ml-auto" : "bg-muted"
             } max-w-[80%] ${message.role === "user" ? "ml-auto" : "mr-auto"}`}
           >
-            {message.content}
+            <pre className="whitespace-pre-wrap font-sans">{message.content}</pre>
           </div>
         ))}
+        {chatLoading && (
+          <div className="bg-muted p-3 rounded-lg max-w-[80%] mr-auto">
+            <div className="flex items-center space-x-2">
+              <div className="animate-spin h-4 w-4 border-2 border-current border-t-transparent rounded-full"></div>
+              <span>AI is thinking...</span>
+            </div>
+          </div>
+        )}
       </div>
+
       {/* Fixed input area */}
       <div className="flex-shrink-0 p-4 border-t">
         <div className="flex gap-2">
@@ -59,13 +159,27 @@ export function ChatSidebar() {
             value={input}
             onChange={(e: ChangeEvent<HTMLTextAreaElement>) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Type your message..."
+            placeholder={
+              selectedSource && selectedLLM
+                ? "Type your message..."
+                : "Select a source and LLM to start chatting"
+            }
             className="min-h-[80px] resize-none"
+            disabled={!selectedSource || !selectedLLM || chatLoading}
           />
-          <Button onClick={handleSend} className="self-end">
+          <Button
+            onClick={handleSend}
+            className="self-end"
+            disabled={!selectedSource || !selectedLLM || chatLoading || !input.trim()}
+          >
             Send
           </Button>
         </div>
+        {editorContent.trim() && editorContent.trim() !== "-- Write your SQL query here\n" && (
+          <div className="mt-2 text-xs text-muted-foreground">
+            💡 Editor content will be included as context
+          </div>
+        )}
       </div>
     </div>
   );

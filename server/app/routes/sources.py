@@ -5,6 +5,7 @@ from app.schemas.sources import (
     TestSourceRequest,
     RenameSourceRequest,
 )
+from app.controllers.sources import get_source_schema, invalidate_source_schema_cache
 from app.core.db import get_db
 from sqlalchemy.orm import Session
 from app.models import Source
@@ -14,7 +15,6 @@ from app.core.spawn_worker import WorkerContainer, stop_worker
 from app.schemas.sources import PostgresCreds
 from uuid import uuid4
 from app.models import Worker
-import requests
 
 router = APIRouter(prefix="/sources", tags=["sources"])
 
@@ -124,6 +124,9 @@ async def connect(
                     pass  # Ignore cleanup errors
             raise HTTPException(status_code=500, detail=str(e)) from e
 
+        # invalidate source schema cache to ensure fresh data after connection
+        await invalidate_source_schema_cache(str(source_id))
+
         return {"message": "Connected"}
 
     except HTTPException:
@@ -153,27 +156,13 @@ async def get_schemas(
     if not source:
         raise HTTPException(status_code=404, detail="Source not found")
 
+    # Check if there's already a connected worker for this source
+    db_worker = db.query(Worker).filter_by(source_id=source_id).first()
+    if not db_worker:
+        raise HTTPException(status_code=400, detail="Source is not connected")
+
     try:
-        # Check if there's already a connected worker for this source
-        db_worker = db.query(Worker).filter_by(source_id=source_id).first()
-
-        if not db_worker:
-            msg = "Source is not connected. Please connect to the source first to view schemas."
-            raise HTTPException(
-                status_code=400,
-                detail=msg,
-            )
-
-        container_name = f"dribble-worker-postgres-{source_id}"
-        response = requests.get(
-            f"http://{container_name}:8000/schema/",
-            timeout=5,
-        )
-        return response.json()
-
-    except HTTPException:
-        # Re-raise HTTP exceptions as-is
-        raise
+        return await get_source_schema(str(source.id))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
 
@@ -224,6 +213,10 @@ async def disconnect_source(
     # remove worker record
     db.delete(worker)
     db.commit()
+
+    # invalidate source schema cache
+    await invalidate_source_schema_cache(str(source_id))
+
     return {"message": "Disconnected"}
 
 
@@ -256,4 +249,8 @@ async def edit_source(
     source.creds = request.creds.model_dump()
     db.commit()
     db.refresh(source)
+
+    # invalidate source schema cache since credentials changed
+    await invalidate_source_schema_cache(str(source_id))
+
     return source

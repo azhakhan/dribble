@@ -172,6 +172,53 @@ def get_postgres_schemas():
             columns_result = conn.execute(text(columns_query))
             columns = [dict(row._mapping) for row in columns_result]
 
+            # Get primary key constraints
+            primary_keys_query = """
+            SELECT 
+                tc.table_schema,
+                tc.table_name,
+                kcu.column_name
+            FROM 
+                information_schema.table_constraints tc
+                JOIN information_schema.key_column_usage kcu 
+                    ON tc.constraint_name = kcu.constraint_name
+                    AND tc.table_schema = kcu.table_schema
+            WHERE 
+                tc.constraint_type = 'PRIMARY KEY'
+                AND tc.table_schema NOT IN ('pg_catalog', 'information_schema')
+            ORDER BY 
+                tc.table_schema, tc.table_name, kcu.ordinal_position;
+            """
+            primary_keys_result = conn.execute(text(primary_keys_query))
+            primary_keys = [dict(row._mapping) for row in primary_keys_result]
+
+            # Get foreign key constraints with relationships
+            foreign_keys_query = """
+            SELECT 
+                tc.table_schema,
+                tc.table_name,
+                kcu.column_name,
+                ccu.table_schema AS foreign_table_schema,
+                ccu.table_name AS foreign_table_name,
+                ccu.column_name AS foreign_column_name,
+                tc.constraint_name
+            FROM 
+                information_schema.table_constraints tc
+                JOIN information_schema.key_column_usage kcu 
+                    ON tc.constraint_name = kcu.constraint_name
+                    AND tc.table_schema = kcu.table_schema
+                JOIN information_schema.constraint_column_usage ccu 
+                    ON ccu.constraint_name = tc.constraint_name
+                    AND ccu.table_schema = tc.table_schema
+            WHERE 
+                tc.constraint_type = 'FOREIGN KEY'
+                AND tc.table_schema NOT IN ('pg_catalog', 'information_schema')
+            ORDER BY 
+                tc.table_schema, tc.table_name, kcu.ordinal_position;
+            """
+            foreign_keys_result = conn.execute(text(foreign_keys_query))
+            foreign_keys = [dict(row._mapping) for row in foreign_keys_result]
+
             # Get all views
             views_query = """
             SELECT 
@@ -199,7 +246,15 @@ def get_postgres_schemas():
                 if schema_name not in schemas:
                     schemas[schema_name] = {"tables": {}, "views": {}}
 
-                schemas[schema_name]["tables"][table_name] = {"columns": []}
+                schemas[schema_name]["tables"][table_name] = {
+                    "columns": [],
+                    "primary_keys": [],
+                    "foreign_keys": [],
+                    "relationships": {
+                        "references": [],  # Tables this table references
+                        "referenced_by": [],  # Tables that reference this table
+                    },
+                }
 
             # Add columns to their respective tables
             for column in columns:
@@ -214,6 +269,59 @@ def get_postgres_schemas():
                             "nullable": column["is_nullable"] == "YES",
                         }
                     )
+
+            # Add primary keys
+            for pk in primary_keys:
+                schema_name = pk["table_schema"]
+                table_name = pk["table_name"]
+
+                if schema_name in schemas and table_name in schemas[schema_name]["tables"]:
+                    schemas[schema_name]["tables"][table_name]["primary_keys"].append(
+                        pk["column_name"]
+                    )
+
+            # Add foreign keys and relationships
+            for fk in foreign_keys:
+                schema_name = fk["table_schema"]
+                table_name = fk["table_name"]
+                foreign_schema = fk["foreign_table_schema"]
+                foreign_table = fk["foreign_table_name"]
+
+                if schema_name in schemas and table_name in schemas[schema_name]["tables"]:
+                    # Add foreign key info
+                    fk_info = {
+                        "column": fk["column_name"],
+                        "references_table": f"{foreign_schema}.{foreign_table}",
+                        "references_column": fk["foreign_column_name"],
+                        "constraint_name": fk["constraint_name"],
+                    }
+                    schemas[schema_name]["tables"][table_name]["foreign_keys"].append(fk_info)
+
+                    # Add to relationships - this table references another
+                    relationship_info = {
+                        "table": f"{foreign_schema}.{foreign_table}",
+                        "type": "references",
+                        "local_column": fk["column_name"],
+                        "foreign_column": fk["foreign_column_name"],
+                    }
+                    schemas[schema_name]["tables"][table_name]["relationships"][
+                        "references"
+                    ].append(relationship_info)
+
+                    # Add reverse relationship - the referenced table is referenced by this table
+                    if (
+                        foreign_schema in schemas
+                        and foreign_table in schemas[foreign_schema]["tables"]
+                    ):
+                        reverse_relationship = {
+                            "table": f"{schema_name}.{table_name}",
+                            "type": "referenced_by",
+                            "local_column": fk["foreign_column_name"],
+                            "foreign_column": fk["column_name"],
+                        }
+                        schemas[foreign_schema]["tables"][foreign_table]["relationships"][
+                            "referenced_by"
+                        ].append(reverse_relationship)
 
             # Process views
             for view in views:
