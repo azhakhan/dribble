@@ -29,7 +29,7 @@ interface SchemaRelationship {
   references: SchemaRelationshipReference[];
 }
 
-interface SchemaTable {
+export interface SchemaTable {
   columns: SchemaColumn[];
   primary_keys: string[];
   foreign_keys: SchemaForeignKey[];
@@ -76,7 +76,7 @@ interface AppState extends FileTreeState, SourceChildrenState {
 
   // Source and schema state
   selectedSource: Source | null;
-  sourceSchemaMap: Record<string, SchemaTable[]>;
+  sourceSchemaMap: Record<string, Record<string, SchemaObject>>;
   selectedTableData: object[] | null;
 
   // Query state
@@ -98,7 +98,7 @@ interface AppState extends FileTreeState, SourceChildrenState {
   // Actions for App state
   setPanelSizes: (sizes: number[]) => void;
   setSelectedSource: (source: Source | null) => void;
-  setSourceSchema: (sourceId: string, schema: SchemaTable[]) => void;
+  setSourceSchema: (sourceId: string, schema: Record<string, SchemaObject>) => void;
   setSelectedTableData: (data: object[] | null) => void;
   setQueryResults: (results: object[] | null) => void;
   setQueryRunning: (isRunning: boolean) => void;

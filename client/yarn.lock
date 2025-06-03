@@ -2251,6 +2251,18 @@ ansicolors@~0.3.2:
   resolved "https://registry.yarnpkg.com/ansicolors/-/ansicolors-0.3.2.tgz#665597de86a9ffe3aa9bfbe6cae5c6ea426b4979"
   integrity sha512-QXu7BPrP29VllRxH8GwB7x5iX5qWKAAMLqKQGWTeLWVlNHNOpVMJ91dsxQAIWXpjuW5wqvxu3Jd/nRjrJ+0pqg==
 
+antlr4-c3@3.3.7:
+  version "3.3.7"
+  resolved "https://registry.yarnpkg.com/antlr4-c3/-/antlr4-c3-3.3.7.tgz#f459fd3cfddfa8811a1f944bd7567df455f8ad27"
+  integrity sha512-F3ndE38wwA6z6AjUbL3heSdEGl4TxulGDPf9xB0/IY4dbRHWBh6XNaqFwur8vHKQk9FS5yNABHeg2wqlqIYO0w==
+  dependencies:
+    antlr4ng "2.0.11"
+
+antlr4ng@2.0.11:
+  version "2.0.11"
+  resolved "https://registry.yarnpkg.com/antlr4ng/-/antlr4ng-2.0.11.tgz#daa000ee6a50fa90d5391d53de2579c6e1d80211"
+  integrity sha512-9jM91VVtHSqHkAHQsXHaoaiewFETMvUTI1/tXvwTiFw4f7zke3IGlwEyoKN9NS0FqIwDKFvUNW2e1cKPniTkVQ==
+
 anymatch@^2.0.0:
   version "2.0.0"
   resolved "https://registry.yarnpkg.com/anymatch/-/anymatch-2.0.0.tgz#bcb24b4f37934d9aa7ac17b4adaf89e7c76ef2eb"
@@ -3034,6 +3046,14 @@ dompurify@^2.3.3:
   version "2.5.8"
   resolved "https://registry.yarnpkg.com/dompurify/-/dompurify-2.5.8.tgz#2809d89d7e528dc7a071dea440d7376df676f824"
   integrity sha512-o1vSNgrmYMQObbSSvF/1brBYEQPHhV1+gsmrusO7/GXtp1T9rCS8cXFqVxK/9crT1jA6Ccv+5MTSjBNqr7Sovw==
+
+dt-sql-parser@4.3.0:
+  version "4.3.0"
+  resolved "https://registry.yarnpkg.com/dt-sql-parser/-/dt-sql-parser-4.3.0.tgz#d57cd6f3a2139e8b8c35bcdd3a13eda2e700dea1"
+  integrity sha512-k3G9xga1F4Y4KKj+6Up9G/4BK4dM6rjISISln+s8FaV8qmMfmCJOmzfJQkY9/9xrqLFKCesBi1HYDK9FcIHoKA==
+  dependencies:
+    antlr4-c3 "3.3.7"
+    antlr4ng "2.0.11"
 
 dunder-proto@^1.0.1:
   version "1.0.1"
@@ -5209,6 +5229,11 @@ monaco-editor@0.45.0:
   resolved "https://registry.yarnpkg.com/monaco-editor/-/monaco-editor-0.45.0.tgz#6939123a6254aea9fea2d647697f846306dd4448"
   integrity sha512-mjv1G1ZzfEE3k9HZN0dQ2olMdwIfaeAAjFiwNprLfYNRSz7ctv9XuCT7gPtBGrMUeV1/iZzYKj17Khu1hxoHOA==
 
+monaco-editor@^0.52.0:
+  version "0.52.2"
+  resolved "https://registry.yarnpkg.com/monaco-editor/-/monaco-editor-0.52.2.tgz#53c75a6fcc6802684e99fd1b2700299857002205"
+  integrity sha512-GEQWEZmfkOGLdd3XK8ryrfWz3AIP8YymVXiPHEdewrUq7mh0qrKrfHLNCXcbB6sTnMLnOZ3ztSiKcciFUkIJwQ==
+
 "monaco-editor@npm:@codingame/monaco-editor-treemended@>=1.85.0 <1.86.0":
   version "1.85.6"
   resolved "https://registry.yarnpkg.com/@codingame/monaco-editor-treemended/-/monaco-editor-treemended-1.85.6.tgz#e2494dd98619376f3da6ff04a76fcbb4d9c9e2f4"
@@ -5225,6 +5250,13 @@ monaco-languageclient@^7.0.0:
     monaco-editor "npm:@codingame/monaco-editor-treemended@>=1.85.0 <1.86.0"
     vscode "npm:@codingame/monaco-vscode-api@>=1.85.0 <1.86.0"
     vscode-languageclient "~9.0.1"
+
+monaco-sql-languages@^0.15.0:
+  version "0.15.0"
+  resolved "https://registry.yarnpkg.com/monaco-sql-languages/-/monaco-sql-languages-0.15.0.tgz#39d2b3830ff3b98e912d21cbdb4f13a486706f89"
+  integrity sha512-I6gCFJO0Ne3CjCdZf+QjCajV6xP4suFpvkwJpoVTgGX9wX/TiYMUSz33S5VSidHJ6jjInD0GTBCYMREP12/dtw==
+  dependencies:
+    dt-sql-parser "4.3.0"
 
 ms@2.0.0:
   version "2.0.0"

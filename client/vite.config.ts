@@ -11,6 +11,10 @@ export default defineConfig({
       "@": path.resolve(__dirname, "./src")
     }
   },
+  optimizeDeps: {
+    // Exclude Monaco and Monaco SQL Languages from dependency optimization
+    exclude: ["monaco-editor", "monaco-sql-languages"]
+  },
   server: {
     port: 3000,
     strictPort: true, // Don't try other ports if 3000 is taken

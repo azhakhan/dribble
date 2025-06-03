@@ -1,11 +1,19 @@
 import { useRef, useState, useEffect } from "react";
-import MonacoEditor from "@monaco-editor/react";
 import type { Source } from "@/shared/lib/api";
 import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from "@/components/ui/select";
 import { PlayIcon } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryQuery } from "@/shared/hooks/useQueryQuery";
 import { useAppStore } from "@/shared/store/useAppStore";
+import { LanguageIdEnum, getAvailableSQLDialects } from "@/shared/lib/monaco-setup";
+import { MonacoSQLEditor } from "./MonacoSQLEditor";
 
 interface EditorProps {
   selectedSource: Source | null;
@@ -25,6 +33,10 @@ export function Editor({
   const editorContainerRef = useRef<HTMLDivElement>(null);
   const [isRunning, setIsRunning] = useState(false);
   const [activeQuery, setActiveQuery] = useState<{ sourceId: string; sql: string } | null>(null);
+  const [selectedDialect, setSelectedDialect] = useState<string>(LanguageIdEnum.MYSQL);
+
+  // Get available SQL dialects
+  const availableDialects = getAvailableSQLDialects();
 
   // Get editor content from appStore
   const { editorContent, setEditorContent } = useAppStore();
@@ -81,10 +93,12 @@ export function Editor({
     }
   }, [queryResults, queryError, onQueryExecution]);
 
-  const handleEditorChange = (value: string | undefined) => {
-    if (value !== undefined) {
-      setEditorContent(value);
-    }
+  const handleEditorChange = (value: string) => {
+    setEditorContent(value);
+  };
+
+  const handleDialectChange = (value: string) => {
+    setSelectedDialect(value);
   };
 
   const isEditorActive = selectedSource && !schemasLoading && !schemasError;
@@ -111,8 +125,23 @@ export function Editor({
 
   return (
     <div ref={editorContainerRef} className="h-full flex flex-col">
-      {/* Fixed header with run button */}
-      <div className="flex-shrink-0 flex justify-end gap-2 p-2 border-b">
+      {/* Fixed header with dialect selector and run button */}
+      <div className="flex-shrink-0 flex justify-between items-center gap-2 p-2 border-b">
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-muted-foreground">SQL Dialect:</span>
+          <Select value={selectedDialect} onValueChange={handleDialectChange}>
+            <SelectTrigger className="w-40">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {availableDialects.map((dialect) => (
+                <SelectItem key={dialect.value} value={dialect.value}>
+                  {dialect.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
         <Button onClick={handleRunQuery} disabled={!isEditorActive || isRunning} className="gap-1">
           <PlayIcon size={16} />
           Run SQL
@@ -133,20 +162,11 @@ export function Editor({
             </p>
           </div>
         )}
-        <MonacoEditor
-          height="100%"
-          defaultLanguage="sql"
-          theme="vs-dark"
+        <MonacoSQLEditor
           value={editorContent}
           onChange={handleEditorChange}
-          options={{
-            minimap: { enabled: false },
-            fontSize: 14,
-            wordWrap: "on",
-            automaticLayout: true,
-            scrollBeyondLastLine: false,
-            readOnly: !isEditorActive
-          }}
+          language={selectedDialect}
+          readOnly={!isEditorActive}
         />
       </div>
     </div>
