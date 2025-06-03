@@ -28,10 +28,3 @@ export const getAvailableSQLDialects = () => [
   { label: "MySQL", value: LanguageIdEnum.MYSQL },
   { label: "PostgreSQL", value: LanguageIdEnum.PG }
 ];
-
-if (import.meta.env.DEV) {
-  console.log(
-    "Monaco SQL Languages setup completed for:",
-    getAvailableSQLDialects().map((d) => d.label)
-  );
-}

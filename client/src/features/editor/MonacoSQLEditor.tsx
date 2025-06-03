@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState } from "react";
+import { useRef, useEffect } from "react";
 import * as monaco from "monaco-editor";
 
 interface MonacoSQLEditorProps {
@@ -16,13 +16,12 @@ export function MonacoSQLEditor({
 }: MonacoSQLEditorProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | undefined>(undefined);
-  const [currentLanguage, setCurrentLanguage] = useState(language);
 
   // Initialize editor once
   useEffect(() => {
     if (hostRef.current && !editorRef.current) {
       editorRef.current = monaco.editor.create(hostRef.current, {
-        language: currentLanguage,
+        language: language,
         theme: "vs-dark",
         value: value,
         minimap: { enabled: false },
@@ -59,10 +58,6 @@ export function MonacoSQLEditor({
         const newValue = editorRef.current?.getValue() || "";
         onChange(newValue);
       });
-
-      if (import.meta.env.DEV) {
-        console.log("Direct Monaco editor created with language:", currentLanguage);
-      }
     }
 
     return () => {
@@ -71,22 +66,13 @@ export function MonacoSQLEditor({
         editorRef.current = undefined;
       }
     };
-  }, []); // Only run once on mount
+  }, []);
 
-  // Handle language changes - matching the working example pattern
+  // Handle language changes
   useEffect(() => {
     const model = editorRef.current?.getModel();
     if (model && model.getLanguageId() !== language) {
       monaco.editor.setModelLanguage(model, language);
-      setCurrentLanguage(language);
-      setTimeout(() => {
-        if (import.meta.env.DEV) {
-          console.log(
-            "Language changed, current is:",
-            editorRef.current?.getModel()?.getLanguageId()
-          );
-        }
-      }, 200);
     }
   }, [language]);
 
