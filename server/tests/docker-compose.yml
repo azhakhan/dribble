@@ -35,6 +35,8 @@ services:
     build:
       context: ../../server
       dockerfile: Dockerfile.migrations
+    volumes:
+      - ../../server/app/alembic:/app/app/alembic:cached
     environment:
       - DATABASE_URL=postgresql+psycopg://postgres:postgres@postgres:5432/postgres
     depends_on:
