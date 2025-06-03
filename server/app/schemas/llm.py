@@ -52,3 +52,10 @@ class LLMListResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class ChatLLMRequest(BaseModel):
+    source_id: UUID
+    llm_id: UUID
+    message: str
+    query: Optional[str] = None

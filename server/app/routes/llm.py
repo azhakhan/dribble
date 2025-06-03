@@ -4,11 +4,13 @@ from app.schemas.llm import (
     UpdateLLMRequest,
     LLMResponse,
     LLMListResponse,
+    ChatLLMRequest,
 )
+from app.controllers.llm import chat_llm
 from app.core.db import get_db
 from app.core.encryption import encrypt_password
 from sqlalchemy.orm import Session
-from app.models import LLM
+from app.models import LLM, Source
 from app.dependencies import get_current_workspace
 from uuid import UUID
 from typing import List
@@ -115,3 +117,24 @@ async def delete_llm(
     db.delete(llm)
     db.commit()
     return {"message": "LLM deleted successfully"}
+
+
+@router.post("/chat")
+async def chat_llm_req(
+    request: ChatLLMRequest,
+    db: Session = Depends(get_db),
+    workspace=Depends(get_current_workspace),
+):
+    """Chat with an LLM"""
+    llm = db.query(LLM).filter_by(id=request.llm_id, workspace_id=workspace.id).first()
+    if not llm:
+        raise HTTPException(status_code=404, detail="LLM not found")
+
+    source = db.query(Source).filter_by(id=request.source_id, workspace_id=workspace.id).first()
+    if not source:
+        raise HTTPException(status_code=404, detail="Source not found")
+
+    try:
+        return await chat_llm(llm, source, request)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
