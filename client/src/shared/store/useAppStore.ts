@@ -101,6 +101,7 @@ interface AppState extends FileTreeState, SourceChildrenState {
   selectedLLM: string | null;
   messages: Array<{ role: "user" | "assistant"; content: string }>;
   chatLoading: boolean;
+  sessionId: string | null;
 
   // Actions for App state
   setPanelSizes: (sizes: number[]) => void;
@@ -134,6 +135,9 @@ interface AppState extends FileTreeState, SourceChildrenState {
   addMessage: (message: { role: "user" | "assistant"; content: string }) => void;
   setChatLoading: (loading: boolean) => void;
   clearMessages: () => void;
+  generateNewSession: () => void;
+  setSessionId: (sessionId: string | null) => void;
+  startNewSession: () => void;
 
   // New action to clean up disconnected sources
   cleanupDisconnectedSources: (connectedSourceIds: string[]) => void;
@@ -176,6 +180,7 @@ export const useAppStore = create<AppState>()(
       selectedLLM: null,
       messages: [],
       chatLoading: false,
+      sessionId: null,
 
       // Panel actions
       setPanelSizes: (sizes) => set({ panelSizes: sizes }),
@@ -267,6 +272,9 @@ export const useAppStore = create<AppState>()(
         })),
       setChatLoading: (loading) => set({ chatLoading: loading }),
       clearMessages: () => set({ messages: [] }),
+      generateNewSession: () => set({ sessionId: crypto.randomUUID() }),
+      setSessionId: (sessionId) => set({ sessionId }),
+      startNewSession: () => set({ messages: [], sessionId: crypto.randomUUID() }),
 
       // New action to clean up disconnected sources
       cleanupDisconnectedSources: (connectedSourceIds) =>

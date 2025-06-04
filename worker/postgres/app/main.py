@@ -100,6 +100,9 @@ def execute_query(query: str):
             rows = result.fetchall()
             processed_rows = []
             logger.info(f"[{datetime.datetime.now()}] Rows fetched: {len(rows)}")
+            if len(rows) == 0:
+                return []
+
             for row in rows:
                 processed_row = {}
                 for key, value in row._mapping.items():

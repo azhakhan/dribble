@@ -5,13 +5,15 @@ import json
 import re
 import asyncio
 from dataclasses import dataclass
+from sqlalchemy.orm import Session
 
 from app.schemas.llm import LLMName, ChatLLMRequest
-from app.models import LLM, Source
+from app.models import LLM, Source, ChatSession, MessageTypeEnum
 from openai import OpenAI
 from app.core.encryption import decrypt_password
 from app.controllers.sources import get_source_schema
 from app.controllers.query import execute_in_worker, get_query_results
+from app.controllers.messages import ChatMessageService, ChatMessage
 
 
 class ActionType(str, Enum):
@@ -19,15 +21,6 @@ class ActionType(str, Enum):
 
     UPDATE_EDITOR = "update_editor"
     SHOW_MESSAGE = "show_message"
-
-
-@dataclass
-class ChatMessage:
-    """Structured chat message"""
-
-    role: str
-    content: str
-    metadata: Optional[Dict[str, Any]] = None
 
 
 @dataclass
@@ -53,9 +46,15 @@ class StreamChunk:
 class BaseLLMProvider(ABC):
     """Abstract base class for LLM providers"""
 
-    def __init__(self, llm: LLM, query_executor: Optional["SQLQueryExecutor"] = None):
+    def __init__(
+        self,
+        llm: LLM,
+        query_executor: Optional["SQLQueryExecutor"] = None,
+        message_service: Optional[ChatMessageService] = None,
+    ):
         self.llm = llm
         self.query_executor = query_executor
+        self.message_service = message_service
         self.client = None
         self._initialize_client()
 
@@ -110,8 +109,20 @@ class OpenAIProvider(BaseLLMProvider):
         )
 
         # Handle tool calls (existing logic)
+        assistant_message_id = None
         while response.choices[0].message.tool_calls and tool_call_count < max_tool_calls:
             tool_call_count += 1
+
+            # Save the assistant message with tool calls if we have message service
+            if self.message_service and assistant_message_id is None:
+                assistant_db_msg = self.message_service.save_message(
+                    role="assistant",
+                    content="Executing tool calls...",
+                    message_type=MessageTypeEnum.message,
+                    metadata={"has_tool_calls": True},
+                )
+                assistant_message_id = str(assistant_db_msg.id)
+
             openai_messages.append(response.choices[0].message)
 
             for tool_call in response.choices[0].message.tool_calls:
@@ -121,15 +132,32 @@ class OpenAIProvider(BaseLLMProvider):
                         sql_query = function_args["query"]
                         reasoning = function_args["reasoning"]
 
+                        # Save tool call to database
+                        if self.message_service and assistant_message_id:
+                            self.message_service.save_tool_call(
+                                tool_call_id=tool_call.id,
+                                function_name=tool_call.function.name,
+                                arguments=function_args,
+                                parent_message_id=assistant_message_id,
+                            )
+
                         if not is_safe_query(sql_query):
+                            error_result = {
+                                "error": "Query rejected for safety reasons. Only SELECT queries are allowed.",
+                                "query": sql_query,
+                            }
+
+                            # Save tool response to database
+                            if self.message_service and assistant_message_id:
+                                self.message_service.save_tool_response(
+                                    tool_call_id=tool_call.id,
+                                    response=error_result,
+                                    parent_message_id=assistant_message_id,
+                                )
+
                             error_response = {
                                 "role": "tool",
-                                "content": json.dumps(
-                                    {
-                                        "error": "Query rejected for safety reasons. Only SELECT queries are allowed.",
-                                        "query": sql_query,
-                                    }
-                                ),
+                                "content": json.dumps(error_result),
                                 "tool_call_id": tool_call.id,
                             }
                             openai_messages.append(error_response)
@@ -141,6 +169,14 @@ class OpenAIProvider(BaseLLMProvider):
                         else:
                             result = await self._execute_query_tool(sql_query, reasoning)
 
+                        # Save tool response to database
+                        if self.message_service and assistant_message_id:
+                            self.message_service.save_tool_response(
+                                tool_call_id=tool_call.id,
+                                response=result,
+                                parent_message_id=assistant_message_id,
+                            )
+
                         tool_response = {
                             "role": "tool",
                             "content": json.dumps(result),
@@ -149,15 +185,23 @@ class OpenAIProvider(BaseLLMProvider):
                         openai_messages.append(tool_response)
 
                     except Exception as e:
+                        error_result = {
+                            "error": f"Query execution failed: {str(e)}",
+                            "query": function_args.get("query", "Unknown query"),
+                            "status": "error",
+                        }
+
+                        # Save tool response to database
+                        if self.message_service and assistant_message_id:
+                            self.message_service.save_tool_response(
+                                tool_call_id=tool_call.id,
+                                response=error_result,
+                                parent_message_id=assistant_message_id,
+                            )
+
                         error_response = {
                             "role": "tool",
-                            "content": json.dumps(
-                                {
-                                    "error": f"Query execution failed: {str(e)}",
-                                    "query": function_args.get("query", "Unknown query"),
-                                    "status": "error",
-                                }
-                            ),
+                            "content": json.dumps(error_result),
                             "tool_call_id": tool_call.id,
                         }
                         openai_messages.append(error_response)
@@ -212,11 +256,15 @@ class OpenAIProvider(BaseLLMProvider):
         )
 
         accumulated_content = ""
+        accumulated_metadata = {}
 
         for chunk in stream:
             if chunk.choices[0].delta.content:
                 content = chunk.choices[0].delta.content
                 accumulated_content += content
+
+                if chunk.metadata:
+                    accumulated_metadata.update(chunk.metadata)
 
                 yield StreamChunk(content=content, is_complete=False)
 
@@ -294,14 +342,16 @@ class LLMProviderFactory:
 
     @staticmethod
     def create_provider(
-        llm: LLM, query_executor: Optional["SQLQueryExecutor"] = None
+        llm: LLM,
+        query_executor: Optional["SQLQueryExecutor"] = None,
+        message_service: Optional[ChatMessageService] = None,
     ) -> BaseLLMProvider:
         if llm.name == LLMName.openai:
-            return OpenAIProvider(llm, query_executor)
+            return OpenAIProvider(llm, query_executor, message_service)
         elif llm.name == LLMName.anthropic:
-            return AnthropicProvider(llm, query_executor)
+            return AnthropicProvider(llm, query_executor, message_service)
         elif llm.name == LLMName.ollama:
-            return OllamaProvider(llm, query_executor)
+            return OllamaProvider(llm, query_executor, message_service)
         else:
             raise ValueError(f"Unsupported LLM provider: {llm.name}")
 
@@ -354,11 +404,24 @@ class SQLQueryExecutor:
 class ChatService:
     """Main service for handling LLM chat functionality"""
 
-    def __init__(self, llm: LLM, source: Source):
+    def __init__(
+        self,
+        llm: LLM,
+        source: Source,
+        chat_session: ChatSession,
+        db_session: Session,
+        user_id: Optional[str] = None,
+    ):
         self.llm = llm
         self.source = source
+        self.chat_session = chat_session
+        self.db = db_session
+        self.user_id = user_id
         self.query_executor = SQLQueryExecutor(source)
-        self.provider = LLMProviderFactory.create_provider(llm, self.query_executor)
+        self.message_service = ChatMessageService(db_session, chat_session)
+        self.provider = LLMProviderFactory.create_provider(
+            llm, self.query_executor, self.message_service
+        )
         self.tools = self._get_tools()
 
     async def chat(
@@ -366,14 +429,79 @@ class ChatService:
     ) -> Union[ChatResponse, AsyncGenerator[StreamChunk, None]]:
         """Main chat method"""
         schema = await get_source_schema(str(self.source.id))
-        system_prompt = self._compose_system_prompt(schema, request.query)
 
-        messages = [
-            ChatMessage(role="system", content=system_prompt),
-            ChatMessage(role="user", content=request.message),
-        ]
+        # Load existing messages from database
+        messages = self.message_service.load_messages()
 
-        return await self.provider.chat_completion(messages, self.tools, stream)
+        # Add system prompt if no messages exist yet
+        if not messages:
+            system_prompt = self._compose_system_prompt(schema, request.query)
+            self.message_service.save_message(
+                role="system",
+                content=system_prompt,
+                metadata={"schema_version": "1.0"},  # Track schema versions for debugging
+            )
+            messages.append(ChatMessage(role="system", content=system_prompt))
+
+        # Save user message to database
+        self.message_service.save_message(
+            role="user", content=request.message, user_id=self.user_id
+        )
+
+        # Add user message to the conversation
+        messages.append(ChatMessage(role="user", content=request.message))
+
+        # Generate response
+        if stream:
+            return self._handle_streaming_response(messages)
+        else:
+            return await self._handle_regular_response(messages)
+
+    async def _handle_regular_response(self, messages: List[ChatMessage]) -> ChatResponse:
+        """Handle non-streaming response with database persistence"""
+        response = await self.provider.chat_completion(messages, self.tools, stream=False)
+
+        if isinstance(response, ChatResponse):
+            # Save assistant response to database
+            self.message_service.save_message(
+                role="assistant",
+                content=response.content,
+                metadata=(
+                    {"action": response.action.value, "sql_query": response.sql_query}
+                    if response.sql_query
+                    else {"action": response.action.value}
+                ),
+            )
+
+            return response
+        else:
+            raise ValueError("Unexpected response type in non-streaming mode")
+
+    async def _handle_streaming_response(
+        self, messages: List[ChatMessage]
+    ) -> AsyncGenerator[StreamChunk, None]:
+        """Handle streaming response with database persistence"""
+        accumulated_content = ""
+        accumulated_metadata = {}
+
+        async for chunk in self.provider.stream_completion(messages, self.tools):
+            accumulated_content += chunk.content
+
+            if chunk.metadata:
+                accumulated_metadata.update(chunk.metadata)
+
+            yield chunk
+
+            # Save complete response when streaming is done
+            if chunk.is_complete:
+                self.message_service.save_message(
+                    role="assistant",
+                    content=accumulated_content,
+                    metadata={
+                        "action": chunk.action.value if chunk.action else "show_message",
+                        **accumulated_metadata,
+                    },
+                )
 
     def _get_tools(self) -> List[Dict]:
         """Get available tools for the LLM"""
@@ -464,19 +592,6 @@ Here is the user's current query:
         return system_prompt
 
 
-# Legacy function for backward compatibility
-async def chat_llm(llm: LLM, source: Source, request: ChatLLMRequest):
-    """Legacy function - maintained for backward compatibility"""
-    service = ChatService(llm, source)
-    response = await service.chat(request, stream=False)
-
-    if isinstance(response, ChatResponse):
-        return {"response": response.content}
-    else:
-        # This shouldn't happen in non-streaming mode
-        raise ValueError("Unexpected response type")
-
-
 def is_safe_query(query: str) -> bool:
     """
     Basic safety check to ensure only SELECT queries are executed.
@@ -516,9 +631,11 @@ def is_safe_query(query: str) -> bool:
 # Export classes for external use
 __all__ = [
     "ChatService",
+    "ChatMessageService",
+    "ChatMessage",
     "LLMProviderFactory",
     "ActionType",
     "ChatResponse",
     "StreamChunk",
-    "chat_llm",  # Legacy compatibility
+    "MessageTypeEnum",
 ]

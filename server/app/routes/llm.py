@@ -12,8 +12,8 @@ from app.controllers.llm import ChatService, ChatResponse
 from app.core.db import get_db
 from app.core.encryption import encrypt_password
 from sqlalchemy.orm import Session
-from app.models import LLM, Source
-from app.dependencies import get_current_workspace
+from app.models import LLM, Source, ChatSession
+from app.dependencies import get_current_workspace, get_current_user
 from uuid import UUID
 from typing import List
 import json
@@ -127,6 +127,7 @@ async def delete_llm(
 async def chat_llm_req(
     request: ChatLLMRequest,
     db: Session = Depends(get_db),
+    user=Depends(get_current_user),
     workspace=Depends(get_current_workspace),
 ):
     """Chat with an LLM - supports both streaming and non-streaming"""
@@ -138,8 +139,22 @@ async def chat_llm_req(
     if not source:
         raise HTTPException(status_code=404, detail="Source not found")
 
+    chat_session = (
+        db.query(ChatSession).filter_by(id=request.session_id, workspace_id=workspace.id).first()
+    )
+    if not chat_session:
+        chat_session = ChatSession(
+            id=request.session_id,
+            workspace_id=workspace.id,
+            source_id=request.source_id,
+            llm_id=request.llm_id,
+        )
+        db.add(chat_session)
+        db.commit()
+        db.refresh(chat_session)
+
     try:
-        service = ChatService(llm, source)
+        service = ChatService(llm, source, chat_session, db, user_id=user.id)
 
         if request.stream:
             # Return streaming response

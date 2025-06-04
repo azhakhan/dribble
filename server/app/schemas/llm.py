@@ -66,6 +66,7 @@ class LLMListResponse(BaseModel):
 
 
 class ChatLLMRequest(BaseModel):
+    session_id: Optional[UUID]
     source_id: UUID
     llm_id: UUID
     message: str

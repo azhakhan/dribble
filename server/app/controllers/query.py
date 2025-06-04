@@ -26,7 +26,7 @@ async def get_query_results(query_id: UUID):
         return {"status": "running"}
     if result.get("status") == "error":
         return {"status": "error", "error": result["error"]}
-    if result.get("status") == "success" and result.get("data"):
-        return result["data"]
+    if result.get("status") == "success":
+        return {"status": "success", "data": result["data"] if result.get("data") else []}
     else:
         return {"status": "error", "error": "Unknown error"}

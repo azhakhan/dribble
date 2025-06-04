@@ -224,6 +224,7 @@ export interface ChatLLMRequest {
   source_id: string;
   llm_id: string;
   message: string;
+  session_id: string;
   query?: string;
 }
 

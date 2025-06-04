@@ -44,7 +44,9 @@ export function ChatSidebar() {
     chatLoading,
     setChatLoading,
     editorContent,
-    setProposedChanges
+    setProposedChanges,
+    sessionId,
+    generateNewSession
   } = useAppStore();
 
   const { data: llms = [] } = useLLMsQuery();
@@ -63,6 +65,13 @@ export function ChatSidebar() {
     }
   }, [llms, selectedLLMId, setSelectedLLM]);
 
+  // Generate a new session ID if one doesn't exist
+  useEffect(() => {
+    if (!sessionId) {
+      generateNewSession();
+    }
+  }, [sessionId, generateNewSession]);
+
   const handleSend = async () => {
     if (!input.trim()) return;
     if (!selectedSource) {
@@ -71,6 +80,10 @@ export function ChatSidebar() {
     }
     if (!selectedLLM) {
       toast.error("Please select an LLM first");
+      return;
+    }
+    if (!sessionId) {
+      toast.error("Session not initialized");
       return;
     }
 
@@ -86,6 +99,7 @@ export function ChatSidebar() {
         source_id: selectedSource.id,
         llm_id: selectedLLM.id,
         message: input,
+        session_id: sessionId!,
         query: editorContent ? editorContent : undefined
       });
 
@@ -101,7 +115,7 @@ export function ChatSidebar() {
         // Add a message to chat indicating SQL was proposed
         const aiMessage = {
           role: "assistant" as const,
-          content: `✅ Proposed SQL query changes. Please review and accept/reject in the editor:\n\`\`\`sql\n${response.sql_query}\n\`\`\``
+          content: `${response.content}\n\`\`\`sql\n${response.sql_query}\n\`\`\``
         };
         addMessage(aiMessage);
       } else {
@@ -248,7 +262,7 @@ export function ChatSidebar() {
               : "Select a source and LLM to start chatting"
           }
           className="min-h-[40px] max-h-[120px] resize-none text-sm border-0 bg-muted/30 hover:bg-muted/50 focus:bg-muted/50 transition-colors px-3 py-2 rounded-xs w-full overflow-hidden"
-          disabled={!selectedSource || !selectedLLM || chatLoading}
+          disabled={!selectedSource || !selectedLLM || !sessionId || chatLoading}
           style={{ height: "40px" }}
         />
       </div>
@@ -283,7 +297,9 @@ export function ChatSidebar() {
               onClick={handleSend}
               size="sm"
               className="h-8 w-8 p-0 rounded-md bg-primary/90 hover:bg-primary transition-colors"
-              disabled={!selectedSource || !selectedLLM || chatLoading || !input.trim()}
+              disabled={
+                !selectedSource || !selectedLLM || !sessionId || chatLoading || !input.trim()
+              }
             >
               <ChevronUp className="h-3 w-3" />
             </Button>
