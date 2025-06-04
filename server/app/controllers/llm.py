@@ -1,135 +1,153 @@
+from abc import ABC, abstractmethod
+from typing import Dict, Any, List, AsyncGenerator, Optional, Union
+from enum import Enum
+import json
+import re
+import asyncio
+from dataclasses import dataclass
+
 from app.schemas.llm import LLMName, ChatLLMRequest
 from app.models import LLM, Source
 from openai import OpenAI
 from app.core.encryption import decrypt_password
 from app.controllers.sources import get_source_schema
 from app.controllers.query import execute_in_worker, get_query_results
-import json
-import re
-import time
 
 
-async def chat_llm(llm: LLM, source: Source, request: ChatLLMRequest):
-    schema = await get_source_schema(str(source.id))
-    system_prompt = compose_system_prompt(schema, dialect=source.dbtype, query=request.query)
+class ActionType(str, Enum):
+    """Actions to take based on response"""
 
-    # Define tools that the LLM can use
-    tools = [
-        {
-            "type": "function",
-            "function": {
-                "name": "execute_sql_query",
-                "description": "Execute a SQL query against the database and return the results. Use this to run queries and analyze data before providing your final response. Only use SELECT queries for data exploration. Avoid destructive operations.",
-                "parameters": {
-                    "type": "object",
-                    "properties": {
-                        "query": {
-                            "type": "string",
-                            "description": "The SQL query to execute (SELECT statements only)",
-                        },
-                        "reasoning": {
-                            "type": "string",
-                            "description": "Brief explanation of why you're running this query",
-                        },
-                    },
-                    "required": ["query", "reasoning"],
-                },
-            },
-        }
-    ]
+    UPDATE_EDITOR = "update_editor"
+    SHOW_MESSAGE = "show_message"
 
-    # get llm connection
-    if llm.name == LLMName.openai:
-        client = OpenAI(api_key=decrypt_password(llm.api_key))
 
-        messages = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": request.message},
-        ]
+@dataclass
+class ChatMessage:
+    """Structured chat message"""
+
+    role: str
+    content: str
+    metadata: Optional[Dict[str, Any]] = None
+
+
+@dataclass
+class ChatResponse:
+    """Structured response from LLM chat"""
+
+    content: str
+    action: ActionType
+    sql_query: Optional[str] = None
+    metadata: Optional[Dict[str, Any]] = None
+
+
+@dataclass
+class StreamChunk:
+    """Single chunk of streaming data"""
+
+    content: str
+    is_complete: bool = False
+    action: Optional[ActionType] = None
+    metadata: Optional[Dict[str, Any]] = None
+
+
+class BaseLLMProvider(ABC):
+    """Abstract base class for LLM providers"""
+
+    def __init__(self, llm: LLM, query_executor: Optional["SQLQueryExecutor"] = None):
+        self.llm = llm
+        self.query_executor = query_executor
+        self.client = None
+        self._initialize_client()
+
+    @abstractmethod
+    def _initialize_client(self):
+        """Initialize the provider-specific client"""
+        pass
+
+    @abstractmethod
+    async def chat_completion(
+        self, messages: List[ChatMessage], tools: Optional[List[Dict]] = None, stream: bool = False
+    ) -> Union[ChatResponse, AsyncGenerator[StreamChunk, None]]:
+        """Generate chat completion"""
+        pass
+
+    @abstractmethod
+    async def stream_completion(
+        self, messages: List[ChatMessage], tools: Optional[List[Dict]] = None
+    ) -> AsyncGenerator[StreamChunk, None]:
+        """Stream chat completion"""
+        pass
+
+
+class OpenAIProvider(BaseLLMProvider):
+    """OpenAI provider implementation"""
+
+    def _initialize_client(self):
+        self.client = OpenAI(api_key=decrypt_password(self.llm.api_key))
+
+    async def chat_completion(
+        self, messages: List[ChatMessage], tools: Optional[List[Dict]] = None, stream: bool = False
+    ) -> Union[ChatResponse, AsyncGenerator[StreamChunk, None]]:
+        if stream:
+            return self.stream_completion(messages, tools)
+
+        openai_messages = [{"role": msg.role, "content": msg.content} for msg in messages]
 
         # Track tool usage for safety
         tool_call_count = 0
-        max_tool_calls = 5  # Prevent infinite loops
+        max_tool_calls = 5
 
-        # Initial call with tools
-        response = client.chat.completions.create(
-            model=llm.model,
-            messages=messages,
-            tools=tools,
-            tool_choice="auto",
+        # Initial call
+        response = self.client.chat.completions.create(
+            model=self.llm.model,
+            messages=openai_messages,
+            tools=tools or [],
+            tool_choice="auto" if tools else "none",
             temperature=1,
             max_tokens=2048,
             top_p=1,
         )
 
-        # Handle tool calls
+        # Handle tool calls (existing logic)
         while response.choices[0].message.tool_calls and tool_call_count < max_tool_calls:
             tool_call_count += 1
+            openai_messages.append(response.choices[0].message)
 
-            # Add the assistant's message with tool calls to conversation
-            messages.append(response.choices[0].message)
-
-            # Process each tool call
             for tool_call in response.choices[0].message.tool_calls:
                 if tool_call.function.name == "execute_sql_query":
                     try:
-                        # Parse function arguments
                         function_args = json.loads(tool_call.function.arguments)
                         sql_query = function_args["query"]
                         reasoning = function_args["reasoning"]
 
-                        # Basic safety check for destructive queries
                         if not is_safe_query(sql_query):
                             error_response = {
                                 "role": "tool",
                                 "content": json.dumps(
                                     {
-                                        "error": "Query rejected for safety reasons. Only SELECT queries are allowed for data exploration.",
+                                        "error": "Query rejected for safety reasons. Only SELECT queries are allowed.",
                                         "query": sql_query,
                                     }
                                 ),
                                 "tool_call_id": tool_call.id,
                             }
-                            messages.append(error_response)
+                            openai_messages.append(error_response)
                             continue
 
-                        print(f"LLM is executing query: {sql_query}")
-                        print(f"Reasoning: {reasoning}")
+                        # Execute query using the query executor
+                        if self.query_executor:
+                            result = await self.query_executor.execute_query(sql_query, reasoning)
+                        else:
+                            result = await self._execute_query_tool(sql_query, reasoning)
 
-                        # Execute the query
-                        result = execute_in_worker(source.id, sql_query)
-
-                        query_id = result.get("query_id")
-                        if query_id:
-                            # try to get query results multiple times
-                            for _ in range(5):
-                                result = await get_query_results(query_id)
-                                if result.get("status") == "success":
-                                    break
-                                time.sleep(1)
-
-                            if result.get("status") == "error":
-                                result = result.get("error")
-                            else:
-                                result = result.get("data")
-
-                        # Add tool response to conversation
                         tool_response = {
                             "role": "tool",
-                            "content": json.dumps(
-                                {
-                                    "query": sql_query,
-                                    "result": result,
-                                    "reasoning": reasoning,
-                                    "status": "success",
-                                }
-                            ),
+                            "content": json.dumps(result),
                             "tool_call_id": tool_call.id,
                         }
-                        messages.append(tool_response)
+                        openai_messages.append(tool_response)
 
                     except Exception as e:
-                        # Handle query execution errors
                         error_response = {
                             "role": "tool",
                             "content": json.dumps(
@@ -141,24 +159,294 @@ async def chat_llm(llm: LLM, source: Source, request: ChatLLMRequest):
                             ),
                             "tool_call_id": tool_call.id,
                         }
-                        messages.append(error_response)
+                        openai_messages.append(error_response)
 
-            # Make follow-up call to get LLM's response after tool execution
-            response = client.chat.completions.create(
-                model=llm.model,
-                messages=messages,
-                tools=tools,
-                tool_choice="auto",
+            response = self.client.chat.completions.create(
+                model=self.llm.model,
+                messages=openai_messages,
+                tools=tools or [],
+                tool_choice="auto" if tools else "none",
                 temperature=1,
                 max_tokens=2048,
                 top_p=1,
             )
 
         content = response.choices[0].message.content
-    else:
-        raise ValueError(f"Unsupported LLM: {llm.name}")
 
-    return {"response": content}
+        # Analyze response to determine action
+        action, sql_query = self._analyze_response(content)
+
+        return ChatResponse(content=content, action=action, sql_query=sql_query)
+
+    async def stream_completion(
+        self, messages: List[ChatMessage], tools: Optional[List[Dict]] = None
+    ) -> AsyncGenerator[StreamChunk, None]:
+        openai_messages = [{"role": msg.role, "content": msg.content} for msg in messages]
+
+        stream = self.client.chat.completions.create(
+            model=self.llm.model,
+            messages=openai_messages,
+            tools=tools or [],
+            tool_choice="auto" if tools else "none",
+            temperature=1,
+            max_tokens=2048,
+            top_p=1,
+            stream=True,
+        )
+
+        accumulated_content = ""
+
+        for chunk in stream:
+            if chunk.choices[0].delta.content:
+                content = chunk.choices[0].delta.content
+                accumulated_content += content
+
+                yield StreamChunk(content=content, is_complete=False)
+
+        # Final chunk with analysis
+        action, sql_query = self._analyze_response(accumulated_content)
+        yield StreamChunk(
+            content="",
+            is_complete=True,
+            action=action,
+            metadata={"sql_query": sql_query} if sql_query else None,
+        )
+
+    async def _execute_query_tool(self, sql_query: str, reasoning: str) -> Dict[str, Any]:
+        """Fallback execute SQL query tool - used when no query executor is provided"""
+        print(f"LLM is executing query: {sql_query}")
+        print(f"Reasoning: {reasoning}")
+
+        return {
+            "query": sql_query,
+            "result": "Tool execution not implemented in this context",
+            "reasoning": reasoning,
+            "status": "success",
+        }
+
+    def _analyze_response(self, content: str) -> tuple:
+        """Analyze response content to determine action"""
+        # Look for SQL code blocks
+        sql_match = re.search(r"```sql\s*(.*?)\s*```", content, re.DOTALL | re.IGNORECASE)
+        if sql_match:
+            sql_query = sql_match.group(1).strip()
+            return ActionType.UPDATE_EDITOR, sql_query
+
+        # Look for SQL in text
+        if re.search(r"\b(select|insert|update|delete|create|drop|alter)\b", content.lower()):
+            lines = content.split("\n")
+            for line in lines:
+                if re.search(r"\b(select|insert|update|delete|create|drop|alter)\b", line.lower()):
+                    return ActionType.UPDATE_EDITOR, line.strip()
+
+        return ActionType.SHOW_MESSAGE, None
+
+
+class AnthropicProvider(BaseLLMProvider):
+    """Anthropic (Claude) provider implementation"""
+
+    def _initialize_client(self):
+        raise NotImplementedError("Anthropic provider not yet implemented")
+
+    async def chat_completion(
+        self, messages: List[ChatMessage], tools: Optional[List[Dict]] = None, stream: bool = False
+    ) -> Union[ChatResponse, AsyncGenerator[StreamChunk, None]]:
+        raise NotImplementedError("Anthropic provider not yet implemented")
+
+    async def stream_completion(
+        self, messages: List[ChatMessage], tools: Optional[List[Dict]] = None
+    ) -> AsyncGenerator[StreamChunk, None]:
+        raise NotImplementedError("Anthropic provider not yet implemented")
+
+
+class OllamaProvider(BaseLLMProvider):
+    """Ollama provider implementation"""
+
+    def _initialize_client(self):
+        raise NotImplementedError("Ollama provider not yet implemented")
+
+    async def chat_completion(
+        self, messages: List[ChatMessage], tools: Optional[List[Dict]] = None, stream: bool = False
+    ) -> Union[ChatResponse, AsyncGenerator[StreamChunk, None]]:
+        raise NotImplementedError("Ollama provider not yet implemented")
+
+    async def stream_completion(
+        self, messages: List[ChatMessage], tools: Optional[List[Dict]] = None
+    ) -> AsyncGenerator[StreamChunk, None]:
+        raise NotImplementedError("Ollama provider not yet implemented")
+
+
+class LLMProviderFactory:
+    """Factory for creating LLM providers"""
+
+    @staticmethod
+    def create_provider(
+        llm: LLM, query_executor: Optional["SQLQueryExecutor"] = None
+    ) -> BaseLLMProvider:
+        if llm.name == LLMName.openai:
+            return OpenAIProvider(llm, query_executor)
+        elif llm.name == LLMName.anthropic:
+            return AnthropicProvider(llm, query_executor)
+        elif llm.name == LLMName.ollama:
+            return OllamaProvider(llm, query_executor)
+        else:
+            raise ValueError(f"Unsupported LLM provider: {llm.name}")
+
+
+class SQLQueryExecutor:
+    """Handles SQL query execution for tool calls"""
+
+    def __init__(self, source: Source):
+        self.source = source
+
+    async def execute_query(self, sql_query: str, reasoning: str) -> Dict[str, Any]:
+        """Execute SQL query and return results"""
+        try:
+            print(f"LLM is executing query: {sql_query}")
+            print(f"Reasoning: {reasoning}")
+
+            result = execute_in_worker(self.source.id, sql_query)
+            query_id = result.get("query_id")
+
+            if query_id:
+                # Wait for query results
+                for _ in range(5):
+                    result = await get_query_results(query_id)
+                    if result.get("status") == "success":
+                        break
+                    await asyncio.sleep(1)
+
+                if result.get("status") == "error":
+                    result_data = result.get("error")
+                else:
+                    result_data = result.get("data")
+            else:
+                result_data = result
+
+            return {
+                "query": sql_query,
+                "result": result_data,
+                "reasoning": reasoning,
+                "status": "success",
+            }
+
+        except Exception as e:
+            return {
+                "error": f"Query execution failed: {str(e)}",
+                "query": sql_query,
+                "status": "error",
+            }
+
+
+class ChatService:
+    """Main service for handling LLM chat functionality"""
+
+    def __init__(self, llm: LLM, source: Source):
+        self.llm = llm
+        self.source = source
+        self.query_executor = SQLQueryExecutor(source)
+        self.provider = LLMProviderFactory.create_provider(llm, self.query_executor)
+        self.tools = self._get_tools()
+
+    async def chat(
+        self, request: ChatLLMRequest, stream: bool = False
+    ) -> Union[ChatResponse, AsyncGenerator[StreamChunk, None]]:
+        """Main chat method"""
+        schema = await get_source_schema(str(self.source.id))
+        system_prompt = self._compose_system_prompt(schema, request.query)
+
+        messages = [
+            ChatMessage(role="system", content=system_prompt),
+            ChatMessage(role="user", content=request.message),
+        ]
+
+        return await self.provider.chat_completion(messages, self.tools, stream)
+
+    def _get_tools(self) -> List[Dict]:
+        """Get available tools for the LLM"""
+        return [
+            {
+                "type": "function",
+                "function": {
+                    "name": "execute_sql_query",
+                    "description": "Execute a SQL query against the database and return the results. Use this to run queries and analyze data before providing your final response. Only use SELECT queries for data exploration. Avoid destructive operations.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "query": {
+                                "type": "string",
+                                "description": "The SQL query to execute (SELECT statements only)",
+                            },
+                            "reasoning": {
+                                "type": "string",
+                                "description": "Brief explanation of why you're running this query",
+                            },
+                        },
+                        "required": ["query", "reasoning"],
+                    },
+                },
+            }
+        ]
+
+    def _compose_system_prompt(self, schema: dict, query: str | None = None):
+        """Compose system prompt for the LLM"""
+        system_prompt = f"""
+You are a senior SQL expert assisting a user in writing and editing SQL queries.
+
+Your job is to help users:
+- Generate correct and optimized SQL based on natural language requests
+- Modify or improve existing SQL
+- Explain what a query does in plain English
+- Ensure that queries are syntactically correct and valid for the selected database
+
+You have access to tools that allow you to execute SQL queries against the database. Use these tools to:
+- Test queries before providing final results
+- Analyze data to provide better insights
+- Verify that queries work correctly
+- Gather sample data to better understand the user's needs
+
+When generating SQL queries, wrap them in ```sql code blocks.
+When explaining SQL, provide clear, conversational explanations.
+
+Use the following rules:
+- Follow the syntax for the target database: {self.source.dbtype}
+- Refer only to available tables, columns, and relationships provided in the schema
+- Never hallucinate table or column names
+- Avoid destructive commands (DROP, DELETE, TRUNCATE) unless explicitly asked
+- Avoid using LIMIT without an ORDER BY clause
+- Prefer CTEs for readability when queries are complex
+
+If the user provides a partial query, improve or complete it while preserving intent.
+If the user provides both a query and a request (e.g. "optimize this"), rewrite accordingly.
+
+Your output must be ready to run.
+
+Here is the current database schema:
+
+{json.dumps(schema)}
+
+The user is working in this context.
+"""
+        if query:
+            system_prompt += f"""
+Here is the user's query:
+
+{query}
+"""
+        return system_prompt
+
+
+# Legacy function for backward compatibility
+async def chat_llm(llm: LLM, source: Source, request: ChatLLMRequest):
+    """Legacy function - maintained for backward compatibility"""
+    service = ChatService(llm, source)
+    response = await service.chat(request, stream=False)
+
+    if isinstance(response, ChatResponse):
+        return {"response": response.content}
+    else:
+        # This shouldn't happen in non-streaming mode
+        raise ValueError("Unexpected response type")
 
 
 def is_safe_query(query: str) -> bool:
@@ -197,55 +485,12 @@ def is_safe_query(query: str) -> bool:
     return True
 
 
-def compose_system_prompt(schema: dict, dialect: str, query: str | None = None):
-    system_prompt = f"""
-You are a senior SQL expert assisting a user in writing and editing SQL queries.
-
-Your job is to help users:
-- Generate correct and optimized SQL based on natural language requests
-- Modify or improve existing SQL
-- Explain what a query does in plain English
-- Ensure that queries are syntactically correct and valid for the selected database
-
-You have access to tools that allow you to execute SQL queries against the database. Use these tools to:
-- Test queries before providing final results
-- Analyze data to provide better insights
-- Verify that queries work correctly
-- Gather sample data to better understand the user's needs
-
-When using tools:
-- Always explain your reasoning for running a query
-- Start with simple queries to understand the data structure
-- Use the results to inform your final response
-- Only use SELECT statements for exploration (no INSERT, UPDATE, DELETE, etc.)
-- Limit result sets appropriately to avoid overwhelming output
-
-Respond with clear, well-formatted SQL code or explanations.
-Do not include markdown formatting in SQL responses unless explicitly requested.
-
-Use the following rules:
-- Follow the syntax for the target database: {dialect}
-- Refer only to available tables, columns, and relationships provided in the schema
-- Never hallucinate table or column names
-- Avoid destructive commands (DROP, DELETE, TRUNCATE) unless explicitly asked
-- Avoid using LIMIT without an ORDER BY clause
-- Prefer CTEs for readability when queries are complex
-
-If the user provides a partial query, improve or complete it while preserving intent.
-If the user provides both a query and a request (e.g. "optimize this"), rewrite accordingly.
-
-Your output must be ready to run.
-
-Here is the current database schema:
-
-{json.dumps(schema)}
-
-The user is working in this context.
-"""
-    if query:
-        system_prompt += f"""
-Here is the user's query:
-
-{query}
-"""
-    return system_prompt
+# Export classes for external use
+__all__ = [
+    "ChatService",
+    "LLMProviderFactory",
+    "ActionType",
+    "ChatResponse",
+    "StreamChunk",
+    "chat_llm",  # Legacy compatibility
+]

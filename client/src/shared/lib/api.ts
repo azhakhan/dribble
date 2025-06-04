@@ -224,7 +224,10 @@ export interface ChatLLMRequest {
 }
 
 export interface ChatLLMResponse {
-  response: string;
+  content: string;
+  action: "update_editor" | "show_message";
+  sql_query?: string;
+  metadata?: Record<string, unknown>;
 }
 
 export const chatLLM = async (data: ChatLLMRequest): Promise<ChatLLMResponse> => {

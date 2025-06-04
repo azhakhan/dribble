@@ -1,12 +1,14 @@
 from fastapi import APIRouter, HTTPException, Depends
+from fastapi.responses import StreamingResponse
 from app.schemas.llm import (
     CreateLLMRequest,
     UpdateLLMRequest,
     LLMResponse,
     LLMListResponse,
     ChatLLMRequest,
+    ChatLLMResponse,
 )
-from app.controllers.llm import chat_llm
+from app.controllers.llm import ChatService, ChatResponse
 from app.core.db import get_db
 from app.core.encryption import encrypt_password
 from sqlalchemy.orm import Session
@@ -14,6 +16,7 @@ from app.models import LLM, Source
 from app.dependencies import get_current_workspace
 from uuid import UUID
 from typing import List
+import json
 
 router = APIRouter(prefix="/llms", tags=["llms"])
 
@@ -125,7 +128,7 @@ async def chat_llm_req(
     db: Session = Depends(get_db),
     workspace=Depends(get_current_workspace),
 ):
-    """Chat with an LLM"""
+    """Chat with an LLM - supports both streaming and non-streaming"""
     llm = db.query(LLM).filter_by(id=request.llm_id, workspace_id=workspace.id).first()
     if not llm:
         raise HTTPException(status_code=404, detail="LLM not found")
@@ -135,6 +138,49 @@ async def chat_llm_req(
         raise HTTPException(status_code=404, detail="Source not found")
 
     try:
-        return await chat_llm(llm, source, request)
+        service = ChatService(llm, source)
+
+        if request.stream:
+            # Return streaming response
+            async def generate_stream():
+                async for chunk in await service.chat(request, stream=True):
+                    # Convert StreamChunk to JSON
+                    chunk_data = {
+                        "content": chunk.content,
+                        "is_complete": chunk.is_complete,
+                        "action": chunk.action.value if chunk.action else None,
+                        "metadata": chunk.metadata,
+                    }
+                    yield f"data: {json.dumps(chunk_data)}\n\n"
+
+                    # Send final chunk to end stream
+                    if chunk.is_complete:
+                        break
+
+                # Send end signal
+                yield "data: [DONE]\n\n"
+
+            return StreamingResponse(
+                generate_stream(),
+                media_type="text/plain",
+                headers={
+                    "Cache-Control": "no-cache",
+                    "Connection": "keep-alive",
+                    "Content-Type": "text/event-stream",
+                },
+            )
+        else:
+            # Return regular response
+            response = await service.chat(request, stream=False)
+            if isinstance(response, ChatResponse):
+                return ChatLLMResponse(
+                    content=response.content,
+                    action=response.action,
+                    sql_query=response.sql_query,
+                    metadata=response.metadata,
+                )
+            else:
+                raise HTTPException(status_code=500, detail="Unexpected response type")
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e

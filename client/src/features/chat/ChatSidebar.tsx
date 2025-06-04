@@ -62,21 +62,21 @@ export function ChatSidebar() {
             : undefined
       });
 
-      // Add AI response to chat
-      const responseContent = response?.response || "No response received";
-      const aiMessage = { role: "assistant" as const, content: responseContent };
-      addMessage(aiMessage);
+      // Handle response based on action type
+      if (response.action === "update_editor" && response.sql_query) {
+        // Update the SQL editor with the generated query
+        setEditorContent(response.sql_query);
 
-      // If response looks like SQL/code, update editor content
-      if (
-        typeof responseContent === "string" &&
-        (responseContent.includes("SELECT") ||
-          responseContent.includes("CREATE") ||
-          responseContent.includes("INSERT") ||
-          responseContent.includes("UPDATE") ||
-          responseContent.includes("DELETE"))
-      ) {
-        setEditorContent(responseContent);
+        // Also add a message to chat indicating SQL was generated
+        const aiMessage = {
+          role: "assistant" as const,
+          content: `✅ Generated SQL query and updated the editor:\n\n\`\`\`sql\n${response.sql_query}\n\`\`\``
+        };
+        addMessage(aiMessage);
+      } else {
+        // Show the response as a regular chat message
+        const aiMessage = { role: "assistant" as const, content: response.content };
+        addMessage(aiMessage);
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Failed to send message";
