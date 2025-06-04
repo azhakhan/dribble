@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { KeyboardEvent, ChangeEvent } from "react";
+import type { KeyboardEvent, ChangeEvent, ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -13,6 +13,23 @@ import { useAppStore } from "@/shared/store/useAppStore";
 import { useChatLLMQuery } from "@/shared/hooks/useChatLLMQuery";
 import { useLLMsQuery, useLLMQuery } from "@/shared/hooks/useLLMsQuery";
 import { toast } from "sonner";
+import { SQLCodeBlock } from "./SQLCodeBlock";
+
+// Utility function to extract SQL code blocks from a message
+const extractSQLBlocks = (content: string): { sql: string; index: number }[] => {
+  const regex = /```sql\n([\s\S]*?)```/g;
+  const blocks: { sql: string; index: number }[] = [];
+  let match;
+
+  while ((match = regex.exec(content)) !== null) {
+    blocks.push({
+      sql: match[1],
+      index: match.index
+    });
+  }
+
+  return blocks;
+};
 
 export function ChatSidebar() {
   const [input, setInput] = useState("");
@@ -132,16 +149,68 @@ export function ChatSidebar() {
                 : "Start a conversation with your AI assistant"}
           </div>
         )}
-        {messages.map((message, index) => (
-          <div
-            key={index}
-            className={`p-3 rounded-lg ${
-              message.role === "user" ? "bg-primary text-primary-foreground ml-auto" : "bg-muted"
-            } max-w-[80%] ${message.role === "user" ? "ml-auto" : "mr-auto"}`}
-          >
-            <pre className="whitespace-pre-wrap font-sans">{message.content}</pre>
-          </div>
-        ))}
+        {messages.map((message, index) => {
+          const sqlBlocks = extractSQLBlocks(message.content);
+
+          if (sqlBlocks.length === 0) {
+            // No SQL blocks, render the message as is
+            return (
+              <div
+                key={index}
+                className={`p-3 rounded-lg ${
+                  message.role === "user"
+                    ? "bg-primary text-primary-foreground ml-auto"
+                    : "bg-muted"
+                } max-w-[80%] ${message.role === "user" ? "ml-auto" : "mr-auto"} text-sm`}
+              >
+                <pre className="whitespace-pre-wrap font-sans">{message.content}</pre>
+              </div>
+            );
+          }
+
+          // We have SQL blocks to render
+          let lastIndex = 0;
+          const contentParts: ReactNode[] = [];
+
+          sqlBlocks.forEach((block, blockIndex) => {
+            // Add text content before SQL block
+            if (block.index > lastIndex) {
+              const textContent = message.content.substring(lastIndex, block.index);
+              contentParts.push(
+                <pre key={`text-${blockIndex}`} className="whitespace-pre-wrap font-sans text-sm">
+                  {textContent}
+                </pre>
+              );
+            }
+
+            // Add SQL block with Monaco editor
+            const sqlPattern = "```sql\n" + block.sql + "```";
+            contentParts.push(<SQLCodeBlock key={`sql-${blockIndex}`} code={block.sql} />);
+
+            lastIndex = block.index + sqlPattern.length;
+          });
+
+          // Add any remaining text after the last SQL block
+          if (lastIndex < message.content.length) {
+            const textContent = message.content.substring(lastIndex);
+            contentParts.push(
+              <pre key="text-end" className="whitespace-pre-wrap font-sans text-sm">
+                {textContent}
+              </pre>
+            );
+          }
+
+          return (
+            <div
+              key={index}
+              className={`p-3 rounded-sm ${
+                message.role === "user" ? "bg-primary text-primary-foreground ml-auto" : "bg-muted"
+              } max-w-[80%] ${message.role === "user" ? "ml-auto" : "mr-auto"}`}
+            >
+              {contentParts}
+            </div>
+          );
+        })}
         {chatLoading && (
           <div className="bg-muted p-3 rounded-lg max-w-[80%] mr-auto">
             <div className="flex items-center space-x-2">
