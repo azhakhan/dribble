@@ -90,6 +90,13 @@ interface AppState extends FileTreeState, SourceChildrenState {
   // Editor state
   editorContent: string;
 
+  // Proposed changes for diff view
+  proposedChanges: {
+    originalContent: string;
+    proposedContent: string;
+    message: string;
+  } | null;
+
   // Chat state
   selectedLLM: string | null;
   messages: Array<{ role: "user" | "assistant"; content: string }>;
@@ -110,6 +117,17 @@ interface AppState extends FileTreeState, SourceChildrenState {
 
   // Editor actions
   setEditorContent: (content: string) => void;
+
+  // Proposed changes actions
+  setProposedChanges: (
+    changes: {
+      originalContent: string;
+      proposedContent: string;
+      message: string;
+    } | null
+  ) => void;
+  acceptProposedChanges: () => void;
+  rejectProposedChanges: () => void;
 
   // Chat actions
   setSelectedLLM: (llmId: string | null) => void;
@@ -150,6 +168,9 @@ export const useAppStore = create<AppState>()(
 
       // Editor state
       editorContent: "-- Write your SQL query here\n",
+
+      // Proposed changes state
+      proposedChanges: null,
 
       // Chat state
       selectedLLM: null,
@@ -223,6 +244,20 @@ export const useAppStore = create<AppState>()(
 
       // Editor actions
       setEditorContent: (content) => set({ editorContent: content }),
+
+      // Proposed changes actions
+      setProposedChanges: (changes) => set({ proposedChanges: changes }),
+      acceptProposedChanges: () =>
+        set((state) => {
+          if (state.proposedChanges) {
+            return {
+              editorContent: state.proposedChanges.proposedContent,
+              proposedChanges: null
+            };
+          }
+          return state;
+        }),
+      rejectProposedChanges: () => set({ proposedChanges: null }),
 
       // Chat actions
       setSelectedLLM: (llmId) => set({ selectedLLM: llmId }),

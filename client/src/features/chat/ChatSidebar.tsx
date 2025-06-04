@@ -43,7 +43,7 @@ export function ChatSidebar() {
     chatLoading,
     setChatLoading,
     editorContent,
-    setEditorContent
+    setProposedChanges
   } = useAppStore();
 
   const { data: llms = [] } = useLLMsQuery();
@@ -81,13 +81,17 @@ export function ChatSidebar() {
 
       // Handle response based on action type
       if (response.action === "update_editor" && response.sql_query) {
-        // Update the SQL editor with the generated query
-        setEditorContent(response.sql_query);
+        // Instead of directly updating the editor, set proposed changes for diff view
+        setProposedChanges({
+          originalContent: editorContent,
+          proposedContent: response.sql_query,
+          message: response.content || "AI generated SQL query"
+        });
 
-        // Also add a message to chat indicating SQL was generated
+        // Add a message to chat indicating SQL was proposed
         const aiMessage = {
           role: "assistant" as const,
-          content: `✅ Generated SQL query and updated the editor:\n\n\`\`\`sql\n${response.sql_query}\n\`\`\``
+          content: `✅ Proposed SQL query changes. Please review and accept/reject in the editor:\n\`\`\`sql\n${response.sql_query}\n\`\`\``
         };
         addMessage(aiMessage);
       } else {
