@@ -1,6 +1,7 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useCallback } from "react";
 import * as monaco from "monaco-editor";
 import { LanguageIdEnum } from "@/shared/lib/monaco-setup";
+import { useTheme } from "@/components/theme-provider";
 
 interface SQLCodeBlockProps {
   code: string;
@@ -10,12 +11,33 @@ export function SQLCodeBlock({ code }: SQLCodeBlockProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | undefined>(undefined);
 
+  // Get theme from context
+  const { theme } = useTheme();
+
+  // Helper to determine Monaco theme based on app theme
+  const getMonacoTheme = useCallback((): string => {
+    const isDark =
+      theme === "dark" ||
+      (theme === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+
+    return isDark ? "vs-dark" : "vs";
+  }, [theme]);
+
+  // Helper to get background color based on theme
+  const getBackgroundColor = (): string => {
+    const isDark =
+      theme === "dark" ||
+      (theme === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+
+    return isDark ? "#1e1e1e" : "#f8f8f8";
+  };
+
   // Initialize editor once
   useEffect(() => {
     if (hostRef.current && !editorRef.current) {
       editorRef.current = monaco.editor.create(hostRef.current, {
         language: LanguageIdEnum.MYSQL,
-        theme: "vs-dark",
+        theme: getMonacoTheme(),
         value: code,
         minimap: { enabled: false },
         fontSize: 12,
@@ -51,6 +73,13 @@ export function SQLCodeBlock({ code }: SQLCodeBlockProps) {
     };
   }, []);
 
+  // Handle theme changes
+  useEffect(() => {
+    if (editorRef.current) {
+      monaco.editor.setTheme(getMonacoTheme());
+    }
+  }, [theme, getMonacoTheme]);
+
   // Handle value changes
   useEffect(() => {
     if (editorRef.current && editorRef.current.getValue() !== code) {
@@ -76,7 +105,7 @@ export function SQLCodeBlock({ code }: SQLCodeBlockProps) {
       className="w-full rounded overflow-hidden my-2"
       style={{
         minWidth: "100%",
-        backgroundColor: "#1e1e1e",
+        backgroundColor: getBackgroundColor(),
         padding: "8px 12px",
         borderRadius: "4px"
       }}

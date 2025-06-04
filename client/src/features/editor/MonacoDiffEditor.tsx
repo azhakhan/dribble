@@ -1,5 +1,6 @@
 import { useRef, useEffect } from "react";
 import * as monaco from "monaco-editor";
+import { useTheme } from "@/components/theme-provider";
 
 interface MonacoDiffEditorProps {
   originalContent: string;
@@ -17,6 +18,18 @@ export function MonacoDiffEditor({
   const hostRef = useRef<HTMLDivElement>(null);
   const diffEditorRef = useRef<monaco.editor.IStandaloneDiffEditor | undefined>(undefined);
 
+  // Get theme from context
+  const { theme } = useTheme();
+
+  // Helper to determine Monaco theme based on app theme
+  const getMonacoTheme = (): string => {
+    const isDark =
+      theme === "dark" ||
+      (theme === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+
+    return isDark ? "vs-dark" : "vs";
+  };
+
   // Initialize diff editor
   useEffect(() => {
     if (hostRef.current && !diffEditorRef.current) {
@@ -33,7 +46,7 @@ export function MonacoDiffEditor({
       );
 
       diffEditorRef.current = monaco.editor.createDiffEditor(hostRef.current, {
-        theme: "vs-dark",
+        theme: getMonacoTheme(),
         minimap: { enabled: false },
         fontSize: 14,
         wordWrap: "on",
@@ -66,6 +79,13 @@ export function MonacoDiffEditor({
       }
     };
   }, []);
+
+  // Handle theme changes
+  useEffect(() => {
+    if (diffEditorRef.current) {
+      monaco.editor.setTheme(getMonacoTheme());
+    }
+  }, [theme]);
 
   // Update models when content changes
   useEffect(() => {

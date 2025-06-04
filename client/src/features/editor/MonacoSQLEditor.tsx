@@ -2,6 +2,7 @@ import { useRef, useEffect, useMemo } from "react";
 import * as monaco from "monaco-editor";
 import { LanguageIdEnum } from "monaco-sql-languages";
 import { useAppStore } from "@/shared/store/useAppStore";
+import { useTheme } from "@/components/theme-provider";
 
 interface MonacoSQLEditorProps {
   value: string;
@@ -21,6 +22,18 @@ export function MonacoSQLEditor({
 
   // Get schema data from the store
   const { selectedSource, sourceSchemaMap } = useAppStore();
+
+  // Get theme from context
+  const { theme } = useTheme();
+
+  // Helper to determine Monaco theme based on app theme
+  const getMonacoTheme = (): string => {
+    const isDark =
+      theme === "dark" ||
+      (theme === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+
+    return isDark ? "vs-dark" : "vs";
+  };
 
   // Memoize schema completions to prevent recalculation
   const schemaCompletions = useMemo(() => {
@@ -110,7 +123,7 @@ export function MonacoSQLEditor({
     if (hostRef.current && !editorRef.current) {
       editorRef.current = monaco.editor.create(hostRef.current, {
         language: language,
-        theme: "vs-dark",
+        theme: getMonacoTheme(),
         value: value,
         minimap: { enabled: false },
         fontSize: 14,
@@ -150,6 +163,13 @@ export function MonacoSQLEditor({
       }
     };
   }, []);
+
+  // Handle theme changes
+  useEffect(() => {
+    if (editorRef.current) {
+      monaco.editor.setTheme(getMonacoTheme());
+    }
+  }, [theme]);
 
   // Handle language changes
   useEffect(() => {
