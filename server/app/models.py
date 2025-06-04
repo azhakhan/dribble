@@ -114,16 +114,23 @@ class ChatSession(Base):
     source = relationship("Source", back_populates="chat_sessions")
     llm_id = Column(UUID(as_uuid=True), ForeignKey("llms.id"), nullable=False)
     llm = relationship("LLM", back_populates="chat_sessions")
-    messages = relationship("ChatMessage", back_populates="chat_session")
-    created_at = Column(DateTime, default=datetime.now)
     workspace_id = Column(UUID(as_uuid=True), ForeignKey("workspaces.id"), nullable=False)
     workspace = relationship("Workspace", back_populates="chat_sessions")
+    created_at = Column(DateTime, default=datetime.now)
+    messages = relationship("ChatMessage", back_populates="chat_session")
 
 
 class ChatRoleEnum(enum.Enum):
     user = "user"
     assistant = "assistant"
     system = "system"
+    tool = "tool"  # For tool call responses
+
+
+class MessageTypeEnum(enum.Enum):
+    message = "message"  # Regular user/assistant message
+    tool_call = "tool_call"  # Assistant tool call
+    tool_response = "tool_response"  # Tool execution response
 
 
 class ChatMessage(Base):
@@ -133,8 +140,16 @@ class ChatMessage(Base):
     role = Column(SqlEnum(ChatRoleEnum), nullable=False)
     content = Column(String, nullable=False)
     position = Column(Integer, nullable=False)
+    message_type = Column(SqlEnum(MessageTypeEnum), nullable=False, default=MessageTypeEnum.message)
+    message_metadata = Column(JSON, nullable=True)  # Store tool calls, reasoning, etc.
+    parent_message_id = Column(
+        UUID(as_uuid=True), ForeignKey("chat_messages.id"), nullable=True
+    )  # For threading tool calls
     created_at = Column(DateTime, default=datetime.now)
     chat_session_id = Column(UUID(as_uuid=True), ForeignKey("chat_sessions.id"), nullable=False)
     chat_session = relationship("ChatSession", back_populates="messages")
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
     user = relationship("User", back_populates="chat_messages")
+
+    # Self-referential relationship for message threading
+    parent_message = relationship("ChatMessage", remote_side=[id], backref="child_messages")
