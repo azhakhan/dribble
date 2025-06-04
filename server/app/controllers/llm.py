@@ -362,13 +362,42 @@ class SQLQueryExecutor:
     def __init__(self, source: Source):
         self.source = source
 
+    def _ensure_query_limit(self, query: str, default_limit: int = 10) -> str:
+        """
+        Add LIMIT clause to SELECT queries that don't already have one.
+        Returns the modified query with LIMIT added if necessary.
+        """
+        # Clean and normalize the query
+        cleaned_query = query.strip()
+        normalized_query = " ".join(cleaned_query.split()).upper()
+
+        # Only process SELECT queries (including CTEs that start with WITH)
+        if not (normalized_query.startswith("SELECT") or normalized_query.startswith("WITH")):
+            return query
+
+        # Check if LIMIT already exists
+        if "LIMIT" in normalized_query:
+            return query
+
+        # Add LIMIT to the query
+        # Handle potential semicolon at the end
+        if cleaned_query.endswith(";"):
+            return f"{cleaned_query[:-1]} LIMIT {default_limit};"
+        else:
+            return f"{cleaned_query} LIMIT {default_limit}"
+
     async def execute_query(self, sql_query: str, reasoning: str) -> Dict[str, Any]:
         """Execute SQL query and return results"""
         try:
             print(f"LLM is executing query: {sql_query}")
             print(f"Reasoning: {reasoning}")
 
-            result = execute_in_worker(self.source.id, sql_query)
+            # Ensure query has LIMIT 10 if it's a SELECT query without LIMIT
+            processed_query = self._ensure_query_limit(sql_query)
+            if processed_query != sql_query:
+                print(f"Added LIMIT to query: {processed_query}")
+
+            result = execute_in_worker(self.source.id, processed_query)
             query_id = result.get("query_id")
 
             if query_id:
@@ -387,7 +416,7 @@ class SQLQueryExecutor:
                 result_data = result
 
             return {
-                "query": sql_query,
+                "query": processed_query,
                 "result": result_data,
                 "reasoning": reasoning,
                 "status": "success",
@@ -510,7 +539,7 @@ class ChatService:
                 "type": "function",
                 "function": {
                     "name": "execute_sql_query",
-                    "description": "Execute a SQL query against the database and return the results. Use this to run queries and analyze data before providing your final response. Only use SELECT queries for data exploration. Avoid destructive operations.",
+                    "description": "Execute a SQL query against the database and return the results. Use this to run queries and analyze data before providing your final response. Only use SELECT queries for data exploration. Avoid destructive operations. Alwats add LIMIT 10 to the query to avoid returning too many results.",
                     "parameters": {
                         "type": "object",
                         "properties": {
