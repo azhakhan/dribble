@@ -106,6 +106,7 @@ class OpenAIProvider(BaseLLMProvider):
             temperature=1,
             max_tokens=2048,
             top_p=1,
+            response_format={"type": "json_object"},
         )
 
         # Handle tool calls (existing logic)
@@ -169,14 +170,29 @@ class OpenAIProvider(BaseLLMProvider):
                 temperature=1,
                 max_tokens=2048,
                 top_p=1,
+                response_format={"type": "json_object"},
             )
 
         content = response.choices[0].message.content
 
-        # Analyze response to determine action
-        action, sql_query = self._analyze_response(content)
+        # Parse JSON response
+        try:
+            json_response = json.loads(content)
+            action_str = json_response.get("action", "show_message")
+            action = (
+                ActionType.UPDATE_EDITOR
+                if action_str == "update_editor"
+                else ActionType.SHOW_MESSAGE
+            )
+            sql_query = json_response.get("sql_query")
+            response_content = json_response.get("content", content)
+        except json.JSONDecodeError:
+            # Fallback to original content if JSON parsing fails
+            action = ActionType.SHOW_MESSAGE
+            sql_query = None
+            response_content = content
 
-        return ChatResponse(content=content, action=action, sql_query=sql_query)
+        return ChatResponse(content=response_content, action=action, sql_query=sql_query)
 
     async def stream_completion(
         self, messages: List[ChatMessage], tools: Optional[List[Dict]] = None
@@ -192,6 +208,7 @@ class OpenAIProvider(BaseLLMProvider):
             max_tokens=2048,
             top_p=1,
             stream=True,
+            response_format={"type": "json_object"},
         )
 
         accumulated_content = ""
@@ -203,8 +220,21 @@ class OpenAIProvider(BaseLLMProvider):
 
                 yield StreamChunk(content=content, is_complete=False)
 
-        # Final chunk with analysis
-        action, sql_query = self._analyze_response(accumulated_content)
+        # Parse final JSON response
+        try:
+            json_response = json.loads(accumulated_content)
+            action_str = json_response.get("action", "show_message")
+            action = (
+                ActionType.UPDATE_EDITOR
+                if action_str == "update_editor"
+                else ActionType.SHOW_MESSAGE
+            )
+            sql_query = json_response.get("sql_query")
+        except json.JSONDecodeError:
+            # Fallback if JSON parsing fails
+            action = ActionType.SHOW_MESSAGE
+            sql_query = None
+
         yield StreamChunk(
             content="",
             is_complete=True,
@@ -223,23 +253,6 @@ class OpenAIProvider(BaseLLMProvider):
             "reasoning": reasoning,
             "status": "success",
         }
-
-    def _analyze_response(self, content: str) -> tuple:
-        """Analyze response content to determine action"""
-        # Look for SQL code blocks
-        sql_match = re.search(r"```sql\s*(.*?)\s*```", content, re.DOTALL | re.IGNORECASE)
-        if sql_match:
-            sql_query = sql_match.group(1).strip()
-            return ActionType.UPDATE_EDITOR, sql_query
-
-        # Look for SQL in text
-        if re.search(r"\b(select|insert|update|delete|create|drop|alter)\b", content.lower()):
-            lines = content.split("\n")
-            for line in lines:
-                if re.search(r"\b(select|insert|update|delete|create|drop|alter)\b", line.lower()):
-                    return ActionType.UPDATE_EDITOR, line.strip()
-
-        return ActionType.SHOW_MESSAGE, None
 
 
 class AnthropicProvider(BaseLLMProvider):
@@ -405,8 +418,23 @@ You have access to tools that allow you to execute SQL queries against the datab
 - Verify that queries work correctly
 - Gather sample data to better understand the user's needs
 
-When generating SQL queries, wrap them in ```sql code blocks.
-When explaining SQL, provide clear, conversational explanations.
+IMPORTANT: You must respond with a JSON object in the following format:
+{{
+  "action": "update_editor" | "show_message",
+  "content": "Your response content here",
+  "sql_query": "SQL query here (only if action is update_editor)"
+}}
+
+Use "update_editor" action when:
+- User asks you to generate, create, write, or modify SQL
+- User wants a query for a specific task
+- User asks for optimization or improvement of SQL
+
+Use "show_message" action when:
+- User asks you to explain existing SQL
+- User asks general questions about databases
+- User wants clarification or help understanding something
+- You're providing general guidance or conversation
 
 Use the following rules:
 - Follow the syntax for the target database: {self.source.dbtype}
@@ -429,7 +457,7 @@ The user is working in this context.
 """
         if query:
             system_prompt += f"""
-Here is the user's query:
+Here is the user's current query:
 
 {query}
 """
