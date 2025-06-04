@@ -36,8 +36,8 @@ export function SQLCodeBlock({ code }: SQLCodeBlockProps) {
           horizontalScrollbarSize: 8
         },
         padding: {
-          top: 8,
-          bottom: 8
+          top: 12,
+          bottom: 12
         },
         automaticLayout: true
       });
@@ -63,7 +63,7 @@ export function SQLCodeBlock({ code }: SQLCodeBlockProps) {
     if (editorRef.current && hostRef.current) {
       const lineCount = editorRef.current.getModel()?.getLineCount() || 1;
       const lineHeight = editorRef.current.getOption(monaco.editor.EditorOption.lineHeight);
-      const height = Math.min(lineCount * lineHeight + 12, 300); // Max height 300px
+      const height = Math.min(lineCount * lineHeight + 24, 300); // Max height 300px, added more padding
       hostRef.current.style.height = `${height}px`;
       hostRef.current.style.width = "100%";
       editorRef.current.layout();
@@ -74,7 +74,12 @@ export function SQLCodeBlock({ code }: SQLCodeBlockProps) {
     <div
       ref={hostRef}
       className="w-full rounded overflow-hidden my-2"
-      style={{ minWidth: "100%" }}
+      style={{
+        minWidth: "100%",
+        backgroundColor: "#1e1e1e",
+        padding: "8px 12px",
+        borderRadius: "4px"
+      }}
     />
   );
 }

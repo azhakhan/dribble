@@ -184,7 +184,7 @@ export function ChatSidebar() {
             // Add SQL block with Monaco editor
             const sqlPattern = "```sql\n" + block.sql + "```";
             contentParts.push(
-              <div key={`sql-${blockIndex}`} className="w-full overflow-hidden">
+              <div key={`sql-${blockIndex}`} className="w-full overflow-hidden mt-2 mb-2">
                 <SQLCodeBlock code={block.sql} />
               </div>
             );
