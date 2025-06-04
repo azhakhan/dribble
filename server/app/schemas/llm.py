@@ -27,6 +27,7 @@ class CreateLLMRequest(BaseModel):
     base_url: Optional[str] = None
     api_version: Optional[str] = None
     settings: Optional[Dict[str, Any]] = None
+    default: Optional[bool] = None
 
 
 class UpdateLLMRequest(BaseModel):
@@ -36,6 +37,7 @@ class UpdateLLMRequest(BaseModel):
     base_url: Optional[str] = None
     api_version: Optional[str] = None
     settings: Optional[Dict[str, Any]] = None
+    default: Optional[bool] = None
 
 
 class LLMResponse(BaseModel):
@@ -45,6 +47,7 @@ class LLMResponse(BaseModel):
     base_url: Optional[str] = None
     api_version: Optional[str] = None
     settings: Optional[Dict[str, Any]] = None
+    default: Optional[bool] = None
     workspace_id: UUID
     created_at: datetime
 
@@ -56,6 +59,7 @@ class LLMListResponse(BaseModel):
     id: UUID
     name: LLMName
     model: str
+    default: Optional[bool] = None
 
     class Config:
         from_attributes = True

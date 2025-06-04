@@ -29,11 +29,11 @@ async def create_llm(
 ):
     """Create a new LLM configuration"""
     # Check if LLM with same name already exists in workspace
-    existing_llm = db.query(LLM).filter_by(name=request.name, workspace_id=workspace.id).first()
-    if existing_llm:
+    existing_llms = db.query(LLM).filter_by(workspace_id=workspace.id).all()
+    if len(existing_llms) > 0 and request.name in [llm.name for llm in existing_llms]:
         raise HTTPException(
             status_code=400,
-            detail=f"LLM with name '{request.name.value}' already exists in this workspace",
+            detail=f"LLM with name '{request.name}' already exists in this workspace",
         )
 
     llm = LLM(
@@ -44,6 +44,7 @@ async def create_llm(
         api_version=request.api_version,
         settings=request.settings,
         workspace_id=workspace.id,
+        default=True if len(existing_llms) == 0 else False,
     )
 
     db.add(llm)

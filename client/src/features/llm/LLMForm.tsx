@@ -12,6 +12,7 @@ import {
   SelectValue
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useLLMStore } from "@/shared/store/useLLMStore";
 import {
   useCreateLLMMutation,
@@ -27,6 +28,7 @@ interface LLMFormData {
   base_url?: string;
   api_version?: string;
   settings?: string; // JSON string for form handling
+  default?: boolean;
 }
 
 interface LLMFormProps {
@@ -55,7 +57,8 @@ export function LLMForm({ onSuccess }: LLMFormProps) {
       api_key: "",
       base_url: "",
       api_version: "",
-      settings: ""
+      settings: "",
+      default: false
     }
   });
 
@@ -70,7 +73,8 @@ export function LLMForm({ onSuccess }: LLMFormProps) {
         api_key: "", // Don't populate API key for security
         base_url: llmData.base_url || "",
         api_version: llmData.api_version || "",
-        settings: llmData.settings ? JSON.stringify(llmData.settings, null, 2) : ""
+        settings: llmData.settings ? JSON.stringify(llmData.settings, null, 2) : "",
+        default: llmData.default || false
       });
     } else if (!isEditing) {
       reset({
@@ -79,7 +83,8 @@ export function LLMForm({ onSuccess }: LLMFormProps) {
         api_key: "",
         base_url: "",
         api_version: "",
-        settings: ""
+        settings: "",
+        default: false
       });
     }
   }, [isEditing, llmData, reset]);
@@ -104,7 +109,8 @@ export function LLMForm({ onSuccess }: LLMFormProps) {
         api_key: data.api_key || undefined,
         base_url: data.base_url || undefined,
         api_version: data.api_version || undefined,
-        settings
+        settings,
+        default: data.default || false
       };
 
       if (isEditing && selectedLLM) {
@@ -246,6 +252,22 @@ export function LLMForm({ onSuccess }: LLMFormProps) {
             {...register("settings")}
           />
           {errors.settings && <p className="text-sm text-destructive">{errors.settings.message}</p>}
+        </div>
+
+        <div className="flex items-center space-x-2">
+          <Controller
+            name="default"
+            control={control}
+            render={({ field }) => (
+              <Checkbox id="default" checked={field.value} onCheckedChange={field.onChange} />
+            )}
+          />
+          <Label
+            htmlFor="default"
+            className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+          >
+            Set as default LLM
+          </Label>
         </div>
       </div>
 

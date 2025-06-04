@@ -167,7 +167,7 @@ export const useAppStore = create<AppState>()(
       sourceGeneratedChildren: {},
 
       // Editor state
-      editorContent: "-- Write your SQL query here\n",
+      editorContent: "",
 
       // Proposed changes state
       proposedChanges: null,

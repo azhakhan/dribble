@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import type { KeyboardEvent, ChangeEvent, ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -50,6 +50,18 @@ export function ChatSidebar() {
   const { data: selectedLLM } = useLLMQuery(selectedLLMId || undefined);
   const chatMutation = useChatLLMQuery();
 
+  // Auto-select the first LLM if none is selected and LLMs are available
+  useEffect(() => {
+    if (llms.length > 0 && !selectedLLMId) {
+      const defaultLLM = llms.find((llm) => llm.default);
+      if (defaultLLM) {
+        setSelectedLLM(defaultLLM.id);
+      } else {
+        setSelectedLLM(llms[0].id);
+      }
+    }
+  }, [llms, selectedLLMId, setSelectedLLM]);
+
   const handleSend = async () => {
     if (!input.trim()) return;
     if (!selectedSource) {
@@ -73,10 +85,7 @@ export function ChatSidebar() {
         source_id: selectedSource.id,
         llm_id: selectedLLM.id,
         message: input,
-        query:
-          editorContent.trim() !== "-- Write your SQL query here\n" && editorContent.trim()
-            ? editorContent
-            : undefined
+        query: editorContent ? editorContent : undefined
       });
 
       // Handle response based on action type
@@ -118,30 +127,6 @@ export function ChatSidebar() {
 
   return (
     <div className="h-full flex flex-col border-l">
-      {/* LLM Selection */}
-      <div className="flex-shrink-0 p-4 border-b">
-        <div className="space-y-2">
-          <label className="text-sm font-medium">Select LLM:</label>
-          <Select
-            value={selectedLLMId || ""}
-            onValueChange={(value) => {
-              setSelectedLLM(value || null);
-            }}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="Choose an LLM..." />
-            </SelectTrigger>
-            <SelectContent>
-              {llms.map((llm) => (
-                <SelectItem key={llm.id} value={llm.id}>
-                  {llm.name} - {llm.model}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
-
       {/* Scrollable messages area */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4 min-h-0">
         {messages.length === 0 && (
@@ -250,11 +235,28 @@ export function ChatSidebar() {
             Send
           </Button>
         </div>
-        {editorContent.trim() && editorContent.trim() !== "-- Write your SQL query here\n" && (
-          <div className="mt-2 text-xs text-muted-foreground">
-            💡 Editor content will be included as context
+        {/* LLM Selection */}
+        <div className="flex-shrink-0 p-2">
+          <div className="space-y-2">
+            <Select
+              value={selectedLLMId || ""}
+              onValueChange={(value) => {
+                setSelectedLLM(value || null);
+              }}
+            >
+              <SelectTrigger size="sm">
+                <SelectValue placeholder="Choose an LLM..." />
+              </SelectTrigger>
+              <SelectContent>
+                {llms.map((llm) => (
+                  <SelectItem key={llm.id} value={llm.id}>
+                    {llm.name} - {llm.model}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
-        )}
+        </div>
       </div>
     </div>
   );

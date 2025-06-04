@@ -162,6 +162,7 @@ export interface LLM {
   base_url?: string;
   api_version?: string;
   settings?: Record<string, unknown>;
+  default?: boolean;
   workspace_id: string;
   created_at: string;
 }
@@ -170,6 +171,7 @@ export interface LLMListItem {
   id: string;
   name: "openai" | "anthropic" | "gemini" | "ollama";
   model: string;
+  default?: boolean;
 }
 
 export interface CreateLLMRequest {
@@ -179,6 +181,7 @@ export interface CreateLLMRequest {
   base_url?: string;
   api_version?: string;
   settings?: Record<string, unknown>;
+  default?: boolean;
 }
 
 export interface UpdateLLMRequest {
@@ -188,6 +191,7 @@ export interface UpdateLLMRequest {
   base_url?: string;
   api_version?: string;
   settings?: Record<string, unknown>;
+  default?: boolean;
 }
 
 // LLM API functions
