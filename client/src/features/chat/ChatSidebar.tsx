@@ -157,11 +157,9 @@ export function ChatSidebar() {
             return (
               <div
                 key={index}
-                className={`p-3 rounded-lg ${
-                  message.role === "user"
-                    ? "bg-primary text-primary-foreground ml-auto"
-                    : "bg-muted"
-                } max-w-[80%] ${message.role === "user" ? "ml-auto" : "mr-auto"} text-sm`}
+                className={`p-3 rounded-sm ${message.role === "user" ? "bg-muted" : ""} ${
+                  message.role === "user" ? "ml-auto" : "mr-auto"
+                } text-sm`}
               >
                 <pre className="whitespace-pre-wrap font-sans">{message.content}</pre>
               </div>
@@ -185,7 +183,11 @@ export function ChatSidebar() {
 
             // Add SQL block with Monaco editor
             const sqlPattern = "```sql\n" + block.sql + "```";
-            contentParts.push(<SQLCodeBlock key={`sql-${blockIndex}`} code={block.sql} />);
+            contentParts.push(
+              <div key={`sql-${blockIndex}`} className="w-full overflow-hidden">
+                <SQLCodeBlock code={block.sql} />
+              </div>
+            );
 
             lastIndex = block.index + sqlPattern.length;
           });
@@ -203,16 +205,16 @@ export function ChatSidebar() {
           return (
             <div
               key={index}
-              className={`p-3 rounded-sm ${
-                message.role === "user" ? "bg-primary text-primary-foreground ml-auto" : "bg-muted"
-              } max-w-[80%] ${message.role === "user" ? "ml-auto" : "mr-auto"}`}
+              className={`p-3 rounded-sm ${message.role === "user" ? "bg-muted" : ""} w-full ${
+                message.role === "user" ? "ml-auto" : "mr-auto"
+              } flex flex-col`}
             >
               {contentParts}
             </div>
           );
         })}
         {chatLoading && (
-          <div className="bg-muted p-3 rounded-lg max-w-[80%] mr-auto">
+          <div className="bg-muted p-3 rounded-sm w-full mr-auto">
             <div className="flex items-center space-x-2">
               <div className="animate-spin h-4 w-4 border-2 border-current border-t-transparent rounded-full"></div>
               <span>AI is thinking...</span>
