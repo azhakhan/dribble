@@ -40,7 +40,7 @@ export function MonacoDiffEditor({
         automaticLayout: true,
         scrollBeyondLastLine: false,
         readOnly: readOnly,
-        renderSideBySide: true,
+        renderSideBySide: false,
         ignoreTrimWhitespace: false,
         renderWhitespace: "boundary",
         diffCodeLens: true,
