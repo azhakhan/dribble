@@ -9,6 +9,7 @@ import {
   SelectTrigger,
   SelectValue
 } from "@/components/ui/select";
+import { ChevronUp, Database } from "lucide-react";
 import { useAppStore } from "@/shared/store/useAppStore";
 import { useChatLLMQuery } from "@/shared/hooks/useChatLLMQuery";
 import { useLLMsQuery, useLLMQuery } from "@/shared/hooks/useLLMsQuery";
@@ -125,12 +126,23 @@ export function ChatSidebar() {
     }
   };
 
+  // Auto-resize textarea function
+  const handleInputChange = (e: ChangeEvent<HTMLTextAreaElement>) => {
+    setInput(e.target.value);
+
+    // Auto-resize textarea
+    const textarea = e.target;
+    textarea.style.height = "auto";
+    const scrollHeight = Math.min(textarea.scrollHeight, 120); // Max height of 120px
+    textarea.style.height = `${Math.max(32, scrollHeight)}px`; // Min height of 32px
+  };
+
   return (
-    <div className="h-full flex flex-col border-l">
+    <div className="h-full flex flex-col border-l bg-background">
       {/* Scrollable messages area */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4 min-h-0">
+      <div className="flex-1 overflow-y-auto p-3 space-y-3 min-h-0">
         {messages.length === 0 && (
-          <div className="text-center text-muted-foreground text-sm py-8">
+          <div className="text-center text-muted-foreground text-xs py-8">
             {!selectedSource
               ? "Select a source to start chatting"
               : !selectedLLM
@@ -146,11 +158,13 @@ export function ChatSidebar() {
             return (
               <div
                 key={index}
-                className={`p-3 rounded-sm ${message.role === "user" ? "bg-muted" : ""} ${
-                  message.role === "user" ? "ml-auto" : "mr-auto"
-                } text-sm`}
+                className={`p-2 rounded-md ${message.role === "user" ? "bg-muted/50" : ""} ${
+                  message.role === "user" ? "ml-auto max-w-[85%]" : "mr-auto w-full"
+                } text-xs`}
               >
-                <pre className="whitespace-pre-wrap font-sans">{message.content}</pre>
+                <pre className="whitespace-pre-wrap font-sans text-xs leading-relaxed">
+                  {message.content}
+                </pre>
               </div>
             );
           }
@@ -194,8 +208,8 @@ export function ChatSidebar() {
           return (
             <div
               key={index}
-              className={`p-3 rounded-sm ${message.role === "user" ? "bg-muted" : ""} w-full ${
-                message.role === "user" ? "ml-auto" : "mr-auto"
+              className={`p-2 rounded-md ${message.role === "user" ? "bg-muted/50" : ""} w-full ${
+                message.role === "user" ? "ml-auto max-w-[85%]" : "mr-auto"
               } flex flex-col`}
             >
               {contentParts}
@@ -203,58 +217,76 @@ export function ChatSidebar() {
           );
         })}
         {chatLoading && (
-          <div className="bg-muted p-3 rounded-sm w-full mr-auto">
+          <div className="bg-muted/30 p-2 rounded-md w-full mr-auto">
             <div className="flex items-center space-x-2">
-              <div className="animate-spin h-4 w-4 border-2 border-current border-t-transparent rounded-full"></div>
-              <span>AI is thinking...</span>
+              <div className="animate-spin h-3 w-3 border border-current border-t-transparent rounded-full"></div>
+              <span className="text-xs text-muted-foreground">AI is thinking...</span>
             </div>
           </div>
         )}
       </div>
 
-      {/* Fixed input area */}
-      <div className="flex-shrink-0 p-4 border-t">
-        <div className="flex gap-2">
-          <Textarea
-            value={input}
-            onChange={(e: ChangeEvent<HTMLTextAreaElement>) => setInput(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder={
-              selectedSource && selectedLLM
-                ? "Type your message..."
-                : "Select a source and LLM to start chatting"
-            }
-            className="min-h-[80px] resize-none"
-            disabled={!selectedSource || !selectedLLM || chatLoading}
-          />
-          <Button
-            onClick={handleSend}
-            className="self-end"
-            disabled={!selectedSource || !selectedLLM || chatLoading || !input.trim()}
-          >
-            Send
-          </Button>
+      {/* Context indicator */}
+      {selectedSource && (
+        <div className="px-3 py-2 border-t border-border/50 bg-muted/20">
+          <div className="text-xs text-muted-foreground flex items-center gap-1">
+            <Database className="h-3 w-3" strokeWidth={1} />
+            <span className="text-foreground font-medium">{selectedSource.name}</span>
+          </div>
         </div>
-        {/* LLM Selection */}
-        <div className="flex-shrink-0 p-2">
-          <div className="space-y-2">
+      )}
+
+      {/* Middle: Full-width textarea input */}
+      <div className="flex-shrink-0 px-3 py-2">
+        <Textarea
+          value={input}
+          onChange={handleInputChange}
+          onKeyDown={handleKeyDown}
+          placeholder={
+            selectedSource && selectedLLM
+              ? "Type your message..."
+              : "Select a source and LLM to start chatting"
+          }
+          className="min-h-[40px] max-h-[120px] resize-none text-sm border-0 bg-muted/30 hover:bg-muted/50 focus:bg-muted/50 transition-colors px-3 py-2 rounded-xs w-full overflow-hidden"
+          disabled={!selectedSource || !selectedLLM || chatLoading}
+          style={{ height: "40px" }}
+        />
+      </div>
+
+      {/* Bottom: LLM selection (left) and Send button (right) */}
+      <div className="flex-shrink-0 px-3 py-2 border-t border-border/50">
+        <div className="flex items-center justify-between">
+          {/* LLM selection on the left - no border, no background */}
+          <div className="flex-shrink-0">
             <Select
               value={selectedLLMId || ""}
               onValueChange={(value) => {
                 setSelectedLLM(value || null);
               }}
             >
-              <SelectTrigger size="sm">
-                <SelectValue placeholder="Choose an LLM..." />
+              <SelectTrigger className="h-7 text-xs bg-transparent hover:bg-muted/30 transition-colors min-w-[140px] border-0 focus:ring-0 focus:ring-offset-0 shadow-none">
+                <SelectValue placeholder="Choose model..." />
               </SelectTrigger>
               <SelectContent>
                 {llms.map((llm) => (
-                  <SelectItem key={llm.id} value={llm.id}>
+                  <SelectItem key={llm.id} value={llm.id} className="text-xs">
                     {llm.name} - {llm.model}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
+          </div>
+
+          {/* Send button on the right */}
+          <div className="flex-shrink-0">
+            <Button
+              onClick={handleSend}
+              size="sm"
+              className="h-8 w-8 p-0 rounded-md bg-primary/90 hover:bg-primary transition-colors"
+              disabled={!selectedSource || !selectedLLM || chatLoading || !input.trim()}
+            >
+              <ChevronUp className="h-3 w-3" />
+            </Button>
           </div>
         </div>
       </div>
