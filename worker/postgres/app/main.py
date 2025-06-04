@@ -14,6 +14,7 @@ import datetime
 import sys
 import decimal
 import uuid
+import time
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -28,13 +29,8 @@ class PostgresCreds(BaseModel):
     dbname: str
 
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    # Setup
-    os_creds = os.environ.get("DB_CREDS")
-    if not os_creds:
-        raise Exception("DB_CREDS is not set")
-    creds = PostgresCreds(**json.loads(os_creds))
+def create_database_engine(creds: PostgresCreds):
+    """Create a database engine with proper SSL and connection settings"""
     url = URL.create(
         "postgresql+psycopg",
         username=creds.user,
@@ -43,11 +39,55 @@ async def lifespan(app: FastAPI):
         port=creds.port,
         database=creds.dbname,
     )
-    app.state.engine = create_engine(url)
+
+    # Create engine with connection pooling and SSL settings
+    engine = create_engine(
+        url,
+        # Connection pool settings
+        pool_size=5,
+        max_overflow=10,
+        pool_pre_ping=True,  # Validate connections before use
+        pool_recycle=3600,  # Recycle connections every hour
+        # Connection arguments for psycopg
+        connect_args={
+            "sslmode": "prefer",  # Try SSL, fallback to non-SSL
+            "connect_timeout": 10,
+            "application_name": "dribble_worker",
+        },
+    )
+    return engine
+
+
+def get_database_connection(engine, max_retries: int = 3, retry_delay: float = 1.0):
+    """Get a database connection with retry logic"""
+    for attempt in range(max_retries):
+        try:
+            conn = engine.connect()
+            # Test the connection
+            conn.execute(text("SELECT 1"))
+            return conn
+        except OperationalError as e:
+            logger.warning(f"Database connection attempt {attempt + 1} failed: {str(e)}")
+            if attempt < max_retries - 1:
+                time.sleep(retry_delay * (2**attempt))  # Exponential backoff
+                continue
+            else:
+                raise e
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Setup
+    os_creds = os.environ.get("DB_CREDS")
+    if not os_creds:
+        raise Exception("DB_CREDS is not set")
+    creds = PostgresCreds(**json.loads(os_creds))
+
+    app.state.engine = create_database_engine(creds)
 
     # Test the connection immediately to catch credential issues early
     try:
-        with app.state.engine.connect() as conn:
+        with get_database_connection(app.state.engine) as conn:
             conn.execute(text("SELECT 1"))
         logger.info("Database connection test successful during startup")
     except OperationalError as e:
@@ -94,7 +134,7 @@ def execute_query(query: str):
     # 5 second timeout
     logger.info(f"[{datetime.datetime.now()}] In execute_query function")
     try:
-        with app.state.engine.connect() as conn:
+        with get_database_connection(app.state.engine) as conn:
             logger.info(f"[{datetime.datetime.now()}] Connected to database")
             result = conn.execute(text(query))
             rows = result.fetchall()
@@ -140,7 +180,7 @@ def execute_query(query: str):
 @app.get("/schema/")
 def get_postgres_schemas():
     try:
-        with app.state.engine.connect() as conn:
+        with get_database_connection(app.state.engine) as conn:
             # Get all tables
             tables_query = """
             SELECT 
@@ -339,6 +379,7 @@ def get_postgres_schemas():
             return schemas
 
     except OperationalError as e:
+        logger.error(f"Database connection error in get_postgres_schemas: {str(e)}")
         raise Exception(f"Error getting schemas: {e}") from e
 
 
@@ -348,16 +389,8 @@ def test_connection_cli():
         if not os_creds:
             raise Exception("DB_CREDS is not set")
         creds = PostgresCreds(**json.loads(os_creds))
-        url = URL.create(
-            "postgresql+psycopg",
-            username=creds.user,
-            password=creds.password,
-            host=creds.host,
-            port=creds.port,
-            database=creds.dbname,
-        )
-        engine = create_engine(url)
-        with engine.connect() as conn:
+        engine = create_database_engine(creds)
+        with get_database_connection(engine) as conn:
             res = conn.execute(text("SELECT 1")).fetchone()
             if res:
                 print(json.dumps({"status": "success"}))
