@@ -164,7 +164,6 @@ async def chat_llm_req(
                     chunk_data = {
                         "content": chunk.content,
                         "is_complete": chunk.is_complete,
-                        "action": chunk.action.value if chunk.action else None,
                         "metadata": chunk.metadata,
                     }
                     yield f"data: {json.dumps(chunk_data)}\n\n"
@@ -191,7 +190,6 @@ async def chat_llm_req(
             if isinstance(response, ChatResponse):
                 return ChatLLMResponse(
                     content=response.content,
-                    action=response.action,
                     sql_query=response.sql_query,
                     metadata=response.metadata,
                 )

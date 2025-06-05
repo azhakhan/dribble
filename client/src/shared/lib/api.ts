@@ -230,7 +230,6 @@ export interface ChatLLMRequest {
 
 export interface ChatLLMResponse {
   content: string;
-  action: "update_editor" | "show_message";
   sql_query?: string;
   metadata?: Record<string, unknown>;
 }

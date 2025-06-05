@@ -1,6 +1,5 @@
 from abc import ABC, abstractmethod
 from typing import Dict, Any, List, AsyncGenerator, Optional, Union
-from enum import Enum
 import json
 import re
 import asyncio
@@ -16,19 +15,11 @@ from app.controllers.query import execute_in_worker, get_query_results
 from app.controllers.messages import ChatMessageService, ChatMessage
 
 
-class ActionType(str, Enum):
-    """Actions to take based on response"""
-
-    UPDATE_EDITOR = "update_editor"
-    SHOW_MESSAGE = "show_message"
-
-
 @dataclass
 class ChatResponse:
     """Structured response from LLM chat"""
 
     content: str
-    action: ActionType
     sql_query: Optional[str] = None
     metadata: Optional[Dict[str, Any]] = None
 
@@ -39,7 +30,6 @@ class StreamChunk:
 
     content: str
     is_complete: bool = False
-    action: Optional[ActionType] = None
     metadata: Optional[Dict[str, Any]] = None
 
 
@@ -222,21 +212,14 @@ class OpenAIProvider(BaseLLMProvider):
         # Parse JSON response
         try:
             json_response = json.loads(content)
-            action_str = json_response.get("action", "show_message")
-            action = (
-                ActionType.UPDATE_EDITOR
-                if action_str == "update_editor"
-                else ActionType.SHOW_MESSAGE
-            )
             sql_query = json_response.get("sql_query")
             response_content = json_response.get("content", content)
         except json.JSONDecodeError:
             # Fallback to original content if JSON parsing fails
-            action = ActionType.SHOW_MESSAGE
             sql_query = None
             response_content = content
 
-        return ChatResponse(content=response_content, action=action, sql_query=sql_query)
+        return ChatResponse(content=response_content, sql_query=sql_query)
 
     async def stream_completion(
         self, messages: List[ChatMessage], tools: Optional[List[Dict]] = None
@@ -271,22 +254,14 @@ class OpenAIProvider(BaseLLMProvider):
         # Parse final JSON response
         try:
             json_response = json.loads(accumulated_content)
-            action_str = json_response.get("action", "show_message")
-            action = (
-                ActionType.UPDATE_EDITOR
-                if action_str == "update_editor"
-                else ActionType.SHOW_MESSAGE
-            )
             sql_query = json_response.get("sql_query")
         except json.JSONDecodeError:
             # Fallback if JSON parsing fails
-            action = ActionType.SHOW_MESSAGE
             sql_query = None
 
         yield StreamChunk(
             content="",
             is_complete=True,
-            action=action,
             metadata={"sql_query": sql_query} if sql_query else None,
         )
 
@@ -496,7 +471,6 @@ class ChatService:
                 role="assistant",
                 content=response.content,
                 sql_query=response.sql_query,
-                metadata={"action": response.action.value},
             )
 
             return response
@@ -528,7 +502,6 @@ class ChatService:
                     content=accumulated_content,
                     sql_query=sql_query,
                     metadata={
-                        "action": chunk.action.value if chunk.action else "show_message",
                         **{k: v for k, v in accumulated_metadata.items() if k != "sql_query"},
                     },
                 )
@@ -578,17 +551,16 @@ You have access to tools that allow you to execute SQL queries against the datab
 
 IMPORTANT: You must respond with a JSON object in the following format:
 {{
-  "action": "update_editor" | "show_message",
   "content": "Your response content here",
-  "sql_query": "SQL query here (only if action is update_editor)"
+  "sql_query": "SQL query here (only when generating/modifying SQL)"
 }}
 
-Use "update_editor" action when:
+Include the "sql_query" field when:
 - User asks you to generate, create, write, or modify SQL
 - User wants a query for a specific task
 - User asks for optimization or improvement of SQL
 
-Use "show_message" action when:
+Omit the "sql_query" field when:
 - User asks you to explain existing SQL
 - User asks general questions about databases
 - User wants clarification or help understanding something
@@ -664,7 +636,6 @@ __all__ = [
     "ChatMessageService",
     "ChatMessage",
     "LLMProviderFactory",
-    "ActionType",
     "ChatResponse",
     "StreamChunk",
     "MessageTypeEnum",

@@ -12,13 +12,6 @@ class LLMName(str, enum.Enum):
     ollama = "ollama"
 
 
-class ActionType(str, enum.Enum):
-    """Actions to take based on response"""
-
-    UPDATE_EDITOR = "update_editor"
-    SHOW_MESSAGE = "show_message"
-
-
 class CreateLLMRequest(BaseModel):
     # name is enum of openai, anthropic, gemini, etc.
     name: LLMName
@@ -78,7 +71,6 @@ class ChatLLMResponse(BaseModel):
     """Structured response for non-streaming chat"""
 
     content: str
-    action: ActionType
     sql_query: Optional[str] = None
     metadata: Optional[Dict[str, Any]] = None
 
@@ -88,5 +80,4 @@ class StreamChunkResponse(BaseModel):
 
     content: str
     is_complete: bool = False
-    action: Optional[ActionType] = None
     metadata: Optional[Dict[str, Any]] = None

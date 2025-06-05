@@ -180,8 +180,8 @@ export function ChatSidebar() {
         query: editorContent ? editorContent : undefined
       });
 
-      // Handle response based on action type
-      if (response.action === "update_editor" && response.sql_query) {
+      // Handle response based on sql_query presence
+      if (response.sql_query) {
         // Instead of directly updating the editor, set proposed changes for diff view
         setProposedChanges({
           originalContent: editorContent,
