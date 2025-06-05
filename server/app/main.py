@@ -7,6 +7,7 @@ from app.routes.chat import router as chat_router
 from app.core.start import ensure_user_and_workspace
 from app.core.worker_health_check import start_health_check, stop_health_check
 from app.core.reconcile import reconcile_workers
+from app.core.session_naming import start_session_naming, stop_session_naming
 import logging
 
 # Suppress APScheduler logs to reduce noise
@@ -21,10 +22,12 @@ async def lifespan(app: FastAPI):
     ensure_user_and_workspace()
     reconcile_workers()
     start_health_check()
+    start_session_naming()
     yield
     # TODO: stop workers only when not in development mode with hot reloading
     # stop_workers()
     stop_health_check()
+    stop_session_naming()
 
 
 app = FastAPI(lifespan=lifespan)
