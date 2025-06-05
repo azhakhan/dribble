@@ -139,6 +139,7 @@ class ChatMessage(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     role = Column(SqlEnum(ChatRoleEnum), nullable=False)
     content = Column(String, nullable=False)
+    sql_query = Column(String, nullable=True)  # Store SQL queries as first-class field
     position = Column(Integer, nullable=False)
     message_type = Column(SqlEnum(MessageTypeEnum), nullable=False, default=MessageTypeEnum.message)
     message_metadata = Column(JSON, nullable=True)  # Store tool calls, reasoning, etc.
