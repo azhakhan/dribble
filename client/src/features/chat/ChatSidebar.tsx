@@ -13,6 +13,7 @@ import { ChevronUp, Database } from "lucide-react";
 import { useAppStore } from "@/shared/store/useAppStore";
 import { useChatLLMQuery } from "@/shared/hooks/useChatLLMQuery";
 import { useLLMsQuery, useLLMQuery } from "@/shared/hooks/useLLMsQuery";
+// import { useChatMessagesQuery } from "@/shared/hooks/useChatQuery"; // For future session loading
 import { toast } from "sonner";
 import { SQLCodeBlock } from "./SQLCodeBlock";
 
@@ -53,6 +54,18 @@ export function ChatSidebar() {
   const { data: llms = [] } = useLLMsQuery();
   const { data: selectedLLM } = useLLMQuery(selectedLLMId || undefined);
   const chatMutation = useChatLLMQuery();
+
+  // To load existing messages from server when session changes, you would use:
+  // const { data: chatMessagesData } = useChatMessagesQuery(sessionId);
+  // useEffect(() => {
+  //   if (chatMessagesData?.messages) {
+  //     loadMessagesFromServer(chatMessagesData.messages.map(msg => ({
+  //       role: msg.role as "user" | "assistant",
+  //       content: msg.content,
+  //       sql_query: msg.sql_query
+  //     })));
+  //   }
+  // }, [chatMessagesData, loadMessagesFromServer]);
 
   // Auto-select the first LLM if none is selected and LLMs are available
   useEffect(() => {
@@ -120,15 +133,20 @@ export function ChatSidebar() {
           message: response.content || "AI generated SQL query"
         });
 
-        // Add a message to chat indicating SQL was proposed
+        // Add a message to chat with sql_query as separate field
         const aiMessage = {
           role: "assistant" as const,
-          content: `${response.content}\n\`\`\`sql\n${response.sql_query}\n\`\`\``
+          content: response.content,
+          sql_query: response.sql_query
         };
         addMessage(aiMessage);
       } else {
         // Show the response as a regular chat message
-        const aiMessage = { role: "assistant" as const, content: response.content };
+        const aiMessage = {
+          role: "assistant" as const,
+          content: response.content,
+          sql_query: response.sql_query
+        };
         addMessage(aiMessage);
       }
     } catch (error) {
@@ -174,9 +192,34 @@ export function ChatSidebar() {
         )}
         {messages.map((message, index) => {
           const sqlBlocks = extractSQLBlocks(message.content);
+          const hasSqlQuery = message.sql_query && message.sql_query.trim().length > 0;
 
-          if (sqlBlocks.length === 0) {
-            // No SQL blocks, render the message as is
+          // Render message content
+          const messageContentElement = (
+            <pre className="whitespace-pre-wrap font-sans text-xs leading-relaxed">
+              {message.content}
+            </pre>
+          );
+
+          // If message has sql_query field, show it as a code block
+          if (hasSqlQuery && sqlBlocks.length === 0) {
+            return (
+              <div
+                key={index}
+                className={`p-2 rounded-md ${message.role === "user" ? "bg-muted/50" : ""} w-full ${
+                  message.role === "user" ? "ml-auto max-w-[85%]" : "mr-auto"
+                } flex flex-col`}
+              >
+                {messageContentElement}
+                <div className="w-full overflow-hidden mt-2 mb-2">
+                  <SQLCodeBlock code={message.sql_query!} />
+                </div>
+              </div>
+            );
+          }
+
+          if (sqlBlocks.length === 0 && !hasSqlQuery) {
+            // No SQL blocks or sql_query, render the message as is
             return (
               <div
                 key={index}
@@ -184,14 +227,12 @@ export function ChatSidebar() {
                   message.role === "user" ? "ml-auto max-w-[85%]" : "mr-auto w-full"
                 } text-xs`}
               >
-                <pre className="whitespace-pre-wrap font-sans text-xs leading-relaxed">
-                  {message.content}
-                </pre>
+                {messageContentElement}
               </div>
             );
           }
 
-          // We have SQL blocks to render
+          // We have SQL blocks in content to render (legacy format)
           let lastIndex = 0;
           const contentParts: ReactNode[] = [];
 

@@ -99,7 +99,7 @@ interface AppState extends FileTreeState, SourceChildrenState {
 
   // Chat state
   selectedLLM: string | null;
-  messages: Array<{ role: "user" | "assistant"; content: string }>;
+  messages: Array<{ role: "user" | "assistant"; content: string; sql_query?: string }>;
   chatLoading: boolean;
   sessionId: string | null;
 
@@ -132,12 +132,19 @@ interface AppState extends FileTreeState, SourceChildrenState {
 
   // Chat actions
   setSelectedLLM: (llmId: string | null) => void;
-  addMessage: (message: { role: "user" | "assistant"; content: string }) => void;
+  addMessage: (message: {
+    role: "user" | "assistant";
+    content: string;
+    sql_query?: string;
+  }) => void;
   setChatLoading: (loading: boolean) => void;
   clearMessages: () => void;
   generateNewSession: () => void;
   setSessionId: (sessionId: string | null) => void;
   startNewSession: () => void;
+  loadMessagesFromServer: (
+    messages: Array<{ role: "user" | "assistant"; content: string; sql_query?: string }>
+  ) => void;
 
   // New action to clean up disconnected sources
   cleanupDisconnectedSources: (connectedSourceIds: string[]) => void;
@@ -275,6 +282,7 @@ export const useAppStore = create<AppState>()(
       generateNewSession: () => set({ sessionId: crypto.randomUUID() }),
       setSessionId: (sessionId) => set({ sessionId }),
       startNewSession: () => set({ messages: [], sessionId: crypto.randomUUID() }),
+      loadMessagesFromServer: (messages) => set({ messages }),
 
       // New action to clean up disconnected sources
       cleanupDisconnectedSources: (connectedSourceIds) =>
