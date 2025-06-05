@@ -418,7 +418,7 @@ export const FileTree = ({ data, onSourceSelect, onTableDoubleClick }: FileTreeP
   return (
     <div className="h-full flex flex-col">
       {/* Fixed header */}
-      <div className="flex-shrink-0 p-2 font-semibold border-b flex items-center justify-between">
+      <div className="flex-shrink-0 p-2 font-semibold text-sm border-b flex items-center justify-between">
         <span>Sources</span>
         <AddSource className="hover:text-foreground text-muted-foreground" />
       </div>

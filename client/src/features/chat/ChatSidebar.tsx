@@ -234,69 +234,65 @@ export function ChatSidebar() {
   };
 
   return (
-    <div className="h-full flex flex-col border-l bg-background">
+    <div className="h-full flex flex-col">
       {/* Chat Session Header */}
-      <div className="flex-shrink-0 px-3 py-2 border-b border-border/50 bg-muted/10">
-        <div className="flex items-center justify-between">
-          {/* Session name on the left */}
-          <div className="flex-1 min-w-0">
-            <h3 className="text-sm font-medium text-foreground truncate">
-              {getCurrentSessionName()}
-            </h3>
-          </div>
+      <div className="flex-shrink-0 p-2 font-semibold text-sm border-b border-border/50 bg-muted/10 flex items-center justify-between">
+        <span>{getCurrentSessionName()}</span>
 
-          {/* Actions on the right */}
-          <div className="flex items-center gap-1">
-            {/* History dropdown */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="sm" className="h-8 w-8 p-0 hover:bg-muted/50">
-                  <History className="h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-64">
-                {sessionsData?.sessions && sessionsData.sessions.length > 0 ? (
-                  <>
-                    {sessionsData.sessions
-                      .sort(
-                        (a, b) =>
-                          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-                      )
-                      .map((session) => (
-                        <DropdownMenuItem
-                          key={session.id}
-                          onClick={() => handleSessionSelect(session.id)}
-                          className="flex justify-between items-center"
-                        >
-                          <div className="flex-1 min-w-0">
-                            <div className="text-sm font-medium truncate">
-                              {session.name || "Unnamed Chat"}
-                            </div>
+        {/* Actions on the right */}
+        <div className="flex items-center gap-1">
+          {/* History dropdown */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="p-0 h-auto w-auto cursor-pointer  hover:text-foreground text-muted-foreground"
+              >
+                <History className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-64">
+              {sessionsData?.sessions && sessionsData.sessions.length > 0 ? (
+                <>
+                  {sessionsData.sessions
+                    .sort(
+                      (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+                    )
+                    .map((session) => (
+                      <DropdownMenuItem
+                        key={session.id}
+                        onClick={() => handleSessionSelect(session.id)}
+                        className="flex justify-between items-center"
+                      >
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm font-medium truncate">
+                            {session.name || "Unnamed Chat"}
                           </div>
-                          <div className="text-xs text-muted-foreground ml-2">
-                            {formatSessionDate(session.created_at)}
-                          </div>
-                        </DropdownMenuItem>
-                      ))}
-                  </>
-                ) : (
-                  <DropdownMenuItem disabled>
-                    <span className="text-muted-foreground">No previous sessions</span>
-                  </DropdownMenuItem>
-                )}
-              </DropdownMenuContent>
-            </DropdownMenu>
+                        </div>
+                        <div className="text-xs text-muted-foreground ml-2">
+                          {formatSessionDate(session.created_at)}
+                        </div>
+                      </DropdownMenuItem>
+                    ))}
+                </>
+              ) : (
+                <DropdownMenuItem disabled>
+                  <span className="text-muted-foreground">No previous sessions</span>
+                </DropdownMenuItem>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
 
-            {/* New session button */}
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-8 w-8 p-0 hover:bg-muted/50"
-              onClick={handleNewSession}
-            >
-              <Plus className="h-4 w-4" />
-            </Button>
-          </div>
+          {/* New session button */}
+          <Button
+            variant="ghost"
+            size="icon"
+            className="p-0 h-auto w-auto cursor-pointer hover:text-foreground text-muted-foreground"
+            onClick={handleNewSession}
+          >
+            <Plus className="h-4 w-4" />
+          </Button>
         </div>
       </div>
 

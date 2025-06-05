@@ -137,10 +137,11 @@ export function Editor({
         <Button
           onClick={() => handleRunQuery()}
           disabled={!isEditorActive || isRunning}
-          className="gap-1"
+          className="gap-1 text-xs cursor-pointer"
+          size="sm"
         >
           <PlayIcon size={16} />
-          Run SQL
+          Run
         </Button>
       </div>
       {/* Scrollable editor content */}

@@ -35,7 +35,10 @@ export const TableDataDisplay = ({
       {tableData || queryResults ? (
         <>
           {/* Fixed header */}
-          <div className="flex-shrink-0 p-2 font-semibold border-b">{title}</div>
+          <div className="flex-shrink-0 p-2 font-semibold text-sm border-b flex items-center justify-between">
+            <span>{title}</span>
+          </div>
+
           {/* Scrollable content */}
           <div className="flex-1 min-h-0">
             <EditableTable data={displayData as Record<string, unknown>[]} isLoading={isLoading} />
