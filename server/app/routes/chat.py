@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends
 from app.dependencies import get_current_workspace
 from app.core.db import get_db
 from sqlalchemy.orm import Session
-from app.models import ChatSession, ChatMessage, MessageTypeEnum
+from app.models import ChatSession, ChatMessage, MessageTypeEnum, ChatRoleEnum
 from app.schemas.chat import (
     ChatMessagesResponse,
     ChatMessageResponse,
@@ -11,6 +11,7 @@ from app.schemas.chat import (
 )
 from uuid import UUID
 from fastapi import HTTPException
+
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 
@@ -43,7 +44,11 @@ async def get_messages(
     # Get messages from the database, ordered by position
     db_messages = (
         db.query(ChatMessage)
-        .filter_by(chat_session_id=session_id)
+        .filter(
+            ChatMessage.role.in_([ChatRoleEnum.user, ChatRoleEnum.assistant]),
+            ChatMessage.chat_session_id == session_id,
+            ChatMessage.message_type == MessageTypeEnum.message,
+        )
         .order_by(ChatMessage.position)
         .all()
     )
@@ -52,18 +57,14 @@ async def get_messages(
     client_messages = []
 
     for db_message in db_messages:
-        # Only include regular messages (not tool calls/responses)
-        if db_message.message_type == MessageTypeEnum.message:
-            # Only include user, assistant
-            if db_message.role.value in ["user", "assistant"]:
-                client_messages.append(
-                    ChatMessageResponse(
-                        role=db_message.role.value,
-                        content=db_message.content,
-                        sql_query=db_message.sql_query,
-                        created_at=db_message.created_at,
-                    )
-                )
+        client_messages.append(
+            ChatMessageResponse(
+                role=db_message.role.value,
+                content=db_message.content,
+                sql_query=db_message.sql_query,
+                created_at=db_message.created_at,
+            )
+        )
 
     return ChatMessagesResponse(
         messages=client_messages, session_id=session_id, total_count=len(client_messages)

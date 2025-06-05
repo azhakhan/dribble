@@ -118,7 +118,7 @@ class OpenAIProvider(BaseLLMProvider):
                 assistant_db_msg = self.message_service.save_message(
                     role="assistant",
                     content="Executing tool calls...",
-                    message_type=MessageTypeEnum.message,
+                    message_type=MessageTypeEnum.internal_message,
                     metadata={"has_tool_calls": True},
                 )
                 assistant_message_id = str(assistant_db_msg.id)

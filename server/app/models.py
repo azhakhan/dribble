@@ -128,7 +128,8 @@ class ChatRoleEnum(enum.Enum):
 
 
 class MessageTypeEnum(enum.Enum):
-    message = "message"  # Regular user/assistant message
+    message = "message"  # Regular user/assistant message visible to client
+    internal_message = "internal_message"  # Internal operational messages (not shown to client)
     tool_call = "tool_call"  # Assistant tool call
     tool_response = "tool_response"  # Tool execution response
 
