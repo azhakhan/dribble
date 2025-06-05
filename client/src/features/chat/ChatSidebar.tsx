@@ -9,11 +9,17 @@ import {
   SelectTrigger,
   SelectValue
 } from "@/components/ui/select";
-import { ChevronUp, Database } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger
+} from "@/components/ui/dropdown-menu";
+import { ChevronUp, Database, History, Plus } from "lucide-react";
 import { useAppStore } from "@/shared/store/useAppStore";
 import { useChatLLMQuery } from "@/shared/hooks/useChatLLMQuery";
 import { useLLMsQuery, useLLMQuery } from "@/shared/hooks/useLLMsQuery";
-// import { useChatMessagesQuery } from "@/shared/hooks/useChatQuery"; // For future session loading
+import { useChatSessionsQuery, useChatMessagesQuery } from "@/shared/hooks/useChatQuery";
 import { toast } from "sonner";
 import { SQLCodeBlock } from "./SQLCodeBlock";
 
@@ -48,24 +54,35 @@ export function ChatSidebar() {
     editorContent,
     setProposedChanges,
     sessionId,
-    generateNewSession
+    generateNewSession,
+    startNewSession,
+    setSessionId,
+    loadMessagesFromServer
   } = useAppStore();
 
   const { data: llms = [] } = useLLMsQuery();
   const { data: selectedLLM } = useLLMQuery(selectedLLMId || undefined);
+  const { data: sessionsData } = useChatSessionsQuery();
   const chatMutation = useChatLLMQuery();
 
-  // To load existing messages from server when session changes, you would use:
-  // const { data: chatMessagesData } = useChatMessagesQuery(sessionId);
-  // useEffect(() => {
-  //   if (chatMessagesData?.messages) {
-  //     loadMessagesFromServer(chatMessagesData.messages.map(msg => ({
-  //       role: msg.role as "user" | "assistant",
-  //       content: msg.content,
-  //       sql_query: msg.sql_query
-  //     })));
-  //   }
-  // }, [chatMessagesData, loadMessagesFromServer]);
+  // Check if current session exists on server
+  const sessionExistsOnServer = !!(
+    sessionId && sessionsData?.sessions?.some((session) => session.id === sessionId)
+  );
+
+  // Load messages when session changes - only if session exists on server
+  const { data: chatMessagesData } = useChatMessagesQuery(sessionId, sessionExistsOnServer);
+  useEffect(() => {
+    if (chatMessagesData?.messages) {
+      loadMessagesFromServer(
+        chatMessagesData.messages.map((msg) => ({
+          role: msg.role as "user" | "assistant",
+          content: msg.content,
+          sql_query: msg.sql_query
+        }))
+      );
+    }
+  }, [chatMessagesData, loadMessagesFromServer]);
 
   // Auto-select the first LLM if none is selected and LLMs are available
   useEffect(() => {
@@ -92,6 +109,45 @@ export function ChatSidebar() {
       messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
     }
   }, [messages]);
+
+  // Function to get current session name
+  const getCurrentSessionName = () => {
+    if (!sessionId || !sessionsData?.sessions) {
+      return "New chat";
+    }
+
+    const currentSession = sessionsData.sessions.find((session) => session.id === sessionId);
+    return currentSession?.name || "New chat";
+  };
+
+  // Function to handle session selection
+  const handleSessionSelect = (selectedSessionId: string) => {
+    setSessionId(selectedSessionId);
+  };
+
+  // Function to start a new session
+  const handleNewSession = () => {
+    startNewSession();
+  };
+
+  // Function to format session date
+  const formatSessionDate = (dateString: string) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const isToday = date.toDateString() === now.toDateString();
+
+    if (isToday) {
+      return date.toLocaleTimeString("en-US", {
+        hour: "2-digit",
+        minute: "2-digit"
+      });
+    }
+
+    return date.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric"
+    });
+  };
 
   const handleSend = async () => {
     if (!input.trim()) return;
@@ -179,6 +235,71 @@ export function ChatSidebar() {
 
   return (
     <div className="h-full flex flex-col border-l bg-background">
+      {/* Chat Session Header */}
+      <div className="flex-shrink-0 px-3 py-2 border-b border-border/50 bg-muted/10">
+        <div className="flex items-center justify-between">
+          {/* Session name on the left */}
+          <div className="flex-1 min-w-0">
+            <h3 className="text-sm font-medium text-foreground truncate">
+              {getCurrentSessionName()}
+            </h3>
+          </div>
+
+          {/* Actions on the right */}
+          <div className="flex items-center gap-1">
+            {/* History dropdown */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="sm" className="h-8 w-8 p-0 hover:bg-muted/50">
+                  <History className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-64">
+                {sessionsData?.sessions && sessionsData.sessions.length > 0 ? (
+                  <>
+                    {sessionsData.sessions
+                      .sort(
+                        (a, b) =>
+                          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+                      )
+                      .map((session) => (
+                        <DropdownMenuItem
+                          key={session.id}
+                          onClick={() => handleSessionSelect(session.id)}
+                          className="flex justify-between items-center"
+                        >
+                          <div className="flex-1 min-w-0">
+                            <div className="text-sm font-medium truncate">
+                              {session.name || "Unnamed Chat"}
+                            </div>
+                          </div>
+                          <div className="text-xs text-muted-foreground ml-2">
+                            {formatSessionDate(session.created_at)}
+                          </div>
+                        </DropdownMenuItem>
+                      ))}
+                  </>
+                ) : (
+                  <DropdownMenuItem disabled>
+                    <span className="text-muted-foreground">No previous sessions</span>
+                  </DropdownMenuItem>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            {/* New session button */}
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 w-8 p-0 hover:bg-muted/50"
+              onClick={handleNewSession}
+            >
+              <Plus className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      </div>
+
       {/* Scrollable messages area */}
       <div className="flex-1 overflow-y-auto p-3 space-y-3 min-h-0">
         {messages.length === 0 && (
