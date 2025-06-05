@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import type { KeyboardEvent, ChangeEvent, ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -34,6 +34,7 @@ const extractSQLBlocks = (content: string): { sql: string; index: number }[] => 
 
 export function ChatSidebar() {
   const [input, setInput] = useState("");
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const {
     selectedSource,
@@ -71,6 +72,13 @@ export function ChatSidebar() {
       generateNewSession();
     }
   }, [sessionId, generateNewSession]);
+
+  // Auto-scroll to the bottom when messages change
+  useEffect(() => {
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [messages]);
 
   const handleSend = async () => {
     if (!input.trim()) return;
@@ -238,6 +246,8 @@ export function ChatSidebar() {
             </div>
           </div>
         )}
+        {/* Invisible div to mark the end of messages for auto-scrolling */}
+        <div ref={messagesEndRef} />
       </div>
 
       {/* Context indicator */}
