@@ -12,6 +12,13 @@ class LLMName(str, enum.Enum):
     ollama = "ollama"
 
 
+class ActionType(str, enum.Enum):
+    """Actions to take based on response"""
+
+    UPDATE_EDITOR = "update_editor"
+    SHOW_MESSAGE = "show_message"
+
+
 class CreateLLMRequest(BaseModel):
     # name is enum of openai, anthropic, gemini, etc.
     name: LLMName
@@ -20,6 +27,7 @@ class CreateLLMRequest(BaseModel):
     base_url: Optional[str] = None
     api_version: Optional[str] = None
     settings: Optional[Dict[str, Any]] = None
+    default: Optional[bool] = None
 
 
 class UpdateLLMRequest(BaseModel):
@@ -29,6 +37,7 @@ class UpdateLLMRequest(BaseModel):
     base_url: Optional[str] = None
     api_version: Optional[str] = None
     settings: Optional[Dict[str, Any]] = None
+    default: Optional[bool] = None
 
 
 class LLMResponse(BaseModel):
@@ -38,6 +47,7 @@ class LLMResponse(BaseModel):
     base_url: Optional[str] = None
     api_version: Optional[str] = None
     settings: Optional[Dict[str, Any]] = None
+    default: Optional[bool] = None
     workspace_id: UUID
     created_at: datetime
 
@@ -49,13 +59,34 @@ class LLMListResponse(BaseModel):
     id: UUID
     name: LLMName
     model: str
+    default: Optional[bool] = None
 
     class Config:
         from_attributes = True
 
 
 class ChatLLMRequest(BaseModel):
+    session_id: Optional[UUID]
     source_id: UUID
     llm_id: UUID
     message: str
     query: Optional[str] = None
+    stream: Optional[bool] = False
+
+
+class ChatLLMResponse(BaseModel):
+    """Structured response for non-streaming chat"""
+
+    content: str
+    action: ActionType
+    sql_query: Optional[str] = None
+    metadata: Optional[Dict[str, Any]] = None
+
+
+class StreamChunkResponse(BaseModel):
+    """Single chunk of streaming data"""
+
+    content: str
+    is_complete: bool = False
+    action: Optional[ActionType] = None
+    metadata: Optional[Dict[str, Any]] = None

@@ -1,7 +1,7 @@
 repos:
   - repo: https://github.com/astral-sh/ruff-pre-commit
     # Ruff version.
-    rev: v0.11.10
+    rev: v0.11.12
     hooks:
       # Run the linter.
       - id: ruff-check
@@ -25,7 +25,7 @@ repos:
         exclude: node_modules|\.d\.ts$|client/src/components/ui/
 
   - repo: https://github.com/pre-commit/mirrors-prettier
-    rev: v3.1.0
+    rev: v4.0.0-alpha.8
     hooks:
       - id: prettier
         types_or: [javascript, jsx, ts, tsx, json, css, markdown]

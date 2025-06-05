@@ -1,0 +1,14 @@
+{
+  "python.defaultInterpreterPath": "./server/.venv/bin/python",
+  "[python]": {
+    "editor.defaultFormatter": "charliermarsh.ruff",
+    "editor.formatOnSave": true,
+    "editor.codeActionsOnSave": {
+      "source.fixAll.ruff": "explicit",
+      "source.organizeImports.ruff": "explicit"
+    }
+  },
+  "ruff.format.args": ["--line-length=100"],
+  "ruff.lint.args": ["--line-length=100"],
+  "ruff.importStrategy": "fromEnvironment"
+}

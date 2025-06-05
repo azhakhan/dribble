@@ -1,19 +1,22 @@
 from fastapi import APIRouter, HTTPException, Depends
+from fastapi.responses import StreamingResponse
 from app.schemas.llm import (
     CreateLLMRequest,
     UpdateLLMRequest,
     LLMResponse,
     LLMListResponse,
     ChatLLMRequest,
+    ChatLLMResponse,
 )
-from app.controllers.llm import chat_llm
+from app.controllers.llm import ChatService, ChatResponse
 from app.core.db import get_db
 from app.core.encryption import encrypt_password
 from sqlalchemy.orm import Session
-from app.models import LLM, Source
-from app.dependencies import get_current_workspace
+from app.models import LLM, Source, ChatSession
+from app.dependencies import get_current_workspace, get_current_user
 from uuid import UUID
 from typing import List
+import json
 
 router = APIRouter(prefix="/llms", tags=["llms"])
 
@@ -26,11 +29,11 @@ async def create_llm(
 ):
     """Create a new LLM configuration"""
     # Check if LLM with same name already exists in workspace
-    existing_llm = db.query(LLM).filter_by(name=request.name, workspace_id=workspace.id).first()
-    if existing_llm:
+    existing_llms = db.query(LLM).filter_by(workspace_id=workspace.id).all()
+    if len(existing_llms) > 0 and request.name in [llm.name for llm in existing_llms]:
         raise HTTPException(
             status_code=400,
-            detail=f"LLM with name '{request.name.value}' already exists in this workspace",
+            detail=f"LLM with name '{request.name}' already exists in this workspace",
         )
 
     llm = LLM(
@@ -41,6 +44,7 @@ async def create_llm(
         api_version=request.api_version,
         settings=request.settings,
         workspace_id=workspace.id,
+        default=True if len(existing_llms) == 0 else False,
     )
 
     db.add(llm)
@@ -123,9 +127,10 @@ async def delete_llm(
 async def chat_llm_req(
     request: ChatLLMRequest,
     db: Session = Depends(get_db),
+    user=Depends(get_current_user),
     workspace=Depends(get_current_workspace),
 ):
-    """Chat with an LLM"""
+    """Chat with an LLM - supports both streaming and non-streaming"""
     llm = db.query(LLM).filter_by(id=request.llm_id, workspace_id=workspace.id).first()
     if not llm:
         raise HTTPException(status_code=404, detail="LLM not found")
@@ -134,7 +139,64 @@ async def chat_llm_req(
     if not source:
         raise HTTPException(status_code=404, detail="Source not found")
 
+    chat_session = (
+        db.query(ChatSession).filter_by(id=request.session_id, workspace_id=workspace.id).first()
+    )
+    if not chat_session:
+        chat_session = ChatSession(
+            id=request.session_id,
+            workspace_id=workspace.id,
+            source_id=request.source_id,
+            llm_id=request.llm_id,
+        )
+        db.add(chat_session)
+        db.commit()
+        db.refresh(chat_session)
+
     try:
-        return await chat_llm(llm, source, request)
+        service = ChatService(llm, source, chat_session, db, user_id=user.id)
+
+        if request.stream:
+            # Return streaming response
+            async def generate_stream():
+                async for chunk in await service.chat(request, stream=True):
+                    # Convert StreamChunk to JSON
+                    chunk_data = {
+                        "content": chunk.content,
+                        "is_complete": chunk.is_complete,
+                        "action": chunk.action.value if chunk.action else None,
+                        "metadata": chunk.metadata,
+                    }
+                    yield f"data: {json.dumps(chunk_data)}\n\n"
+
+                    # Send final chunk to end stream
+                    if chunk.is_complete:
+                        break
+
+                # Send end signal
+                yield "data: [DONE]\n\n"
+
+            return StreamingResponse(
+                generate_stream(),
+                media_type="text/plain",
+                headers={
+                    "Cache-Control": "no-cache",
+                    "Connection": "keep-alive",
+                    "Content-Type": "text/event-stream",
+                },
+            )
+        else:
+            # Return regular response
+            response = await service.chat(request, stream=False)
+            if isinstance(response, ChatResponse):
+                return ChatLLMResponse(
+                    content=response.content,
+                    action=response.action,
+                    sql_query=response.sql_query,
+                    metadata=response.metadata,
+                )
+            else:
+                raise HTTPException(status_code=500, detail="Unexpected response type")
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e

@@ -4,3 +4,5 @@ globs:
 alwaysApply: false
 ---
 uv used to install packages
+keep your changes to minimum, avoid duplication, don't add example files.
+don't mix dataclasses and pydantic models

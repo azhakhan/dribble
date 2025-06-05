@@ -90,10 +90,18 @@ interface AppState extends FileTreeState, SourceChildrenState {
   // Editor state
   editorContent: string;
 
+  // Proposed changes for diff view
+  proposedChanges: {
+    originalContent: string;
+    proposedContent: string;
+    message: string;
+  } | null;
+
   // Chat state
   selectedLLM: string | null;
-  messages: Array<{ role: "user" | "assistant"; content: string }>;
+  messages: Array<{ role: "user" | "assistant"; content: string; sql_query?: string }>;
   chatLoading: boolean;
+  sessionId: string | null;
 
   // Actions for App state
   setPanelSizes: (sizes: number[]) => void;
@@ -111,11 +119,32 @@ interface AppState extends FileTreeState, SourceChildrenState {
   // Editor actions
   setEditorContent: (content: string) => void;
 
+  // Proposed changes actions
+  setProposedChanges: (
+    changes: {
+      originalContent: string;
+      proposedContent: string;
+      message: string;
+    } | null
+  ) => void;
+  acceptProposedChanges: () => void;
+  rejectProposedChanges: () => void;
+
   // Chat actions
   setSelectedLLM: (llmId: string | null) => void;
-  addMessage: (message: { role: "user" | "assistant"; content: string }) => void;
+  addMessage: (message: {
+    role: "user" | "assistant";
+    content: string;
+    sql_query?: string;
+  }) => void;
   setChatLoading: (loading: boolean) => void;
   clearMessages: () => void;
+  generateNewSession: () => void;
+  setSessionId: (sessionId: string | null) => void;
+  startNewSession: () => void;
+  loadMessagesFromServer: (
+    messages: Array<{ role: "user" | "assistant"; content: string; sql_query?: string }>
+  ) => void;
 
   // New action to clean up disconnected sources
   cleanupDisconnectedSources: (connectedSourceIds: string[]) => void;
@@ -149,12 +178,16 @@ export const useAppStore = create<AppState>()(
       sourceGeneratedChildren: {},
 
       // Editor state
-      editorContent: "-- Write your SQL query here\n",
+      editorContent: "",
+
+      // Proposed changes state
+      proposedChanges: null,
 
       // Chat state
       selectedLLM: null,
       messages: [],
       chatLoading: false,
+      sessionId: null,
 
       // Panel actions
       setPanelSizes: (sizes) => set({ panelSizes: sizes }),
@@ -224,6 +257,20 @@ export const useAppStore = create<AppState>()(
       // Editor actions
       setEditorContent: (content) => set({ editorContent: content }),
 
+      // Proposed changes actions
+      setProposedChanges: (changes) => set({ proposedChanges: changes }),
+      acceptProposedChanges: () =>
+        set((state) => {
+          if (state.proposedChanges) {
+            return {
+              editorContent: state.proposedChanges.proposedContent,
+              proposedChanges: null
+            };
+          }
+          return state;
+        }),
+      rejectProposedChanges: () => set({ proposedChanges: null }),
+
       // Chat actions
       setSelectedLLM: (llmId) => set({ selectedLLM: llmId }),
       addMessage: (message) =>
@@ -232,6 +279,10 @@ export const useAppStore = create<AppState>()(
         })),
       setChatLoading: (loading) => set({ chatLoading: loading }),
       clearMessages: () => set({ messages: [] }),
+      generateNewSession: () => set({ sessionId: crypto.randomUUID() }),
+      setSessionId: (sessionId) => set({ sessionId }),
+      startNewSession: () => set({ messages: [], sessionId: crypto.randomUUID() }),
+      loadMessagesFromServer: (messages) => set({ messages }),
 
       // New action to clean up disconnected sources
       cleanupDisconnectedSources: (connectedSourceIds) =>

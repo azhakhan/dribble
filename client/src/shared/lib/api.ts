@@ -162,6 +162,7 @@ export interface LLM {
   base_url?: string;
   api_version?: string;
   settings?: Record<string, unknown>;
+  default?: boolean;
   workspace_id: string;
   created_at: string;
 }
@@ -170,6 +171,7 @@ export interface LLMListItem {
   id: string;
   name: "openai" | "anthropic" | "gemini" | "ollama";
   model: string;
+  default?: boolean;
 }
 
 export interface CreateLLMRequest {
@@ -179,6 +181,7 @@ export interface CreateLLMRequest {
   base_url?: string;
   api_version?: string;
   settings?: Record<string, unknown>;
+  default?: boolean;
 }
 
 export interface UpdateLLMRequest {
@@ -188,6 +191,7 @@ export interface UpdateLLMRequest {
   base_url?: string;
   api_version?: string;
   settings?: Record<string, unknown>;
+  default?: boolean;
 }
 
 // LLM API functions
@@ -220,15 +224,57 @@ export interface ChatLLMRequest {
   source_id: string;
   llm_id: string;
   message: string;
+  session_id: string;
   query?: string;
 }
 
 export interface ChatLLMResponse {
-  response: string;
+  content: string;
+  action: "update_editor" | "show_message";
+  sql_query?: string;
+  metadata?: Record<string, unknown>;
 }
 
 export const chatLLM = async (data: ChatLLMRequest): Promise<ChatLLMResponse> => {
   const response = await api.post<ChatLLMResponse>("/llms/chat", data);
+  return response.data;
+};
+
+// Chat Messages types and functions
+export interface ChatMessageResponse {
+  role: "user" | "assistant";
+  content: string;
+  sql_query?: string;
+  created_at: string;
+}
+
+export interface ChatMessagesResponse {
+  messages: ChatMessageResponse[];
+  session_id: string;
+  total_count: number;
+}
+
+export interface ChatSessionResponse {
+  id: string;
+  name?: string;
+  source_id: string;
+  llm_id: string;
+  workspace_id: string;
+  created_at: string;
+}
+
+export interface ChatSessionsResponse {
+  sessions: ChatSessionResponse[];
+  total_count: number;
+}
+
+export const getChatMessages = async (sessionId: string): Promise<ChatMessagesResponse> => {
+  const response = await api.get<ChatMessagesResponse>(`/chat/messages/${sessionId}`);
+  return response.data;
+};
+
+export const getChatSessions = async (): Promise<ChatSessionsResponse> => {
+  const response = await api.get<ChatSessionsResponse>("/chat/sessions");
   return response.data;
 };
 

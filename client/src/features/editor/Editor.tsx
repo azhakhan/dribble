@@ -7,6 +7,8 @@ import { useQueryQuery } from "@/shared/hooks/useQueryQuery";
 import { useAppStore } from "@/shared/store/useAppStore";
 import { LanguageIdEnum } from "@/shared/lib/monaco-setup";
 import { MonacoSQLEditor } from "./MonacoSQLEditor";
+import { MonacoDiffEditor } from "./MonacoDiffEditor";
+import { ProposedChangesBar } from "./ProposedChangesBar";
 
 interface EditorProps {
   selectedSource: Source | null;
@@ -27,8 +29,14 @@ export function Editor({
   const [isRunning, setIsRunning] = useState(false);
   const [activeQuery, setActiveQuery] = useState<{ sourceId: string; sql: string } | null>(null);
 
-  // Get editor content from appStore
-  const { editorContent, setEditorContent } = useAppStore();
+  // Get editor content and proposed changes from appStore
+  const {
+    editorContent,
+    setEditorContent,
+    proposedChanges,
+    acceptProposedChanges,
+    rejectProposedChanges
+  } = useAppStore();
 
   // Helper to map dbtype to Monaco language
   function getMonacoLanguage(dbtype?: string): string {
@@ -98,8 +106,12 @@ export function Editor({
 
   const isEditorActive = selectedSource && !schemasLoading && !schemasError;
 
-  const handleRunQuery = () => {
-    if (!selectedSource || !editorContent.trim()) return;
+  const handleRunQuery = (sqlToRun?: string) => {
+    if (!selectedSource) return;
+
+    const queryToRun =
+      sqlToRun || (proposedChanges ? proposedChanges.proposedContent : editorContent);
+    if (!queryToRun.trim()) return;
 
     setIsRunning(true);
     if (onQueryStatusChange) {
@@ -114,7 +126,7 @@ export function Editor({
     // Set the active query which will trigger the useQueryQuery hook
     setActiveQuery({
       sourceId: selectedSource.id,
-      sql: editorContent
+      sql: queryToRun
     });
   };
 
@@ -122,7 +134,11 @@ export function Editor({
     <div ref={editorContainerRef} className="h-full flex flex-col">
       {/* Fixed header with run button only */}
       <div className="flex-shrink-0 flex justify-end items-center gap-2 p-2 border-b">
-        <Button onClick={handleRunQuery} disabled={!isEditorActive || isRunning} className="gap-1">
+        <Button
+          onClick={() => handleRunQuery()}
+          disabled={!isEditorActive || isRunning}
+          className="gap-1"
+        >
           <PlayIcon size={16} />
           Run SQL
         </Button>
@@ -142,13 +158,29 @@ export function Editor({
             </p>
           </div>
         )}
-        <MonacoSQLEditor
-          value={editorContent}
-          onChange={setEditorContent}
-          language={getMonacoLanguage(selectedSource?.dbtype)}
-          readOnly={!isEditorActive}
-        />
+
+        {/* Show diff editor if there are proposed changes, otherwise show regular editor */}
+        {proposedChanges ? (
+          <MonacoDiffEditor
+            originalContent={proposedChanges.originalContent}
+            proposedContent={proposedChanges.proposedContent}
+            language={getMonacoLanguage(selectedSource?.dbtype)}
+            readOnly={true}
+          />
+        ) : (
+          <MonacoSQLEditor
+            value={editorContent}
+            onChange={setEditorContent}
+            language={getMonacoLanguage(selectedSource?.dbtype)}
+            readOnly={!isEditorActive}
+          />
+        )}
       </div>
+
+      {/* Show accept/reject bar when there are proposed changes */}
+      {proposedChanges && (
+        <ProposedChangesBar onAccept={acceptProposedChanges} onReject={rejectProposedChanges} />
+      )}
     </div>
   );
 }
