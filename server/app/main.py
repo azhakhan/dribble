@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 from app.routes.sources import router as sources_router
 from app.routes.query import router as query_router
 from app.routes.llm import router as llm_router
+from app.routes.chat import router as chat_router
 from app.core.start import ensure_user_and_workspace
 from app.core.worker_health_check import start_health_check, stop_health_check
 from app.core.reconcile import reconcile_workers
@@ -37,3 +38,4 @@ async def health():
 app.include_router(sources_router)
 app.include_router(query_router)
 app.include_router(llm_router)
+app.include_router(chat_router)
