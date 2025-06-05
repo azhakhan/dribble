@@ -240,4 +240,42 @@ export const chatLLM = async (data: ChatLLMRequest): Promise<ChatLLMResponse> =>
   return response.data;
 };
 
+// Chat Messages types and functions
+export interface ChatMessageResponse {
+  role: "user" | "assistant";
+  content: string;
+  sql_query?: string;
+  created_at: string;
+}
+
+export interface ChatMessagesResponse {
+  messages: ChatMessageResponse[];
+  session_id: string;
+  total_count: number;
+}
+
+export interface ChatSessionResponse {
+  id: string;
+  name?: string;
+  source_id: string;
+  llm_id: string;
+  workspace_id: string;
+  created_at: string;
+}
+
+export interface ChatSessionsResponse {
+  sessions: ChatSessionResponse[];
+  total_count: number;
+}
+
+export const getChatMessages = async (sessionId: string): Promise<ChatMessagesResponse> => {
+  const response = await api.get<ChatMessagesResponse>(`/chat/messages/${sessionId}`);
+  return response.data;
+};
+
+export const getChatSessions = async (): Promise<ChatSessionsResponse> => {
+  const response = await api.get<ChatSessionsResponse>("/chat/sessions");
+  return response.data;
+};
+
 export default api;
