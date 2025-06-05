@@ -55,6 +55,7 @@ class ChatMessageService:
         self,
         role: str,
         content: str,
+        sql_query: Optional[str] = None,
         message_type: MessageTypeEnum = MessageTypeEnum.message,
         metadata: Optional[Dict[str, Any]] = None,
         parent_message_id: Optional[str] = None,
@@ -77,6 +78,7 @@ class ChatMessageService:
         db_message = ChatMessageModel(
             role=role_enum,
             content=content,
+            sql_query=sql_query,
             position=next_position,
             message_type=message_type,
             message_metadata=metadata,

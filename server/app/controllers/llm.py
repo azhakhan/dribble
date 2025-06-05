@@ -495,11 +495,8 @@ class ChatService:
             self.message_service.save_message(
                 role="assistant",
                 content=response.content,
-                metadata=(
-                    {"action": response.action.value, "sql_query": response.sql_query}
-                    if response.sql_query
-                    else {"action": response.action.value}
-                ),
+                sql_query=response.sql_query,
+                metadata={"action": response.action.value},
             )
 
             return response
@@ -523,12 +520,16 @@ class ChatService:
 
             # Save complete response when streaming is done
             if chunk.is_complete:
+                # Extract sql_query from metadata if present
+                sql_query = accumulated_metadata.get("sql_query")
+
                 self.message_service.save_message(
                     role="assistant",
                     content=accumulated_content,
+                    sql_query=sql_query,
                     metadata={
                         "action": chunk.action.value if chunk.action else "show_message",
-                        **accumulated_metadata,
+                        **{k: v for k, v in accumulated_metadata.items() if k != "sql_query"},
                     },
                 )
 
