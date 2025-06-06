@@ -647,8 +647,35 @@ export const useAppStore = create<AppState>()(
         }));
 
         try {
+          // Step 1: Execute query and get a query ID
           const queryId = await apiExecuteQuery(tab.sourceId, queryToRun);
-          const results = await getQueryResults(queryId);
+
+          // Step 2: Poll for results until we get a final response
+          const pollForResults = async (maxAttempts = 50): Promise<object[]> => {
+            // Limit the number of attempts to prevent infinite loops
+            if (maxAttempts <= 0) {
+              throw new Error("Max polling attempts reached - query may still be running");
+            }
+
+            try {
+              const results = await getQueryResults(queryId);
+
+              // Check if results is an array (query completed successfully)
+              if (Array.isArray(results)) {
+                return results;
+              } else {
+                // If not an array, we need to keep polling (matches old logic)
+                await new Promise((resolve) => setTimeout(resolve, 500));
+                return pollForResults(maxAttempts - 1);
+              }
+            } catch (error) {
+              console.error("Error during polling:", error);
+              throw error;
+            }
+          };
+
+          // Start polling for results
+          const results = await pollForResults();
 
           // Ensure results are always an array of objects
           let processedResults: object[];
@@ -681,7 +708,13 @@ export const useAppStore = create<AppState>()(
                 ? {
                     ...t,
                     queryRunning: false,
-                    queryResults: [{ error: "Query execution failed" }]
+                    queryResults: [
+                      {
+                        error: `Query execution failed: ${
+                          error instanceof Error ? error.message : "Unknown error"
+                        }`
+                      }
+                    ]
                   }
                 : t
             )
