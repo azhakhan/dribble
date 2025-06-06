@@ -45,6 +45,7 @@ export function Editor({
   const [queryId, setQueryId] = useState<string | null>(initialQueryId);
   const [originalQueryContent, setOriginalQueryContent] = useState<string>("");
   const lastSavedContentRef = useRef<string>("");
+  const lastAIProposalRef = useRef<string>("");
 
   // Get editor content and proposed changes from appStore
   const {
@@ -77,6 +78,10 @@ export function Editor({
 
       setEditorContent(queryContent);
       setOriginalQueryContent(queryContent);
+
+      // Reset refs to sync with loaded content
+      lastSavedContentRef.current = queryContent.trim();
+      lastAIProposalRef.current = "";
     }
   }, [loadedQuery, queryVersions, isLoadingQuery, isLoadingVersions, setEditorContent]);
 
@@ -286,13 +291,19 @@ export function Editor({
   // Effect to save version when AI proposes changes
   useEffect(() => {
     if (proposedChanges && queryId) {
-      // Check if proposed content is different from original
       const proposedContent = proposedChanges.proposedContent;
-      if (originalQueryContent.trim() !== proposedContent.trim() && proposedContent.trim() !== "") {
+
+      // Only save if this is a new AI proposal (different from last one)
+      if (
+        lastAIProposalRef.current !== proposedContent.trim() &&
+        editorContent.trim() !== proposedContent.trim() &&
+        proposedContent.trim() !== ""
+      ) {
+        lastAIProposalRef.current = proposedContent.trim();
         createVersionIfChanged("ai");
       }
     }
-  }, [proposedChanges, queryId, originalQueryContent, createVersionIfChanged]);
+  }, [proposedChanges?.proposedContent, queryId, editorContent]);
 
   // Effect to handle page/tab close (keep this for browser close)
   useEffect(() => {
@@ -319,6 +330,16 @@ export function Editor({
       onQueryLoad(loadQuery);
     }
   }, [onQueryLoad, loadQuery]);
+
+  // Effect to handle component unmount (save version when navigating away)
+  useEffect(() => {
+    return () => {
+      // Save version when component unmounts (user navigates away)
+      if (queryId && hasQueryChanged()) {
+        createVersionIfChanged("on_exit");
+      }
+    };
+  }, []); // Empty dependency array so cleanup only runs on unmount
 
   return (
     <div ref={editorContainerRef} className="h-full flex flex-col">

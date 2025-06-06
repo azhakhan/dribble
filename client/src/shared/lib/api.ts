@@ -366,6 +366,11 @@ export const getQueryVersions = async (queryId: string): Promise<QueryVersion[]>
   return response.data;
 };
 
+export const getLatestQueryVersion = async (queryId: string): Promise<QueryVersion | null> => {
+  const response = await api.get<QueryVersion | null>(`/query/${queryId}/versions/latest`);
+  return response.data;
+};
+
 export const getQueryVersionById = async (versionId: string): Promise<QueryVersion> => {
   const response = await api.get<QueryVersion>(`/query/versions/${versionId}`);
   return response.data;

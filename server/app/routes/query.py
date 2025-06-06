@@ -99,6 +99,23 @@ async def get_query_versions_by_query_id(query_id: UUID, db: Session = Depends(g
     return versions
 
 
+@router.get("/{query_id}/versions/latest", response_model=QueryVersionResponse)
+async def get_latest_query_version(query_id: UUID, db: Session = Depends(get_db)):
+    """Get the latest version for a specific query"""
+    query = db.query(Query).filter_by(id=query_id).first()
+    if not query:
+        raise HTTPException(status_code=404, detail="Query not found")
+
+    latest_version = (
+        db.query(QueryVersion)
+        .filter_by(query_id=query_id)
+        .order_by(QueryVersion.created_at.desc())
+        .first()
+    )
+
+    return latest_version  # Will be None if no versions exist
+
+
 @router.get("/versions/{version_id}", response_model=QueryVersionResponse)
 async def get_query_version_by_id(version_id: UUID, db: Session = Depends(get_db)):
     """Get a specific query version by ID"""
