@@ -1,28 +1,17 @@
-import { useEffect, useMemo, useCallback } from "react";
+import { useMemo, useCallback, useEffect } from "react";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
-
+import { useAppStore } from "@/shared/store/useAppStore";
 import { SidebarTabs } from "@/features/sources/SidebarTabs";
-import { sourcesToFileTreeNodes } from "@/shared/lib/fileTreeUtils";
-import { QueryTabs } from "@/features/query/QueryTabs";
+import { OptimizedQueryTabs } from "@/features/query/OptimizedQueryTabs";
 import { ChatSidebar } from "@/features/chat/ChatSidebar";
 import { useSourcesQuery } from "@/shared/hooks/useSourcesQuery";
+import { useConnectedSourcesQuery } from "@/shared/hooks/useConnectedSourcesQuery";
 import { useSourceSchemasQuery } from "@/shared/hooks/useSourceSchemasQuery";
 import { useSourceStatusQuery } from "@/shared/hooks/useSourceStatusQuery";
-import { useConnectedSourcesQuery } from "@/shared/hooks/useConnectedSourcesQuery";
+import { sourcesToFileTreeNodes } from "@/shared/lib/fileTreeUtils";
 import type { Source, ConnectedSource, Query } from "@/shared/lib/api";
-import { useAppStore } from "@/shared/store/useAppStore";
 
-const sampleFileTree = [
-  {
-    name: "Loading...",
-    type: "folder" as const,
-    children: []
-  }
-];
-
-export function IdePage() {
-  console.log("🔄 IdePage render");
-
+export function OptimizedIdePage() {
   // Get state and actions from Zustand store
   const {
     panelSizes,
@@ -37,7 +26,10 @@ export function IdePage() {
     activeTabId,
     openTabs,
     updateTabContent,
-    setActiveTab
+    setActiveTab,
+    setSources,
+    setConnectedSources,
+    loadQueryInTab
   } = useAppStore();
 
   // Query for all sources
@@ -51,6 +43,19 @@ export function IdePage() {
     if (!connectedSourcesData) return new Set<string>();
     return new Set(connectedSourcesData.map((source: ConnectedSource) => source.id));
   }, [connectedSourcesData]);
+
+  // Update store with sources and connected sources when they change
+  useEffect(() => {
+    if (sources) {
+      setSources(sources);
+    }
+  }, [sources, setSources]);
+
+  useEffect(() => {
+    if (connectedSourcesData) {
+      setConnectedSources(connectedSourcesData.map((s: ConnectedSource) => s.id));
+    }
+  }, [connectedSourcesData, setConnectedSources]);
 
   // Query for selected source schemas - only if the source is connected
   const { data: sourceSchemas } = useSourceSchemasQuery(
@@ -73,29 +78,20 @@ export function IdePage() {
     }
   }, [selectedSource, sourceSchemas, sourceSchemaErrors, setSourceSchema, setSourceSchemaError]);
 
-  // Track source statuses
+  // Update source status when new status data is loaded
   useEffect(() => {
-    if (selectedSourceStatus && selectedSource?.id) {
+    if (selectedSource?.id && selectedSourceStatus) {
       setSourceStatus(selectedSource.id, selectedSourceStatus);
     }
-  }, [selectedSourceStatus, selectedSource, setSourceStatus]);
+  }, [selectedSource, selectedSourceStatus, setSourceStatus]);
 
-  // Update selectedSource when active tab changes
-  useEffect(() => {
-    if (activeTabId && openTabs.length > 0) {
-      const activeTab = openTabs.find((tab) => tab.id === activeTabId);
-      if (activeTab && sources) {
-        const tabSource = sources.find((source) => source.id === activeTab.sourceId);
-        if (tabSource && (!selectedSource || selectedSource.id !== tabSource.id)) {
-          setSelectedSource(tabSource);
-        }
-      }
-    }
-  }, [activeTabId, openTabs, sources, selectedSource, setSelectedSource]);
+  // Transform sources to file tree structure - memoized
+  const fileTreeData = useMemo(() => {
+    if (!sources) return [];
+    return sourcesToFileTreeNodes(sources);
+  }, [sources]);
 
-  // Build file tree data with sources only - schema children are handled by FileTree component via AppState
-  const fileTreeData = sources ? sourcesToFileTreeNodes(sources) : sampleFileTree;
-
+  // Handle source selection
   const handleSourceSelect = useCallback(
     (source: Source) => {
       setSelectedSource(source);
@@ -151,12 +147,12 @@ export function IdePage() {
 
   // Handle query selection from QueryTree
   const handleQuerySelect = useCallback(
-    (query: Query) => {
+    async (query: Query) => {
       // Check if query is already open in a tab
       const existingTab = openTabs.find((tab) => tab.queryId === query.id);
 
       if (existingTab) {
-        // Switch to existing tab - use the action from store instead of direct call
+        // Switch to existing tab
         setActiveTab(existingTab.id);
       } else {
         // Open new tab for this query
@@ -165,18 +161,27 @@ export function IdePage() {
           sourceId: query.source_id,
           title: query.name || `Query ${query.id.slice(0, 8)}`,
           isDirty: false,
-          editorContent: "", // Will be loaded by the Editor component
+          editorContent: "", // Will be loaded by loadQueryInTab
           queryResults: null,
           queryRunning: false,
           selectedTableData: null,
-          isLoadingQuery: false,
-          isLoadingVersions: false,
+          isLoadingQuery: true,
+          isLoadingVersions: true,
           lastSavedContent: "",
           originalContent: ""
         });
+
+        // Get the newly created tab ID from the store
+        const state = useAppStore.getState();
+        const newTab = state.openTabs[state.openTabs.length - 1]; // Latest tab
+
+        if (newTab) {
+          // Load query data in the background
+          await loadQueryInTab(newTab.id, query.id);
+        }
       }
     },
-    [openTabs, setActiveTab, openQueryTab]
+    [openTabs, setActiveTab, openQueryTab, loadQueryInTab]
   );
 
   return (
@@ -198,7 +203,7 @@ export function IdePage() {
         <PanelResizeHandle className="w-1 bg-border hover:bg-primary transition-colors" />
 
         <Panel defaultSize={panelSizes[1]} minSize={30}>
-          <QueryTabs />
+          <OptimizedQueryTabs />
         </Panel>
 
         <PanelResizeHandle className="w-1 bg-border hover:bg-primary transition-colors" />

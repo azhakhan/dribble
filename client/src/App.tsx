@@ -4,6 +4,7 @@ import { ModeToggle } from "@/components/mode-toggle";
 import logo from "@/assets/logo.png";
 import { IdePage, SettingsPage } from "@/pages";
 import { SettingsIcon } from "lucide-react";
+import { OptimizedIdePage } from "./pages/OptimizedIdePage";
 function TopMenu() {
   const navigate = useNavigate();
 
@@ -41,6 +42,7 @@ function App() {
             <Route path="/" element={<IdePage />} />
             <Route path="/ide" element={<IdePage />} />
             <Route path="/settings" element={<SettingsPage />} />
+            <Route path="/optimized" element={<OptimizedIdePage />} />
           </Routes>
         </div>
       </Router>

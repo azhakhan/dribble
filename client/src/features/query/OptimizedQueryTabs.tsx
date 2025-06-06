@@ -1,42 +1,56 @@
 import { X, Plus } from "lucide-react";
-import { useEffect, useCallback, memo } from "react";
+import { useCallback, memo } from "react";
 import { cn } from "@/shared/lib/utils";
 import { Button } from "@/components/ui/button";
-import { Query } from "./Query";
+import { SimplifiedQuery } from "./SimplifiedQuery";
 import { useAppStore } from "@/shared/store/useAppStore";
 
-function QueryTabsComponent() {
-  const { openTabs, activeTabId, openQueryTab, closeQueryTab, setActiveTab, selectedSource } =
-    useAppStore();
+// Memoized tab button component to prevent unnecessary re-renders
+const TabButton = memo(
+  ({
+    tab,
+    isActive,
+    onTabClick,
+    onCloseTab
+  }: {
+    tab: { id: string; title: string; isDirty: boolean };
+    isActive: boolean;
+    onTabClick: (tabId: string) => void;
+    onCloseTab: (tabId: string, e: React.MouseEvent) => void;
+  }) => (
+    <div
+      className={cn(
+        "flex items-center px-3 py-2 border-r cursor-pointer hover:bg-accent group min-w-0",
+        isActive ? "bg-background border-b-2 border-b-primary" : ""
+      )}
+      onClick={() => onTabClick(tab.id)}
+    >
+      <span className="text-sm truncate mr-2 min-w-0" title={tab.title}>
+        {tab.title}
+        {tab.isDirty && <span className="ml-1">•</span>}
+      </span>
+      <button
+        className="opacity-0 group-hover:opacity-100 hover:bg-muted rounded p-0.5 transition-opacity"
+        onClick={(e) => onCloseTab(tab.id, e)}
+        aria-label="Close tab"
+      >
+        <X className="h-3 w-3" />
+      </button>
+    </div>
+  )
+);
 
-  console.log("🔄 QueryTabs render:", {
-    selectedSource: selectedSource?.name,
-    openTabsLength: openTabs.length,
-    activeTabId: activeTabId
-  });
+function OptimizedQueryTabsComponent() {
+  // Use selective subscriptions to prevent unnecessary re-renders
+  const openTabs = useAppStore((state) => state.openTabs);
+  const activeTabId = useAppStore((state) => state.activeTabId);
+  const selectedSource = useAppStore((state) => state.selectedSource);
 
-  // Track when openTabs changes
-  useEffect(() => {
-    console.log(
-      "🔢 openTabs changed:",
-      openTabs.length,
-      openTabs.map((t) => t.title)
-    );
-  }, [openTabs]);
-
-  // Track when activeTabId changes
-  useEffect(() => {
-    console.log("🎯 activeTabId changed:", activeTabId);
-  }, [activeTabId]);
-
-  // Track when selectedSource changes
-  useEffect(() => {
-    console.log("🎯 selectedSource changed:", selectedSource?.name);
-  }, [selectedSource]);
+  // Get actions from store
+  const { openQueryTab, closeQueryTab, setActiveTab } = useAppStore();
 
   // Handle creating a new query tab
   const handleNewTab = useCallback(() => {
-    console.log("➕ Creating new tab");
     if (!selectedSource) return;
 
     openQueryTab({
@@ -113,26 +127,13 @@ function QueryTabsComponent() {
       {/* Tab bar */}
       <div className="flex-shrink-0 flex items-stretch border-b bg-muted/30 min-h-[40px] overflow-x-auto">
         {openTabs.map((tab) => (
-          <div
+          <TabButton
             key={tab.id}
-            className={cn(
-              "flex items-center px-3 py-2 border-r cursor-pointer hover:bg-accent group min-w-0",
-              tab.id === activeTabId ? "bg-background border-b-2 border-b-primary" : ""
-            )}
-            onClick={() => handleTabClick(tab.id)}
-          >
-            <span className="text-sm truncate mr-2 min-w-0" title={tab.title}>
-              {tab.title}
-              {tab.isDirty && <span className="ml-1">•</span>}
-            </span>
-            <button
-              className="opacity-0 group-hover:opacity-100 hover:bg-muted rounded p-0.5 transition-opacity"
-              onClick={(e) => handleCloseTab(tab.id, e)}
-              aria-label="Close tab"
-            >
-              <X className="h-3 w-3" />
-            </button>
-          </div>
+            tab={tab}
+            isActive={tab.id === activeTabId}
+            onTabClick={handleTabClick}
+            onCloseTab={handleCloseTab}
+          />
         ))}
 
         {/* New tab button */}
@@ -148,10 +149,10 @@ function QueryTabsComponent() {
       </div>
 
       {/* Active tab content */}
-      <div className="flex-1 min-h-0">{activeTab && <Query tabId={activeTab.id} />}</div>
+      <div className="flex-1 min-h-0">{activeTab && <SimplifiedQuery tabId={activeTab.id} />}</div>
     </div>
   );
 }
 
-// Memoize the component to prevent unnecessary re-renders
-export const QueryTabs = memo(QueryTabsComponent);
+// Memoize the main component but be careful about when it should re-render
+export const OptimizedQueryTabs = memo(OptimizedQueryTabsComponent);

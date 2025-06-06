@@ -1,6 +1,14 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type { Source, SourceStatus, Query, QueryVersion, QueryRun } from "@/shared/lib/api";
+import {
+  getQueryById,
+  getQueryVersions,
+  createQuery,
+  createQueryVersion,
+  executeQuery as apiExecuteQuery,
+  getQueryResults
+} from "@/shared/lib/api";
 import type { FileNode } from "@/shared/lib/fileTreeUtils";
 
 // Interface for schema objects
@@ -48,7 +56,7 @@ export interface SchemaObject {
 // Type for the schema map
 export type SourceSchemaMap = Record<string, Record<string, SchemaObject>>;
 
-// Query tab interface
+// Enhanced query tab interface with better state management
 export interface QueryTab {
   id: string;
   queryId: string | null;
@@ -59,6 +67,39 @@ export interface QueryTab {
   queryResults: object[] | null;
   queryRunning: boolean;
   selectedTableData: { sourceId: string; tableName: string; query: string } | null;
+  // Add loading states
+  isLoadingQuery: boolean;
+  isLoadingVersions: boolean;
+  lastSavedContent: string;
+  originalContent: string;
+}
+
+// Centralized query state management
+interface QueryState {
+  // Cached data
+  queries: Record<string, Query>; // queryId -> Query
+  queryVersions: Record<string, QueryVersion[]>; // queryId -> versions
+  sources: Record<string, Source>; // sourceId -> Source
+  connectedSources: Set<string>; // Set of connected source IDs
+
+  // Loading states
+  loadingQueries: Set<string>; // Set of query IDs being loaded
+  loadingVersions: Set<string>; // Set of query IDs whose versions are being loaded
+
+  // Actions for centralized query management
+  loadQuery: (queryId: string) => Promise<void>;
+  loadQueryVersions: (queryId: string) => Promise<void>;
+  setQuery: (queryId: string, query: Query) => void;
+  setQueryVersions: (queryId: string, versions: QueryVersion[]) => void;
+  setSources: (sources: Source[]) => void;
+  setConnectedSources: (connectedSourceIds: string[]) => void;
+
+  // Query execution
+  executeQuery: (tabId: string, sql?: string) => Promise<void>;
+
+  // Query creation and management
+  createNewQuery: (sourceId: string) => Promise<string>;
+  saveQueryVersion: (queryId: string, sql: string, saveTrigger: "run" | "ai") => Promise<void>;
 }
 
 // FileTree state
@@ -83,7 +124,7 @@ interface SourceChildrenState {
 }
 
 // App state
-interface AppState extends FileTreeState, SourceChildrenState {
+interface AppState extends FileTreeState, SourceChildrenState, QueryState {
   // Panel sizes
   panelSizes: number[];
 
@@ -97,7 +138,7 @@ interface AppState extends FileTreeState, SourceChildrenState {
   schemasError: unknown;
   connectedSourceIds: Set<string>;
 
-  // Query state
+  // Query state (legacy - will be moved to QueryState)
   queryResults: object[] | null;
   queryRunning: boolean;
 
@@ -125,7 +166,7 @@ interface AppState extends FileTreeState, SourceChildrenState {
   chatLoading: boolean;
   sessionId: string | null;
 
-  // Query, Version, Run state
+  // Query, Version, Run state (legacy - will be consolidated)
   queriesBySource: Record<string, Query[]>;
   versionsByQuery: Record<string, QueryVersion[]>;
   runsByVersion: Record<string, QueryRun[]>;
@@ -143,12 +184,13 @@ interface AppState extends FileTreeState, SourceChildrenState {
   setSourceStatus: (sourceId: string, status: SourceStatus) => void;
   removeSourceStatus: (sourceId: string) => void;
 
-  // Query tabs actions
+  // Enhanced query tabs actions
   openQueryTab: (tab: Omit<QueryTab, "id">) => void;
   closeQueryTab: (tabId: string) => void;
   setActiveTab: (tabId: string | null) => void;
   updateTabContent: (tabId: string, content: Partial<QueryTab>) => void;
   updateTabTitle: (tabId: string, title: string) => void;
+  loadQueryInTab: (tabId: string, queryId: string) => Promise<void>;
 
   // Editor actions
   setEditorContent: (content: string) => void;
@@ -183,7 +225,7 @@ interface AppState extends FileTreeState, SourceChildrenState {
   // New action to clean up disconnected sources
   cleanupDisconnectedSources: (connectedSourceIds: string[]) => void;
 
-  // Query, Version, Run actions
+  // Legacy query, Version, Run actions (to be deprecated)
   setQueriesBySource: (sourceId: string, queries: Query[]) => void;
   setVersionsByQuery: (queryId: string, versions: QueryVersion[]) => void;
   setRunsByVersion: (versionId: string, runs: QueryRun[]) => void;
@@ -200,7 +242,7 @@ interface AppState extends FileTreeState, SourceChildrenState {
 // Create the store with persistence for certain values
 export const useAppStore = create<AppState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       // Panel sizes with default values
       panelSizes: [20, 60, 20],
 
@@ -249,6 +291,14 @@ export const useAppStore = create<AppState>()(
       queriesBySource: {},
       versionsByQuery: {},
       runsByVersion: {},
+
+      // Centralized query state
+      queries: {},
+      queryVersions: {},
+      sources: {},
+      connectedSources: new Set(),
+      loadingQueries: new Set(),
+      loadingVersions: new Set(),
 
       // Panel actions
       setPanelSizes: (sizes) => set({ panelSizes: sizes }),
@@ -390,7 +440,7 @@ export const useAppStore = create<AppState>()(
           };
         }),
 
-      // Query, Version, Run actions
+      // Legacy query, Version, Run actions
       setQueriesBySource: (sourceId, queries) =>
         set((state) => ({
           queriesBySource: { ...state.queriesBySource, [sourceId]: queries }
@@ -426,8 +476,16 @@ export const useAppStore = create<AppState>()(
       openQueryTab: (tab) =>
         set((state) => {
           const newTabId = crypto.randomUUID();
+          const newTab: QueryTab = {
+            ...tab,
+            id: newTabId,
+            isLoadingQuery: false,
+            isLoadingVersions: false,
+            lastSavedContent: "",
+            originalContent: ""
+          };
           return {
-            openTabs: [...state.openTabs, { ...tab, id: newTabId }],
+            openTabs: [...state.openTabs, newTab],
             activeTabId: newTabId
           };
         }),
@@ -454,6 +512,214 @@ export const useAppStore = create<AppState>()(
         set((state) => ({
           openTabs: state.openTabs.map((tab) => (tab.id === tabId ? { ...tab, title } : tab))
         })),
+
+      // Enhanced query management
+      loadQueryInTab: async (tabId, queryId) => {
+        const state = get();
+        const tab = state.openTabs.find((t) => t.id === tabId);
+        if (!tab) return;
+
+        // Set loading state
+        set((state) => ({
+          openTabs: state.openTabs.map((t) =>
+            t.id === tabId ? { ...t, isLoadingQuery: true, isLoadingVersions: true } : t
+          )
+        }));
+
+        try {
+          // Load query and versions concurrently
+          await Promise.all([state.loadQuery(queryId), state.loadQueryVersions(queryId)]);
+
+          const updatedState = get();
+          const query = updatedState.queries[queryId];
+          const versions = updatedState.queryVersions[queryId] || [];
+          const latestVersion = versions[0];
+
+          // Update tab with loaded data
+          set((state) => ({
+            openTabs: state.openTabs.map((t) =>
+              t.id === tabId
+                ? {
+                    ...t,
+                    queryId,
+                    title: query?.name || `Query ${queryId.slice(0, 8)}`,
+                    editorContent: latestVersion?.sql || "",
+                    originalContent: latestVersion?.sql || "",
+                    lastSavedContent: latestVersion?.sql || "",
+                    isLoadingQuery: false,
+                    isLoadingVersions: false
+                  }
+                : t
+            )
+          }));
+        } catch (error) {
+          console.error("Failed to load query:", error);
+          // Reset loading state on error
+          set((state) => ({
+            openTabs: state.openTabs.map((t) =>
+              t.id === tabId ? { ...t, isLoadingQuery: false, isLoadingVersions: false } : t
+            )
+          }));
+        }
+      },
+
+      // Centralized query state management
+      loadQuery: async (queryId) => {
+        const state = get();
+        if (state.queries[queryId] || state.loadingQueries.has(queryId)) return;
+
+        set((state) => ({
+          loadingQueries: new Set(state.loadingQueries).add(queryId)
+        }));
+
+        try {
+          const query = await getQueryById(queryId);
+          set((state) => ({
+            queries: { ...state.queries, [queryId]: query },
+            loadingQueries: new Set([...state.loadingQueries].filter((id) => id !== queryId))
+          }));
+        } catch (error) {
+          console.error(`Failed to load query ${queryId}:`, error);
+          set((state) => ({
+            loadingQueries: new Set([...state.loadingQueries].filter((id) => id !== queryId))
+          }));
+        }
+      },
+
+      loadQueryVersions: async (queryId) => {
+        const state = get();
+        if (state.queryVersions[queryId] || state.loadingVersions.has(queryId)) return;
+
+        set((state) => ({
+          loadingVersions: new Set(state.loadingVersions).add(queryId)
+        }));
+
+        try {
+          const versions = await getQueryVersions(queryId);
+          set((state) => ({
+            queryVersions: { ...state.queryVersions, [queryId]: versions },
+            loadingVersions: new Set([...state.loadingVersions].filter((id) => id !== queryId))
+          }));
+        } catch (error) {
+          console.error(`Failed to load versions for query ${queryId}:`, error);
+          set((state) => ({
+            loadingVersions: new Set([...state.loadingVersions].filter((id) => id !== queryId))
+          }));
+        }
+      },
+
+      setQuery: (queryId, query) =>
+        set((state) => ({
+          queries: { ...state.queries, [queryId]: query }
+        })),
+
+      setQueryVersions: (queryId, versions) =>
+        set((state) => ({
+          queryVersions: { ...state.queryVersions, [queryId]: versions }
+        })),
+
+      setSources: (sources) =>
+        set(() => ({
+          sources: sources.reduce((acc, source) => ({ ...acc, [source.id]: source }), {})
+        })),
+
+      setConnectedSources: (connectedSourceIds) =>
+        set({ connectedSources: new Set(connectedSourceIds) }),
+
+      executeQuery: async (tabId, sql) => {
+        const currentState = get();
+        const tab = currentState.openTabs.find((t) => t.id === tabId);
+        if (!tab) return;
+
+        const source = currentState.sources[tab.sourceId];
+        if (!source || !currentState.connectedSources.has(tab.sourceId)) {
+          throw new Error("Source not connected");
+        }
+
+        const queryToRun = sql || tab.editorContent;
+        if (!queryToRun.trim()) return;
+
+        // Set running state
+        set(() => ({
+          openTabs: currentState.openTabs.map((t) =>
+            t.id === tabId ? { ...t, queryRunning: true } : t
+          )
+        }));
+
+        try {
+          const queryId = await apiExecuteQuery(tab.sourceId, queryToRun);
+          const results = await getQueryResults(queryId);
+
+          // Ensure results are always an array of objects
+          let processedResults: object[];
+          if (Array.isArray(results)) {
+            processedResults =
+              results.length > 0 ? results : [{ message: "Query returned no data" }];
+          } else if (typeof results === "object" && results !== null) {
+            processedResults = [results];
+          } else {
+            // Handle primitive types (string, number, etc.) by wrapping them in objects
+            processedResults = [{ result: results }];
+          }
+
+          set(() => ({
+            openTabs: currentState.openTabs.map((t) =>
+              t.id === tabId
+                ? {
+                    ...t,
+                    queryRunning: false,
+                    queryResults: processedResults
+                  }
+                : t
+            )
+          }));
+        } catch (error) {
+          console.error("Query execution failed:", error);
+          set(() => ({
+            openTabs: currentState.openTabs.map((t) =>
+              t.id === tabId
+                ? {
+                    ...t,
+                    queryRunning: false,
+                    queryResults: [{ error: "Query execution failed" }]
+                  }
+                : t
+            )
+          }));
+          throw error;
+        }
+      },
+
+      createNewQuery: async (sourceId) => {
+        try {
+          const newQuery = await createQuery({ source_id: sourceId });
+          set((state) => ({
+            queries: { ...state.queries, [newQuery.id]: newQuery }
+          }));
+          return newQuery.id;
+        } catch (error) {
+          console.error("Failed to create query:", error);
+          throw error;
+        }
+      },
+
+      saveQueryVersion: async (queryId, sql, saveTrigger) => {
+        try {
+          await createQueryVersion({
+            query_id: queryId,
+            sql,
+            save_trigger: saveTrigger,
+            created_by: "00000000-0000-0000-0000-000000000000" // TODO: Replace with actual user ID
+          });
+
+          // Reload versions to get the latest
+          const currentState = get();
+          await currentState.loadQueryVersions(queryId);
+        } catch (error) {
+          console.error("Failed to save query version:", error);
+          throw error;
+        }
+      },
 
       // Editor-related actions
       setSchemasLoading: (loading) => set({ schemasLoading: loading }),
