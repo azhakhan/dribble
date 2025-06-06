@@ -14,8 +14,9 @@ from sqlalchemy.orm import Session
 from app.models import Query, QueryVersion, QueryRun
 from uuid import UUID
 from app.core._redis import get_result
-from typing import List
+from typing import List, Dict
 from app.dependencies import get_current_user
+from itertools import groupby
 
 router = APIRouter(prefix="/query", tags=["query"])
 
@@ -23,12 +24,17 @@ router = APIRouter(prefix="/query", tags=["query"])
 # ==================== QUERY ENDPOINTS ====================
 
 
-@router.get("/", response_model=List[QueryResponse])
+@router.get("/", response_model=Dict[UUID, List[QueryResponse]])
 async def get_all_queries(db: Session = Depends(get_db)):
-    """Get all queries"""
-    # TODO: add limit by workspace_id?
-    queries = db.query(Query).all()
-    return queries
+    """Get all queries grouped by source_id"""
+    queries = db.query(Query).order_by(Query.source_id).all()
+
+    # Create a dictionary with source_id as key and list of queries as value
+    grouped_queries = {}
+    for source_id, group in groupby(queries, lambda x: x.source_id):
+        grouped_queries[source_id] = list(group)
+
+    return grouped_queries
 
 
 @router.get("/{query_id}", response_model=QueryResponse)
