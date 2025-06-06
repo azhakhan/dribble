@@ -69,7 +69,7 @@ class Query(Base):
     __tablename__ = "queries"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    name = Column(String, nullable=False)
+    name = Column(String, nullable=True)
     created_by = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
     created_by_user = relationship("User", back_populates="queries")
     source_id = Column(UUID(as_uuid=True), ForeignKey("sources.id"), nullable=False)
