@@ -335,8 +335,8 @@ export interface CreateQueryRunRequest {
 
 // ==================== QUERY API ====================
 
-export const getQueries = async (): Promise<Query[]> => {
-  const response = await api.get<Query[]>("/query/");
+export const getQueries = async (): Promise<Record<string, Query[]>> => {
+  const response = await api.get<Record<string, Query[]>>("/query/");
   return response.data;
 };
 

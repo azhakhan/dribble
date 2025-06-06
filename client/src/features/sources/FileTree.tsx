@@ -15,7 +15,6 @@ import {
 import { PostgresIcon, MySQLIcon, SQLiteIcon } from "../icons";
 import { getColumnTypeIcon } from "./ColumnTypeIcons";
 import type { FileNode } from "@/shared/lib/fileTreeUtils";
-import { AddSource } from "@/features/sources/dialogs/AddSource";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -417,13 +416,8 @@ export const FileTree = ({ data, onSourceSelect, onTableDoubleClick }: FileTreeP
 
   return (
     <div className="h-full flex flex-col">
-      {/* Fixed header */}
-      <div className="flex-shrink-0 p-2 font-semibold text-sm border-b flex items-center justify-between">
-        <span>Sources</span>
-        <AddSource className="hover:text-foreground text-muted-foreground" />
-      </div>
       {/* Scrollable content */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto mt-2">
         {data.map((node, index) => (
           <FileTreeItem
             key={index}

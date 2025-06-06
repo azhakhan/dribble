@@ -1,7 +1,7 @@
 import { useEffect, useMemo } from "react";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 
-import { FileTree } from "@/features/sources/FileTree";
+import { SidebarTabs } from "@/features/sources/SidebarTabs";
 import { sourcesToFileTreeNodes } from "@/shared/lib/fileTreeUtils";
 import { TableDataDisplay } from "@/features/tables/TableDataDisplay";
 import { ChatSidebar } from "@/features/chat/ChatSidebar";
@@ -11,7 +11,7 @@ import { useSourceSchemasQuery } from "@/shared/hooks/useSourceSchemasQuery";
 import { useQueryQuery } from "@/shared/hooks/useQueryQuery";
 import { useSourceStatusQuery } from "@/shared/hooks/useSourceStatusQuery";
 import { useConnectedSourcesQuery } from "@/shared/hooks/useConnectedSourcesQuery";
-import type { Source, ConnectedSource } from "@/shared/lib/api";
+import type { Source, ConnectedSource, Query } from "@/shared/lib/api";
 import { useAppStore } from "@/shared/store/useAppStore";
 
 const sampleFileTree = [
@@ -152,22 +152,25 @@ export function IdePage() {
     setSelectedTableData(null);
   };
 
+  // Handle query selection
+  const handleQuerySelect = (query: Query) => {
+    // TODO: Implement query selection logic
+    console.log("Query selected:", query);
+  };
+
   return (
     <div className="flex-1 min-h-0">
       <PanelGroup direction="horizontal" onLayout={(newSizes) => setPanelSizes(newSizes)}>
         <Panel defaultSize={panelSizes[0]} minSize={15}>
           <div className="h-full border-r select-none">
-            {sourcesLoading ? (
-              <div className="p-4 text-sm text-muted-foreground">Loading sources...</div>
-            ) : sourcesError ? (
-              <div className="p-4 text-sm text-red-500">Error loading sources</div>
-            ) : (
-              <FileTree
-                data={fileTreeData}
-                onSourceSelect={handleSourceSelect}
-                onTableDoubleClick={handleTableDoubleClick}
-              />
-            )}
+            <SidebarTabs
+              sources={fileTreeData}
+              sourcesLoading={sourcesLoading}
+              sourcesError={sourcesError}
+              onSourceSelect={handleSourceSelect}
+              onTableDoubleClick={handleTableDoubleClick}
+              onQuerySelect={handleQuerySelect}
+            />
           </div>
         </Panel>
 
