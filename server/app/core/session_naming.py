@@ -102,7 +102,7 @@ class SessionNamingService:
                     # Get the default LLM for this workspace once
                     default_llm = (
                         db.query(LLM)
-                        .filter(LLM.workspace_id == workspace_id, LLM.default is True)
+                        .filter(LLM.workspace_id == workspace_id, LLM.default == True)  # noqa
                         .first()
                     )
 

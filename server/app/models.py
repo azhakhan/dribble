@@ -16,6 +16,9 @@ class User(Base):
     name = Column(String, nullable=False)
     email = Column(String, nullable=False)
     chat_messages = relationship("ChatMessage", back_populates="user")
+    queries = relationship("Query", back_populates="created_by_user")
+    query_versions = relationship("QueryVersion", back_populates="created_by_user")
+    query_runs = relationship("QueryRun", back_populates="created_by_user")
     created_at = Column(DateTime, default=datetime.now)
 
 
@@ -67,9 +70,47 @@ class Query(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     name = Column(String, nullable=False)
-    query = Column(String, nullable=False)
+    created_by = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    created_by_user = relationship("User", back_populates="queries")
     source_id = Column(UUID(as_uuid=True), ForeignKey("sources.id"), nullable=False)
     source = relationship("Source", back_populates="queries")
+    versions = relationship("QueryVersion", back_populates="query")
+    created_at = Column(DateTime, default=datetime.now)
+
+
+class QueryTriggerEnum(enum.Enum):
+    manual = "manual"
+    run = "run"
+    ai = "ai"
+    on_exit = "on_exit"
+
+
+class QueryVersion(Base):
+    __tablename__ = "query_versions"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    sql = Column(String, nullable=False)
+    save_trigger = Column(SqlEnum(QueryTriggerEnum), nullable=False)
+    query_id = Column(UUID(as_uuid=True), ForeignKey("queries.id"), nullable=False)
+    query = relationship("Query", back_populates="versions")
+    created_by = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    created_by_user = relationship("User", back_populates="query_versions")
+    runs = relationship("QueryRun", back_populates="query_version")
+    created_at = Column(DateTime, default=datetime.now)
+
+
+class QueryRun(Base):
+    __tablename__ = "query_runs"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    result_message = Column(String, nullable=True)
+    error_message = Column(String, nullable=True)
+    row_count = Column(Integer, nullable=True)
+    execution_time_ms = Column(Integer, nullable=True)
+    query_version_id = Column(UUID(as_uuid=True), ForeignKey("query_versions.id"), nullable=False)
+    query_version = relationship("QueryVersion", back_populates="runs")
+    created_by = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    created_by_user = relationship("User", back_populates="query_runs")
     created_at = Column(DateTime, default=datetime.now)
 
 
@@ -99,9 +140,9 @@ class LLM(Base):
     api_version = Column(String, nullable=True)
     settings = Column(JSON, nullable=True)
     workspace_id = Column(UUID(as_uuid=True), ForeignKey("workspaces.id"), nullable=False)
+    default = Column(Boolean, default=False)
     workspace = relationship("Workspace", back_populates="llms")
     chat_sessions = relationship("ChatSession", back_populates="llm")
-    default = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.now)
 
 
@@ -116,8 +157,8 @@ class ChatSession(Base):
     llm = relationship("LLM", back_populates="chat_sessions")
     workspace_id = Column(UUID(as_uuid=True), ForeignKey("workspaces.id"), nullable=False)
     workspace = relationship("Workspace", back_populates="chat_sessions")
-    created_at = Column(DateTime, default=datetime.now)
     messages = relationship("ChatMessage", back_populates="chat_session")
+    created_at = Column(DateTime, default=datetime.now)
 
 
 class ChatRoleEnum(enum.Enum):
@@ -147,11 +188,10 @@ class ChatMessage(Base):
     parent_message_id = Column(
         UUID(as_uuid=True), ForeignKey("chat_messages.id"), nullable=True
     )  # For threading tool calls
-    created_at = Column(DateTime, default=datetime.now)
     chat_session_id = Column(UUID(as_uuid=True), ForeignKey("chat_sessions.id"), nullable=False)
     chat_session = relationship("ChatSession", back_populates="messages")
+    # TODO: inconsistent naming, maybe rename to created_by
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=True)
     user = relationship("User", back_populates="chat_messages")
-
-    # Self-referential relationship for message threading
     parent_message = relationship("ChatMessage", remote_side=[id], backref="child_messages")
+    created_at = Column(DateTime, default=datetime.now)
