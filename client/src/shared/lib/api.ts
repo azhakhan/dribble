@@ -277,4 +277,130 @@ export const getChatSessions = async (): Promise<ChatSessionsResponse> => {
   return response.data;
 };
 
+// ==================== QUERY, VERSION, RUN TYPES ====================
+
+export type UUID = string;
+
+export interface Query {
+  id: UUID;
+  name?: string;
+  source_id: UUID;
+  created_by: UUID;
+  created_at: string;
+}
+
+export interface CreateQueryRequest {
+  source_id: UUID;
+}
+
+export interface UpdateQueryRequest {
+  name?: string;
+}
+
+export interface QueryVersion {
+  id: UUID;
+  sql: string;
+  save_trigger: "manual" | "run" | "ai" | "on_exit";
+  query_id: UUID;
+  created_by: UUID;
+  created_at: string;
+}
+
+export interface CreateQueryVersionRequest {
+  sql: string;
+  save_trigger: "manual" | "run" | "ai" | "on_exit";
+  query_id: UUID;
+  created_by: UUID;
+}
+
+export interface QueryRun {
+  id: UUID;
+  result_message?: string;
+  error_message?: string;
+  row_count?: number;
+  execution_time_ms?: number;
+  query_version_id: UUID;
+  created_by: UUID;
+  created_at: string;
+}
+
+export interface CreateQueryRunRequest {
+  result_message?: string;
+  error_message?: string;
+  row_count?: number;
+  execution_time_ms?: number;
+  query_version_id: UUID;
+  created_by: UUID;
+}
+
+// ==================== QUERY API ====================
+
+export const getQueries = async (): Promise<Query[]> => {
+  const response = await api.get<Query[]>("/query/");
+  return response.data;
+};
+
+export const getQueryById = async (queryId: string): Promise<Query> => {
+  const response = await api.get<Query>(`/query/${queryId}`);
+  return response.data;
+};
+
+export const createQuery = async (data: CreateQueryRequest): Promise<Query> => {
+  const response = await api.post<Query>("/query/", data);
+  return response.data;
+};
+
+export const updateQuery = async (queryId: string, data: UpdateQueryRequest): Promise<Query> => {
+  const response = await api.put<Query>(`/query/${queryId}`, data);
+  return response.data;
+};
+
+export const deleteQuery = async (queryId: string): Promise<void> => {
+  await api.delete(`/query/${queryId}`);
+};
+
+// ==================== QUERY VERSION API ====================
+
+export const getQueryVersions = async (queryId: string): Promise<QueryVersion[]> => {
+  const response = await api.get<QueryVersion[]>(`/query/${queryId}/versions/`);
+  return response.data;
+};
+
+export const getQueryVersionById = async (versionId: string): Promise<QueryVersion> => {
+  const response = await api.get<QueryVersion>(`/query/versions/${versionId}`);
+  return response.data;
+};
+
+export const createQueryVersion = async (
+  data: CreateQueryVersionRequest
+): Promise<QueryVersion> => {
+  const response = await api.post<QueryVersion>("/query/versions/", data);
+  return response.data;
+};
+
+export const deleteQueryVersion = async (versionId: string): Promise<void> => {
+  await api.delete(`/query/versions/${versionId}`);
+};
+
+// ==================== QUERY RUN API ====================
+
+export const getQueryRunsByQueryId = async (queryId: string): Promise<QueryRun[]> => {
+  const response = await api.get<QueryRun[]>(`/query/runs/query/${queryId}`);
+  return response.data;
+};
+
+export const getQueryRunsByVersionId = async (versionId: string): Promise<QueryRun[]> => {
+  const response = await api.get<QueryRun[]>(`/query/runs/version/${versionId}`);
+  return response.data;
+};
+
+export const getQueryRunById = async (runId: string): Promise<QueryRun> => {
+  const response = await api.get<QueryRun>(`/query/runs/run/${runId}`);
+  return response.data;
+};
+
+export const deleteQueryRun = async (runId: string): Promise<void> => {
+  await api.delete(`/query/runs/${runId}`);
+};
+
 export default api;

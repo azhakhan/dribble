@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import type { Source, SourceStatus } from "@/shared/lib/api";
+import type { Source, SourceStatus, Query, QueryVersion, QueryRun } from "@/shared/lib/api";
 import type { FileNode } from "@/shared/lib/fileTreeUtils";
 
 // Interface for schema objects
@@ -103,6 +103,11 @@ interface AppState extends FileTreeState, SourceChildrenState {
   chatLoading: boolean;
   sessionId: string | null;
 
+  // Query, Version, Run state
+  queriesBySource: Record<string, Query[]>;
+  versionsByQuery: Record<string, QueryVersion[]>;
+  runsByVersion: Record<string, QueryRun[]>;
+
   // Actions for App state
   setPanelSizes: (sizes: number[]) => void;
   setSelectedSource: (source: Source | null) => void;
@@ -148,6 +153,14 @@ interface AppState extends FileTreeState, SourceChildrenState {
 
   // New action to clean up disconnected sources
   cleanupDisconnectedSources: (connectedSourceIds: string[]) => void;
+
+  // Query, Version, Run actions
+  setQueriesBySource: (sourceId: string, queries: Query[]) => void;
+  setVersionsByQuery: (queryId: string, versions: QueryVersion[]) => void;
+  setRunsByVersion: (versionId: string, runs: QueryRun[]) => void;
+  clearQueriesBySource: (sourceId: string) => void;
+  clearVersionsByQuery: (queryId: string) => void;
+  clearRunsByVersion: (versionId: string) => void;
 }
 
 // Create the store with persistence for certain values
@@ -188,6 +201,11 @@ export const useAppStore = create<AppState>()(
       messages: [],
       chatLoading: false,
       sessionId: null,
+
+      // Query, Version, Run state
+      queriesBySource: {},
+      versionsByQuery: {},
+      runsByVersion: {},
 
       // Panel actions
       setPanelSizes: (sizes) => set({ panelSizes: sizes }),
@@ -327,6 +345,38 @@ export const useAppStore = create<AppState>()(
             sourceSchemaErrors: newSourceSchemaErrors,
             sourceStatuses: newSourceStatuses
           };
+        }),
+
+      // Query, Version, Run actions
+      setQueriesBySource: (sourceId, queries) =>
+        set((state) => ({
+          queriesBySource: { ...state.queriesBySource, [sourceId]: queries }
+        })),
+      setVersionsByQuery: (queryId, versions) =>
+        set((state) => ({
+          versionsByQuery: { ...state.versionsByQuery, [queryId]: versions }
+        })),
+      setRunsByVersion: (versionId, runs) =>
+        set((state) => ({
+          runsByVersion: { ...state.runsByVersion, [versionId]: runs }
+        })),
+      clearQueriesBySource: (sourceId) =>
+        set((state) => {
+          const newQueries = { ...state.queriesBySource };
+          delete newQueries[sourceId];
+          return { queriesBySource: newQueries };
+        }),
+      clearVersionsByQuery: (queryId) =>
+        set((state) => {
+          const newVersions = { ...state.versionsByQuery };
+          delete newVersions[queryId];
+          return { versionsByQuery: newVersions };
+        }),
+      clearRunsByVersion: (versionId) =>
+        set((state) => {
+          const newRuns = { ...state.runsByVersion };
+          delete newRuns[versionId];
+          return { runsByVersion: newRuns };
         })
     }),
     {
