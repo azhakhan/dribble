@@ -183,9 +183,6 @@ export function Editor({
   const handleCreateQuery = async () => {
     if (!selectedSource) return;
 
-    // Create version if current query has changed before creating new one
-    await createVersionIfChanged("on_exit");
-
     setEditorContent("");
     setQueryName("");
     setQueryId(null);
@@ -230,7 +227,7 @@ export function Editor({
 
   // Function to create a version if query has changed
   const createVersionIfChanged = useCallback(
-    async (saveTrigger: "run" | "on_exit" | "ai") => {
+    async (saveTrigger: "run" | "ai") => {
       if (!queryId || !hasQueryChanged()) return;
 
       const currentContent = proposedChanges ? proposedChanges.proposedContent : editorContent;
@@ -271,14 +268,11 @@ export function Editor({
   // Function to load a different query (with version saving)
   const loadQuery = useCallback(
     async (newQueryId: string | null) => {
-      // Save current query version if it has changed
-      await createVersionIfChanged("on_exit");
-
       // Set new query ID which will trigger the loading effects
       setQueryId(newQueryId);
       lastSavedContentRef.current = ""; // Reset for new query
     },
-    [createVersionIfChanged, setQueryId]
+    [setQueryId]
   );
 
   // Effect to handle initialQueryId changes (when parent component changes the query)
@@ -305,41 +299,12 @@ export function Editor({
     }
   }, [proposedChanges?.proposedContent, queryId, editorContent]);
 
-  // Effect to handle page/tab close (keep this for browser close)
-  useEffect(() => {
-    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
-      if (hasQueryChanged()) {
-        // This will show a confirmation dialog
-        event.preventDefault();
-
-        // Try to save the version (though it might not complete due to page unload)
-        createVersionIfChanged("on_exit");
-      }
-    };
-
-    window.addEventListener("beforeunload", handleBeforeUnload);
-
-    return () => {
-      window.removeEventListener("beforeunload", handleBeforeUnload);
-    };
-  }, [hasQueryChanged, createVersionIfChanged]);
-
   // Effect to expose loadQuery function to parent
   useEffect(() => {
     if (onQueryLoad) {
       onQueryLoad(loadQuery);
     }
   }, [onQueryLoad, loadQuery]);
-
-  // Effect to handle component unmount (save version when navigating away)
-  useEffect(() => {
-    return () => {
-      // Save version when component unmounts (user navigates away)
-      if (queryId && hasQueryChanged()) {
-        createVersionIfChanged("on_exit");
-      }
-    };
-  }, []); // Empty dependency array so cleanup only runs on unmount
 
   return (
     <div ref={editorContainerRef} className="h-full flex flex-col">
