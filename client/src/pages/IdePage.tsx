@@ -3,12 +3,10 @@ import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 
 import { SidebarTabs } from "@/features/sources/SidebarTabs";
 import { sourcesToFileTreeNodes } from "@/shared/lib/fileTreeUtils";
-import { TableDataDisplay } from "@/features/tables/TableDataDisplay";
+import { QueryTabs } from "@/features/query/QueryTabs";
 import { ChatSidebar } from "@/features/chat/ChatSidebar";
-import { Editor } from "@/features/editor/Editor";
 import { useSourcesQuery } from "@/shared/hooks/useSourcesQuery";
 import { useSourceSchemasQuery } from "@/shared/hooks/useSourceSchemasQuery";
-import { useQueryQuery } from "@/shared/hooks/useQueryQuery";
 import { useSourceStatusQuery } from "@/shared/hooks/useSourceStatusQuery";
 import { useConnectedSourcesQuery } from "@/shared/hooks/useConnectedSourcesQuery";
 import type { Source, ConnectedSource, Query } from "@/shared/lib/api";
@@ -30,15 +28,13 @@ export function IdePage() {
     selectedSource,
     setSelectedSource,
     setSourceSchema,
-    selectedTableData,
-    setSelectedTableData,
-    queryResults,
-    setQueryResults,
-    queryRunning,
-    setQueryRunning,
     sourceSchemaErrors,
     setSourceSchemaError,
-    setSourceStatus
+    setSourceStatus,
+    openQueryTab,
+    activeTabId,
+    openTabs,
+    updateTabContent
   } = useAppStore();
 
   // Query for all sources
@@ -66,39 +62,6 @@ export function IdePage() {
   const { data: selectedSourceStatus } = useSourceStatusQuery(
     selectedSource?.id && connectedSourceIds.has(selectedSource.id) ? selectedSource.id : undefined
   );
-
-  // Query for table data using the useQueryQuery hook
-  const {
-    data: tableQueryResults,
-    isLoading,
-    error: tableQueryError
-  } = useQueryQuery(
-    selectedTableData?.sourceId || "",
-    selectedTableData?.query || "",
-    {
-      enabled: !!selectedTableData
-    },
-    "table"
-  );
-
-  // Update query results when the table query completes
-  useEffect(() => {
-    if (tableQueryResults) {
-      setQueryResults(tableQueryResults);
-    } else if (tableQueryError) {
-      console.error("Error executing table query:", tableQueryError);
-      setQueryResults([{ error: "Error loading table data" }]);
-    }
-  }, [tableQueryResults, tableQueryError, setQueryResults]);
-
-  // Update query running state based on loading state
-  useEffect(() => {
-    if (selectedTableData) {
-      setQueryRunning(isLoading);
-    } else {
-      setQueryRunning(false);
-    }
-  }, [isLoading, selectedTableData, setQueryRunning]);
 
   // Update schema map when new schema data is loaded
   useEffect(() => {
@@ -132,30 +95,66 @@ export function IdePage() {
     setSelectedSource(source);
   };
 
-  // Handle table double-click
+  // Handle table double-click - create or switch to existing tab
   const handleTableDoubleClick = async (sourceId: string, tableName: string) => {
     // Build the query to select all data from the table with a limit
     const query = `SELECT * FROM ${tableName} LIMIT 101`;
 
-    // Set the selected table data with the query
-    setSelectedTableData({ sourceId, tableName, query });
+    // Check if there's already an active tab for this source that we can reuse
+    if (activeTabId && openTabs.length > 0) {
+      const activeTab = openTabs.find((tab) => tab.id === activeTabId);
+      if (
+        activeTab &&
+        activeTab.sourceId === sourceId &&
+        !activeTab.selectedTableData &&
+        !activeTab.queryResults
+      ) {
+        // Use the active empty tab
+        updateTabContent(activeTabId, {
+          selectedTableData: { sourceId, tableName, query },
+          queryResults: null,
+          queryRunning: true,
+          title: tableName,
+          editorContent: query
+        });
+        return;
+      }
+    }
 
-    // Clear previous query results and set loading state
-    setQueryResults(null);
-    setQueryRunning(true);
+    // Create a new tab for this table
+    openQueryTab({
+      queryId: null,
+      sourceId,
+      title: tableName,
+      isDirty: false,
+      editorContent: query,
+      queryResults: null,
+      queryRunning: true,
+      selectedTableData: { sourceId, tableName, query }
+    });
   };
 
-  // Handle SQL query execution
-  const handleQueryExecution = (results: object[]) => {
-    setQueryResults(results);
-    // Clear table selection since we're viewing custom query results
-    setSelectedTableData(null);
-  };
-
-  // Handle query selection
+  // Handle query selection from QueryTree
   const handleQuerySelect = (query: Query) => {
-    // TODO: Implement query selection logic
-    console.log("Query selected:", query);
+    // Check if query is already open in a tab
+    const existingTab = openTabs.find((tab) => tab.queryId === query.id);
+
+    if (existingTab) {
+      // Switch to existing tab
+      useAppStore.getState().setActiveTab(existingTab.id);
+    } else {
+      // Open new tab for this query
+      openQueryTab({
+        queryId: query.id,
+        sourceId: query.source_id,
+        title: query.name || `Query ${query.id.slice(0, 8)}`,
+        isDirty: false,
+        editorContent: "", // Will be loaded by the Editor component
+        queryResults: null,
+        queryRunning: false,
+        selectedTableData: null
+      });
+    }
   };
 
   return (
@@ -177,27 +176,11 @@ export function IdePage() {
         <PanelResizeHandle className="w-1 bg-border hover:bg-primary transition-colors" />
 
         <Panel defaultSize={panelSizes[1]} minSize={30}>
-          <PanelGroup direction="vertical" storage={localStorage} autoSaveId="editor-layout">
-            <Panel defaultSize={60} minSize={30}>
-              <TableDataDisplay
-                tableData={selectedTableData}
-                queryResults={queryResults}
-                isQueryRunning={queryRunning}
-              />
-            </Panel>
-
-            <PanelResizeHandle className="h-1 bg-border hover:bg-primary transition-colors" />
-
-            <Panel defaultSize={40} minSize={10}>
-              <Editor
-                selectedSource={selectedSource}
-                schemasLoading={schemasLoading}
-                schemasError={schemasError}
-                onQueryExecution={handleQueryExecution}
-                onQueryStatusChange={setQueryRunning}
-              />
-            </Panel>
-          </PanelGroup>
+          <QueryTabs
+            selectedSource={selectedSource}
+            schemasLoading={schemasLoading}
+            schemasError={schemasError}
+          />
         </Panel>
 
         <PanelResizeHandle className="w-1 bg-border hover:bg-primary transition-colors" />

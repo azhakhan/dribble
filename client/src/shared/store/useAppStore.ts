@@ -48,6 +48,19 @@ export interface SchemaObject {
 // Type for the schema map
 export type SourceSchemaMap = Record<string, Record<string, SchemaObject>>;
 
+// Query tab interface
+export interface QueryTab {
+  id: string;
+  queryId: string | null;
+  sourceId: string;
+  title: string;
+  isDirty: boolean;
+  editorContent: string;
+  queryResults: object[] | null;
+  queryRunning: boolean;
+  selectedTableData: { sourceId: string; tableName: string; query: string } | null;
+}
+
 // FileTree state
 interface FileTreeState {
   // From FileTree.tsx
@@ -82,6 +95,10 @@ interface AppState extends FileTreeState, SourceChildrenState {
   // Query state
   queryResults: object[] | null;
   queryRunning: boolean;
+
+  // Query tabs state
+  openTabs: QueryTab[];
+  activeTabId: string | null;
 
   // Error and status tracking
   sourceSchemaErrors: Record<string, string>;
@@ -120,6 +137,13 @@ interface AppState extends FileTreeState, SourceChildrenState {
   setSourceSchemaError: (sourceId: string, error: string | null) => void;
   setSourceStatus: (sourceId: string, status: SourceStatus) => void;
   removeSourceStatus: (sourceId: string) => void;
+
+  // Query tabs actions
+  openQueryTab: (tab: Omit<QueryTab, "id">) => string;
+  closeQueryTab: (tabId: string) => void;
+  setActiveTab: (tabId: string | null) => void;
+  updateTabContent: (tabId: string, content: Partial<QueryTab>) => void;
+  getActiveTab: () => QueryTab | null;
 
   // Editor actions
   setEditorContent: (content: string) => void;
@@ -166,7 +190,7 @@ interface AppState extends FileTreeState, SourceChildrenState {
 // Create the store with persistence for certain values
 export const useAppStore = create<AppState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       // Panel sizes with default values
       panelSizes: [20, 60, 20],
 
@@ -182,6 +206,10 @@ export const useAppStore = create<AppState>()(
       // Query state
       queryResults: null,
       queryRunning: false,
+
+      // Query tabs state
+      openTabs: [],
+      activeTabId: null,
 
       // Error and status tracking
       sourceSchemaErrors: {},
@@ -377,7 +405,41 @@ export const useAppStore = create<AppState>()(
           const newRuns = { ...state.runsByVersion };
           delete newRuns[versionId];
           return { runsByVersion: newRuns };
-        })
+        }),
+
+      // Query tabs actions
+      openQueryTab: (tab) => {
+        const newTabId = crypto.randomUUID();
+        const newTab = { ...tab, id: newTabId };
+        set((state) => ({
+          openTabs: [...state.openTabs, newTab],
+          activeTabId: newTabId
+        }));
+        return newTabId;
+      },
+      closeQueryTab: (tabId) =>
+        set((state) => {
+          const newOpenTabs = state.openTabs.filter((tab) => tab.id !== tabId);
+          const newActiveTabId =
+            state.activeTabId === tabId
+              ? newOpenTabs.length > 0
+                ? newOpenTabs[newOpenTabs.length - 1].id
+                : null
+              : state.activeTabId;
+          return {
+            openTabs: newOpenTabs,
+            activeTabId: newActiveTabId
+          };
+        }),
+      setActiveTab: (tabId) => set({ activeTabId: tabId }),
+      updateTabContent: (tabId, content) =>
+        set((state) => ({
+          openTabs: state.openTabs.map((tab) => (tab.id === tabId ? { ...tab, ...content } : tab))
+        })),
+      getActiveTab: () => {
+        const state = get();
+        return state.openTabs.find((tab) => tab.id === state.activeTabId) || null;
+      }
     }),
     {
       name: "dribble-app-storage",
