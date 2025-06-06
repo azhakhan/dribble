@@ -1,7 +1,7 @@
 import { useRef, useState, useEffect } from "react";
 import type { Source } from "@/shared/lib/api";
 import { Button } from "@/components/ui/button";
-import { PlayIcon } from "lucide-react";
+import { PlayIcon, PencilIcon, CheckIcon, XIcon } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryQuery } from "@/shared/hooks/useQueryQuery";
 import { useAppStore } from "@/shared/store/useAppStore";
@@ -9,6 +9,8 @@ import { LanguageIdEnum } from "@/shared/lib/monaco-setup";
 import { MonacoSQLEditor } from "./MonacoSQLEditor";
 import { MonacoDiffEditor } from "./MonacoDiffEditor";
 import { ProposedChangesBar } from "./ProposedChangesBar";
+import { Input } from "@/components/ui/input";
+import { createQuery, updateQuery } from "@/shared/lib/api";
 
 interface EditorProps {
   selectedSource: Source | null;
@@ -28,6 +30,10 @@ export function Editor({
   const editorContainerRef = useRef<HTMLDivElement>(null);
   const [isRunning, setIsRunning] = useState(false);
   const [activeQuery, setActiveQuery] = useState<{ sourceId: string; sql: string } | null>(null);
+  const [queryName, setQueryName] = useState<string>("");
+  const [editingName, setEditingName] = useState(false);
+  const [tempName, setTempName] = useState("");
+  const [queryId, setQueryId] = useState<string | null>(null);
 
   // Get editor content and proposed changes from appStore
   const {
@@ -130,19 +136,118 @@ export function Editor({
     });
   };
 
+  const handleCreateQuery = async () => {
+    if (!selectedSource) return;
+    setEditorContent("");
+    setQueryName("");
+    setQueryId(null);
+    try {
+      const created = await createQuery({ source_id: selectedSource.id });
+      setQueryId(created.id);
+      toast.success("Query created");
+    } catch {
+      toast.error("Failed to create query");
+    }
+  };
+
+  // Handlers for editing query name
+  const startEditingName = () => {
+    setTempName(queryName);
+    setEditingName(true);
+  };
+  const cancelEditingName = () => {
+    setEditingName(false);
+    setTempName("");
+  };
+  const saveEditingName = async () => {
+    if (!queryId) return;
+    try {
+      await updateQuery(queryId, { name: tempName.trim() || undefined });
+      setQueryName(tempName.trim() || "");
+      setEditingName(false);
+      toast.success("Query name updated");
+    } catch {
+      toast.error("Failed to update query name");
+    }
+  };
+
   return (
     <div ref={editorContainerRef} className="h-full flex flex-col">
       {/* Fixed header with run button only */}
-      <div className="flex-shrink-0 flex justify-end items-center gap-2 p-2 border-b">
-        <Button
-          onClick={() => handleRunQuery()}
-          disabled={!isEditorActive || isRunning}
-          className="gap-1 text-xs cursor-pointer"
-          size="sm"
-        >
-          <PlayIcon size={16} />
-          Run
-        </Button>
+      <div className="flex-shrink-0 flex justify-between items-center gap-2 p-2 border-b">
+        {/* Query metadata on the left */}
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="truncate font-medium text-xs text-muted-foreground">
+            {selectedSource?.name || "No source selected"}
+          </span>
+          <span className="text-xs text-muted-foreground">/</span>
+          <span className="truncate font-semibold text-xs relative group" style={{ minWidth: 0 }}>
+            {editingName ? (
+              <span className="flex items-center gap-1">
+                <Input
+                  className="h-6 px-2 py-0 text-xs w-32"
+                  value={tempName}
+                  autoFocus
+                  onChange={(e) => setTempName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") saveEditingName();
+                    if (e.key === "Escape") cancelEditingName();
+                  }}
+                  disabled={!queryId}
+                />
+                <button
+                  className="ml-1 text-green-600 hover:text-green-800"
+                  onClick={saveEditingName}
+                  tabIndex={-1}
+                  aria-label="Save name"
+                  disabled={!queryId}
+                >
+                  <CheckIcon size={16} />
+                </button>
+                <button
+                  className="ml-0.5 text-red-500 hover:text-red-700"
+                  onClick={cancelEditingName}
+                  tabIndex={-1}
+                  aria-label="Cancel edit"
+                >
+                  <XIcon size={16} />
+                </button>
+              </span>
+            ) : (
+              <span className="flex items-center gap-1 group/query-name">
+                <span>{queryName ? queryName : "Untitled query"}</span>
+                <button
+                  className="opacity-0 group-hover/query-name:opacity-100 ml-1 transition-opacity"
+                  onClick={startEditingName}
+                  tabIndex={-1}
+                  aria-label="Edit name"
+                >
+                  <PencilIcon size={14} />
+                </button>
+              </span>
+            )}
+          </span>
+        </div>
+        {/* Action buttons on the right */}
+        <div className="flex items-center gap-2">
+          <Button
+            onClick={() => handleCreateQuery()}
+            disabled={!isEditorActive || isRunning}
+            className="gap-1 text-xs cursor-pointer"
+            size="sm"
+          >
+            Create Query
+          </Button>
+          <Button
+            onClick={() => handleRunQuery()}
+            disabled={!isEditorActive || isRunning}
+            className="gap-1 text-xs cursor-pointer"
+            size="sm"
+          >
+            <PlayIcon size={16} />
+            Run
+          </Button>
+        </div>
       </div>
       {/* Scrollable editor content */}
       <div className="flex-1 min-h-0 relative">
