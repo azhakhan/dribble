@@ -1,51 +1,19 @@
-import { memo, useCallback, useMemo } from "react";
+import { memo, useMemo } from "react";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 import { useAppStore } from "@/shared/store/useAppStore";
 import { TableDataDisplay } from "@/features/tables/TableDataDisplay";
 import { Editor } from "@/features/editor/Editor";
 import { useSourcesQuery } from "@/shared/hooks/useSourcesQuery";
-import type { Source } from "@/shared/lib/api";
 
 interface QueryProps {
   tabId: string;
-  selectedSource: Source | null;
-  schemasLoading: boolean;
-  schemasError?: unknown;
-  connectedSourceIds: Set<string>;
 }
 
-function QueryComponent({
-  tabId,
-  selectedSource,
-  schemasLoading,
-  schemasError,
-  connectedSourceIds
-}: QueryProps) {
-  console.log("🔄 Query render:", { tabId, selectedSource: selectedSource?.name });
+function QueryComponent({ tabId }: QueryProps) {
+  console.log("🔄 Query render:", { tabId });
 
-  const { openTabs, updateTabContent } = useAppStore();
+  const { openTabs } = useAppStore();
   const { data: sources } = useSourcesQuery();
-
-  // Handle SQL query execution from Editor
-  const handleQueryExecution = useCallback(
-    (results: object[]) => {
-      updateTabContent(tabId, {
-        queryResults: results,
-        selectedTableData: null // Clear table selection since we're viewing custom query results
-      });
-    },
-    [tabId, updateTabContent]
-  );
-
-  // Handle query running status change
-  const handleQueryStatusChange = useCallback(
-    (isRunning: boolean) => {
-      updateTabContent(tabId, {
-        queryRunning: isRunning
-      });
-    },
-    [tabId, updateTabContent]
-  );
 
   // Find current tab
   const currentTab = openTabs.find((tab) => tab.id === tabId);
@@ -85,16 +53,7 @@ function QueryComponent({
         <PanelResizeHandle className="h-1 bg-border hover:bg-primary transition-colors" />
 
         <Panel defaultSize={40} minSize={10}>
-          <Editor
-            key={tabId}
-            selectedSource={tabSource}
-            schemasLoading={schemasLoading}
-            schemasError={schemasError}
-            onQueryExecution={handleQueryExecution}
-            onQueryStatusChange={handleQueryStatusChange}
-            connectedSourceIds={connectedSourceIds}
-            initialQueryId={currentTab.queryId}
-          />
+          <Editor key={tabId} initialQueryId={currentTab.queryId} />
         </Panel>
       </PanelGroup>
     </div>

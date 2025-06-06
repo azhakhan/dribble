@@ -92,6 +92,11 @@ interface AppState extends FileTreeState, SourceChildrenState {
   sourceSchemaMap: Record<string, Record<string, SchemaObject>>;
   selectedTableData: { sourceId: string; tableName: string; query: string } | null;
 
+  // Editor-related state
+  schemasLoading: boolean;
+  schemasError: unknown;
+  connectedSourceIds: Set<string>;
+
   // Query state
   queryResults: object[] | null;
   queryRunning: boolean;
@@ -143,6 +148,7 @@ interface AppState extends FileTreeState, SourceChildrenState {
   closeQueryTab: (tabId: string) => void;
   setActiveTab: (tabId: string | null) => void;
   updateTabContent: (tabId: string, content: Partial<QueryTab>) => void;
+  updateTabTitle: (tabId: string, title: string) => void;
 
   // Editor actions
   setEditorContent: (content: string) => void;
@@ -184,6 +190,11 @@ interface AppState extends FileTreeState, SourceChildrenState {
   clearQueriesBySource: (sourceId: string) => void;
   clearVersionsByQuery: (queryId: string) => void;
   clearRunsByVersion: (versionId: string) => void;
+
+  // Editor-related actions
+  setSchemasLoading: (loading: boolean) => void;
+  setSchemasError: (error: unknown) => void;
+  setConnectedSourceIds: (sourceIds: Set<string>) => void;
 }
 
 // Create the store with persistence for certain values
@@ -201,6 +212,11 @@ export const useAppStore = create<AppState>()(
       selectedSource: null,
       sourceSchemaMap: {},
       selectedTableData: null,
+
+      // Editor-related state
+      schemasLoading: false,
+      schemasError: null,
+      connectedSourceIds: new Set(),
 
       // Query state
       queryResults: null,
@@ -433,7 +449,16 @@ export const useAppStore = create<AppState>()(
       updateTabContent: (tabId, content) =>
         set((state) => ({
           openTabs: state.openTabs.map((tab) => (tab.id === tabId ? { ...tab, ...content } : tab))
-        }))
+        })),
+      updateTabTitle: (tabId, title) =>
+        set((state) => ({
+          openTabs: state.openTabs.map((tab) => (tab.id === tabId ? { ...tab, title } : tab))
+        })),
+
+      // Editor-related actions
+      setSchemasLoading: (loading) => set({ schemasLoading: loading }),
+      setSchemasError: (error) => set({ schemasError: error }),
+      setConnectedSourceIds: (sourceIds) => set({ connectedSourceIds: sourceIds })
     }),
     {
       name: "dribble-app-storage",

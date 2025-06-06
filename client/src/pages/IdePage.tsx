@@ -53,11 +53,7 @@ export function IdePage() {
   }, [connectedSourcesData]);
 
   // Query for selected source schemas - only if the source is connected
-  const {
-    data: sourceSchemas,
-    isLoading: schemasLoading,
-    error: schemasError
-  } = useSourceSchemasQuery(
+  const { data: sourceSchemas } = useSourceSchemasQuery(
     selectedSource?.id && connectedSourceIds.has(selectedSource.id) ? selectedSource.id : undefined
   );
 
@@ -77,13 +73,6 @@ export function IdePage() {
     }
   }, [selectedSource, sourceSchemas, sourceSchemaErrors, setSourceSchema, setSourceSchemaError]);
 
-  // Track schema errors by source
-  useEffect(() => {
-    if (schemasError && selectedSource?.id) {
-      setSourceSchemaError(selectedSource.id, "Error loading schemas");
-    }
-  }, [schemasError, selectedSource, setSourceSchemaError]);
-
   // Track source statuses
   useEffect(() => {
     if (selectedSourceStatus && selectedSource?.id) {
@@ -91,19 +80,21 @@ export function IdePage() {
     }
   }, [selectedSourceStatus, selectedSource, setSourceStatus]);
 
+  // Update selectedSource when active tab changes
+  useEffect(() => {
+    if (activeTabId && openTabs.length > 0) {
+      const activeTab = openTabs.find((tab) => tab.id === activeTabId);
+      if (activeTab && sources) {
+        const tabSource = sources.find((source) => source.id === activeTab.sourceId);
+        if (tabSource && (!selectedSource || selectedSource.id !== tabSource.id)) {
+          setSelectedSource(tabSource);
+        }
+      }
+    }
+  }, [activeTabId, openTabs, sources, selectedSource, setSelectedSource]);
+
   // Build file tree data with sources only - schema children are handled by FileTree component via AppState
   const fileTreeData = sources ? sourcesToFileTreeNodes(sources) : sampleFileTree;
-
-  // Memoize QueryTabs props to prevent unnecessary re-renders
-  const queryTabsProps = useMemo(
-    () => ({
-      selectedSource,
-      schemasLoading,
-      schemasError,
-      connectedSourceIds
-    }),
-    [selectedSource, schemasLoading, schemasError, connectedSourceIds]
-  );
 
   const handleSourceSelect = useCallback(
     (source: Source) => {
@@ -199,7 +190,7 @@ export function IdePage() {
         <PanelResizeHandle className="w-1 bg-border hover:bg-primary transition-colors" />
 
         <Panel defaultSize={panelSizes[1]} minSize={30}>
-          <QueryTabs {...queryTabsProps} />
+          <QueryTabs />
         </Panel>
 
         <PanelResizeHandle className="w-1 bg-border hover:bg-primary transition-colors" />

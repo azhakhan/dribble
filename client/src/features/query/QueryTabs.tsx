@@ -4,22 +4,10 @@ import { cn } from "@/shared/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Query } from "./Query";
 import { useAppStore } from "@/shared/store/useAppStore";
-import type { Source } from "@/shared/lib/api";
 
-interface QueryTabsProps {
-  selectedSource: Source | null;
-  schemasLoading: boolean;
-  schemasError?: unknown;
-  connectedSourceIds: Set<string>;
-}
-
-function QueryTabsComponent({
-  selectedSource,
-  schemasLoading,
-  schemasError,
-  connectedSourceIds
-}: QueryTabsProps) {
-  const { openTabs, activeTabId, openQueryTab, closeQueryTab, setActiveTab } = useAppStore();
+function QueryTabsComponent() {
+  const { openTabs, activeTabId, openQueryTab, closeQueryTab, setActiveTab, selectedSource } =
+    useAppStore();
 
   console.log("🔄 QueryTabs render:", {
     selectedSource: selectedSource?.name,
@@ -156,17 +144,7 @@ function QueryTabsComponent({
       </div>
 
       {/* Active tab content */}
-      <div className="flex-1 min-h-0">
-        {activeTab && (
-          <Query
-            tabId={activeTab.id}
-            selectedSource={selectedSource}
-            schemasLoading={schemasLoading}
-            schemasError={schemasError}
-            connectedSourceIds={connectedSourceIds}
-          />
-        )}
-      </div>
+      <div className="flex-1 min-h-0">{activeTab && <Query tabId={activeTab.id} />}</div>
     </div>
   );
 }
