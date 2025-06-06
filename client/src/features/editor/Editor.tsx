@@ -1,7 +1,7 @@
 import { useRef, useState, useEffect, useCallback } from "react";
 import type { Source } from "@/shared/lib/api";
 import { Button } from "@/components/ui/button";
-import { PlayIcon, PencilIcon, CheckIcon, XIcon } from "lucide-react";
+import { PlayIcon, PencilIcon, CheckIcon, XIcon, Database } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryQuery } from "@/shared/hooks/useQueryQuery";
 import {
@@ -25,6 +25,7 @@ interface EditorProps {
   onQueryStatusChange?: (isRunning: boolean) => void;
   initialQueryId?: string | null;
   onQueryLoad?: (loadQuery: (queryId: string | null) => Promise<void>) => void;
+  connectedSourceIds?: Set<string>;
 }
 
 export function Editor({
@@ -34,7 +35,8 @@ export function Editor({
   onQueryExecution,
   onQueryStatusChange,
   initialQueryId = null,
-  onQueryLoad
+  onQueryLoad,
+  connectedSourceIds = new Set()
 }: EditorProps) {
   const editorContainerRef = useRef<HTMLDivElement>(null);
   const [isRunning, setIsRunning] = useState(false);
@@ -55,6 +57,9 @@ export function Editor({
     acceptProposedChanges,
     rejectProposedChanges
   } = useAppStore();
+
+  // Check if the selected source is connected
+  const isSourceConnected = selectedSource ? connectedSourceIds.has(selectedSource.id) : false;
 
   // Mutation for creating query versions
   const createQueryVersionMutation = useCreateQueryVersionMutation();
@@ -152,9 +157,15 @@ export function Editor({
   }, [queryResults, queryError, onQueryExecution]);
 
   const isEditorActive = selectedSource && !schemasLoading && !schemasError;
+  const canRunQueries = isEditorActive && isSourceConnected;
 
   const handleRunQuery = async (sqlToRun?: string) => {
-    if (!selectedSource) return;
+    if (!selectedSource || !isSourceConnected) {
+      if (!isSourceConnected) {
+        toast.error("Cannot run query: Source is not connected");
+      }
+      return;
+    }
 
     const queryToRun =
       sqlToRun || (proposedChanges ? proposedChanges.proposedContent : editorContent);
@@ -255,14 +266,7 @@ export function Editor({
         toast.error("Failed to save query version");
       }
     },
-    [
-      queryId,
-      originalQueryContent,
-      editorContent,
-      proposedChanges,
-      createQueryVersionMutation,
-      setOriginalQueryContent
-    ]
+    [queryId, editorContent, proposedChanges, createQueryVersionMutation, originalQueryContent]
   );
 
   // Function to load a different query (with version saving)
@@ -272,7 +276,7 @@ export function Editor({
       setQueryId(newQueryId);
       lastSavedContentRef.current = ""; // Reset for new query
     },
-    [setQueryId]
+    [] // No dependencies needed since we're only setting local state
   );
 
   // Effect to handle initialQueryId changes (when parent component changes the query)
@@ -280,7 +284,7 @@ export function Editor({
     if (initialQueryId !== queryId) {
       loadQuery(initialQueryId);
     }
-  }, [initialQueryId]);
+  }, [initialQueryId, queryId, loadQuery]);
 
   // Effect to save version when AI proposes changes
   useEffect(() => {
@@ -312,9 +316,18 @@ export function Editor({
       <div className="flex-shrink-0 flex justify-between items-center gap-2 p-2 border-b">
         {/* Query metadata on the left */}
         <div className="flex items-center gap-2 min-w-0">
-          <span className="truncate font-medium text-xs text-muted-foreground">
-            {selectedSource?.name || "No source selected"}
-          </span>
+          <div className="flex items-center gap-1">
+            <Database
+              className={`h-4 w-4 ${isSourceConnected ? "text-green-600" : "text-red-500"}`}
+              strokeWidth={1.5}
+            />
+            <span className="truncate font-medium text-xs text-muted-foreground">
+              {selectedSource?.name || "No source selected"}
+            </span>
+            {!isSourceConnected && selectedSource && (
+              <span className="text-xs text-red-500 font-medium">(Disconnected)</span>
+            )}
+          </div>
           <span className="text-xs text-muted-foreground">/</span>
           <span className="truncate font-semibold text-xs relative group" style={{ minWidth: 0 }}>
             {editingName ? (
@@ -375,9 +388,10 @@ export function Editor({
           </Button>
           <Button
             onClick={() => handleRunQuery()}
-            disabled={!isEditorActive || isRunning}
+            disabled={!canRunQueries || isRunning}
             className="gap-1 text-xs cursor-pointer"
             size="sm"
+            title={!isSourceConnected ? "Source is not connected" : ""}
           >
             <PlayIcon size={16} />
             Run

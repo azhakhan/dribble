@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useCallback } from "react";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 
 import { SidebarTabs } from "@/features/sources/SidebarTabs";
@@ -21,6 +21,8 @@ const sampleFileTree = [
 ];
 
 export function IdePage() {
+  console.log("🔄 IdePage render");
+
   // Get state and actions from Zustand store
   const {
     panelSizes,
@@ -34,7 +36,8 @@ export function IdePage() {
     openQueryTab,
     activeTabId,
     openTabs,
-    updateTabContent
+    updateTabContent,
+    setActiveTab
   } = useAppStore();
 
   // Query for all sources
@@ -91,71 +94,91 @@ export function IdePage() {
   // Build file tree data with sources only - schema children are handled by FileTree component via AppState
   const fileTreeData = sources ? sourcesToFileTreeNodes(sources) : sampleFileTree;
 
-  const handleSourceSelect = (source: Source) => {
-    setSelectedSource(source);
-  };
+  // Memoize QueryTabs props to prevent unnecessary re-renders
+  const queryTabsProps = useMemo(
+    () => ({
+      selectedSource,
+      schemasLoading,
+      schemasError,
+      connectedSourceIds
+    }),
+    [selectedSource, schemasLoading, schemasError, connectedSourceIds]
+  );
+
+  const handleSourceSelect = useCallback(
+    (source: Source) => {
+      setSelectedSource(source);
+    },
+    [setSelectedSource]
+  );
 
   // Handle table double-click - create or switch to existing tab
-  const handleTableDoubleClick = async (sourceId: string, tableName: string) => {
-    // Build the query to select all data from the table with a limit
-    const query = `SELECT * FROM ${tableName} LIMIT 101`;
+  const handleTableDoubleClick = useCallback(
+    async (sourceId: string, tableName: string) => {
+      // Build the query to select all data from the table with a limit
+      const query = `SELECT * FROM ${tableName} LIMIT 101`;
 
-    // Check if there's already an active tab for this source that we can reuse
-    if (activeTabId && openTabs.length > 0) {
-      const activeTab = openTabs.find((tab) => tab.id === activeTabId);
-      if (
-        activeTab &&
-        activeTab.sourceId === sourceId &&
-        !activeTab.selectedTableData &&
-        !activeTab.queryResults
-      ) {
-        // Use the active empty tab
-        updateTabContent(activeTabId, {
-          selectedTableData: { sourceId, tableName, query },
-          queryResults: null,
-          queryRunning: true,
-          title: tableName,
-          editorContent: query
-        });
-        return;
+      // Check if there's already an active tab for this source that we can reuse
+      if (activeTabId && openTabs.length > 0) {
+        const activeTab = openTabs.find((tab) => tab.id === activeTabId);
+        if (
+          activeTab &&
+          activeTab.sourceId === sourceId &&
+          !activeTab.selectedTableData &&
+          !activeTab.queryResults
+        ) {
+          // Use the active empty tab
+          updateTabContent(activeTabId, {
+            selectedTableData: { sourceId, tableName, query },
+            queryResults: null,
+            queryRunning: true,
+            title: tableName,
+            editorContent: query
+          });
+          return;
+        }
       }
-    }
 
-    // Create a new tab for this table
-    openQueryTab({
-      queryId: null,
-      sourceId,
-      title: tableName,
-      isDirty: false,
-      editorContent: query,
-      queryResults: null,
-      queryRunning: true,
-      selectedTableData: { sourceId, tableName, query }
-    });
-  };
+      // Create a new tab for this table
+      openQueryTab({
+        queryId: null,
+        sourceId,
+        title: tableName,
+        isDirty: false,
+        editorContent: query,
+        queryResults: null,
+        queryRunning: true,
+        selectedTableData: { sourceId, tableName, query }
+      });
+    },
+    [activeTabId, openTabs, updateTabContent, openQueryTab]
+  );
 
   // Handle query selection from QueryTree
-  const handleQuerySelect = (query: Query) => {
-    // Check if query is already open in a tab
-    const existingTab = openTabs.find((tab) => tab.queryId === query.id);
+  const handleQuerySelect = useCallback(
+    (query: Query) => {
+      // Check if query is already open in a tab
+      const existingTab = openTabs.find((tab) => tab.queryId === query.id);
 
-    if (existingTab) {
-      // Switch to existing tab
-      useAppStore.getState().setActiveTab(existingTab.id);
-    } else {
-      // Open new tab for this query
-      openQueryTab({
-        queryId: query.id,
-        sourceId: query.source_id,
-        title: query.name || `Query ${query.id.slice(0, 8)}`,
-        isDirty: false,
-        editorContent: "", // Will be loaded by the Editor component
-        queryResults: null,
-        queryRunning: false,
-        selectedTableData: null
-      });
-    }
-  };
+      if (existingTab) {
+        // Switch to existing tab - use the action from store instead of direct call
+        setActiveTab(existingTab.id);
+      } else {
+        // Open new tab for this query
+        openQueryTab({
+          queryId: query.id,
+          sourceId: query.source_id,
+          title: query.name || `Query ${query.id.slice(0, 8)}`,
+          isDirty: false,
+          editorContent: "", // Will be loaded by the Editor component
+          queryResults: null,
+          queryRunning: false,
+          selectedTableData: null
+        });
+      }
+    },
+    [openTabs, setActiveTab, openQueryTab]
+  );
 
   return (
     <div className="flex-1 min-h-0">
@@ -176,11 +199,7 @@ export function IdePage() {
         <PanelResizeHandle className="w-1 bg-border hover:bg-primary transition-colors" />
 
         <Panel defaultSize={panelSizes[1]} minSize={30}>
-          <QueryTabs
-            selectedSource={selectedSource}
-            schemasLoading={schemasLoading}
-            schemasError={schemasError}
-          />
+          <QueryTabs {...queryTabsProps} />
         </Panel>
 
         <PanelResizeHandle className="w-1 bg-border hover:bg-primary transition-colors" />

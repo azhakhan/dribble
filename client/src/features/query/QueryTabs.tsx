@@ -1,4 +1,5 @@
 import { X, Plus } from "lucide-react";
+import { useEffect, useCallback, memo } from "react";
 import { cn } from "@/shared/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Query } from "./Query";
@@ -9,13 +10,45 @@ interface QueryTabsProps {
   selectedSource: Source | null;
   schemasLoading: boolean;
   schemasError?: unknown;
+  connectedSourceIds: Set<string>;
 }
 
-export function QueryTabs({ selectedSource, schemasLoading, schemasError }: QueryTabsProps) {
+function QueryTabsComponent({
+  selectedSource,
+  schemasLoading,
+  schemasError,
+  connectedSourceIds
+}: QueryTabsProps) {
   const { openTabs, activeTabId, openQueryTab, closeQueryTab, setActiveTab } = useAppStore();
 
+  console.log("🔄 QueryTabs render:", {
+    selectedSource: selectedSource?.name,
+    openTabsLength: openTabs.length,
+    activeTabId: activeTabId
+  });
+
+  // Track when openTabs changes
+  useEffect(() => {
+    console.log(
+      "🔢 openTabs changed:",
+      openTabs.length,
+      openTabs.map((t) => t.title)
+    );
+  }, [openTabs]);
+
+  // Track when activeTabId changes
+  useEffect(() => {
+    console.log("🎯 activeTabId changed:", activeTabId);
+  }, [activeTabId]);
+
+  // Track when selectedSource changes
+  useEffect(() => {
+    console.log("🎯 selectedSource changed:", selectedSource?.name);
+  }, [selectedSource]);
+
   // Handle creating a new query tab
-  const handleNewTab = () => {
+  const handleNewTab = useCallback(() => {
+    console.log("➕ Creating new tab");
     if (!selectedSource) return;
 
     openQueryTab({
@@ -28,18 +61,24 @@ export function QueryTabs({ selectedSource, schemasLoading, schemasError }: Quer
       queryRunning: false,
       selectedTableData: null
     });
-  };
+  }, [selectedSource, openQueryTab]);
 
   // Handle closing a tab
-  const handleCloseTab = (tabId: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    closeQueryTab(tabId);
-  };
+  const handleCloseTab = useCallback(
+    (tabId: string, e: React.MouseEvent) => {
+      e.stopPropagation();
+      closeQueryTab(tabId);
+    },
+    [closeQueryTab]
+  );
 
   // Handle tab click to make it active
-  const handleTabClick = (tabId: string) => {
-    setActiveTab(tabId);
-  };
+  const handleTabClick = useCallback(
+    (tabId: string) => {
+      setActiveTab(tabId);
+    },
+    [setActiveTab]
+  );
 
   // If no tabs are open, show empty state
   if (openTabs.length === 0) {
@@ -124,9 +163,13 @@ export function QueryTabs({ selectedSource, schemasLoading, schemasError }: Quer
             selectedSource={selectedSource}
             schemasLoading={schemasLoading}
             schemasError={schemasError}
+            connectedSourceIds={connectedSourceIds}
           />
         )}
       </div>
     </div>
   );
 }
+
+// Memoize the component to prevent unnecessary re-renders
+export const QueryTabs = memo(QueryTabsComponent);

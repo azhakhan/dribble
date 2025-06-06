@@ -139,11 +139,10 @@ interface AppState extends FileTreeState, SourceChildrenState {
   removeSourceStatus: (sourceId: string) => void;
 
   // Query tabs actions
-  openQueryTab: (tab: Omit<QueryTab, "id">) => string;
+  openQueryTab: (tab: Omit<QueryTab, "id">) => void;
   closeQueryTab: (tabId: string) => void;
   setActiveTab: (tabId: string | null) => void;
   updateTabContent: (tabId: string, content: Partial<QueryTab>) => void;
-  getActiveTab: () => QueryTab | null;
 
   // Editor actions
   setEditorContent: (content: string) => void;
@@ -190,7 +189,7 @@ interface AppState extends FileTreeState, SourceChildrenState {
 // Create the store with persistence for certain values
 export const useAppStore = create<AppState>()(
   persist(
-    (set, get) => ({
+    (set) => ({
       // Panel sizes with default values
       panelSizes: [20, 60, 20],
 
@@ -408,15 +407,14 @@ export const useAppStore = create<AppState>()(
         }),
 
       // Query tabs actions
-      openQueryTab: (tab) => {
-        const newTabId = crypto.randomUUID();
-        const newTab = { ...tab, id: newTabId };
-        set((state) => ({
-          openTabs: [...state.openTabs, newTab],
-          activeTabId: newTabId
-        }));
-        return newTabId;
-      },
+      openQueryTab: (tab) =>
+        set((state) => {
+          const newTabId = crypto.randomUUID();
+          return {
+            openTabs: [...state.openTabs, { ...tab, id: newTabId }],
+            activeTabId: newTabId
+          };
+        }),
       closeQueryTab: (tabId) =>
         set((state) => {
           const newOpenTabs = state.openTabs.filter((tab) => tab.id !== tabId);
@@ -435,11 +433,7 @@ export const useAppStore = create<AppState>()(
       updateTabContent: (tabId, content) =>
         set((state) => ({
           openTabs: state.openTabs.map((tab) => (tab.id === tabId ? { ...tab, ...content } : tab))
-        })),
-      getActiveTab: () => {
-        const state = get();
-        return state.openTabs.find((tab) => tab.id === state.activeTabId) || null;
-      }
+        }))
     }),
     {
       name: "dribble-app-storage",

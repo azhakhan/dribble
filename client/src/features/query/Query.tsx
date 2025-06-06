@@ -1,7 +1,9 @@
+import { memo, useCallback, useMemo } from "react";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
+import { useAppStore } from "@/shared/store/useAppStore";
 import { TableDataDisplay } from "@/features/tables/TableDataDisplay";
 import { Editor } from "@/features/editor/Editor";
-import { useAppStore } from "@/shared/store/useAppStore";
+import { useSourcesQuery } from "@/shared/hooks/useSourcesQuery";
 import type { Source } from "@/shared/lib/api";
 
 interface QueryProps {
@@ -9,13 +11,57 @@ interface QueryProps {
   selectedSource: Source | null;
   schemasLoading: boolean;
   schemasError?: unknown;
+  connectedSourceIds: Set<string>;
 }
 
-export function Query({ tabId, selectedSource, schemasLoading, schemasError }: QueryProps) {
+function QueryComponent({
+  tabId,
+  selectedSource,
+  schemasLoading,
+  schemasError,
+  connectedSourceIds
+}: QueryProps) {
+  console.log("🔄 Query render:", { tabId, selectedSource: selectedSource?.name });
+
   const { openTabs, updateTabContent } = useAppStore();
+  const { data: sources } = useSourcesQuery();
+
+  // Handle SQL query execution from Editor
+  const handleQueryExecution = useCallback(
+    (results: object[]) => {
+      updateTabContent(tabId, {
+        queryResults: results,
+        selectedTableData: null // Clear table selection since we're viewing custom query results
+      });
+    },
+    [tabId, updateTabContent]
+  );
+
+  // Handle query running status change
+  const handleQueryStatusChange = useCallback(
+    (isRunning: boolean) => {
+      updateTabContent(tabId, {
+        queryRunning: isRunning
+      });
+    },
+    [tabId, updateTabContent]
+  );
 
   // Find current tab
   const currentTab = openTabs.find((tab) => tab.id === tabId);
+
+  // Find the source for this tab's query
+  const tabSource = useMemo(() => {
+    if (!currentTab || !sources) return null;
+    return sources.find((source) => source.id === currentTab.sourceId) || null;
+  }, [currentTab, sources]);
+
+  console.log("📝 Current tab:", {
+    currentTab: currentTab?.title,
+    tabId,
+    tabSourceId: currentTab?.sourceId,
+    tabSourceName: tabSource?.name
+  });
 
   if (!currentTab) {
     return (
@@ -25,24 +71,8 @@ export function Query({ tabId, selectedSource, schemasLoading, schemasError }: Q
     );
   }
 
-  // Handle query execution from editor
-  const handleQueryExecution = (results: object[]) => {
-    updateTabContent(tabId, {
-      queryResults: results,
-      selectedTableData: null // Clear table selection when running custom query
-    });
-  };
-
-  // Handle query running status
-  const handleQueryStatusChange = (isRunning: boolean) => {
-    updateTabContent(tabId, { queryRunning: isRunning });
-  };
-
-  // Handle table double-click (from the sidebar, not directly here)
-  // This will be called from the parent component when a table is selected
-
   return (
-    <div className="h-full">
+    <div className="h-full flex flex-col">
       <PanelGroup direction="vertical" storage={localStorage} autoSaveId={`query-layout-${tabId}`}>
         <Panel defaultSize={60} minSize={30}>
           <TableDataDisplay
@@ -56,11 +86,13 @@ export function Query({ tabId, selectedSource, schemasLoading, schemasError }: Q
 
         <Panel defaultSize={40} minSize={10}>
           <Editor
-            selectedSource={selectedSource}
+            key={tabId}
+            selectedSource={tabSource}
             schemasLoading={schemasLoading}
             schemasError={schemasError}
             onQueryExecution={handleQueryExecution}
             onQueryStatusChange={handleQueryStatusChange}
+            connectedSourceIds={connectedSourceIds}
             initialQueryId={currentTab.queryId}
           />
         </Panel>
@@ -68,3 +100,6 @@ export function Query({ tabId, selectedSource, schemasLoading, schemasError }: Q
     </div>
   );
 }
+
+// Memoize the component to prevent unnecessary re-renders
+export const Query = memo(QueryComponent);
