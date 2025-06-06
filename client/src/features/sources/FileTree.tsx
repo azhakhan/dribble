@@ -225,7 +225,7 @@ const FileTreeItem = ({
         className={`flex items-center py-1 px-2 text-sm cursor-pointer hover:bg-accent/50 ${
           isSelected ? "bg-accent" : ""
         }`}
-        style={{ paddingLeft: `${level * 12}px` }}
+        style={level > 0 ? { paddingLeft: `${level * 12}px` } : {}}
         onClick={handleItemClick}
         onDoubleClick={handleDoubleClick}
       >
