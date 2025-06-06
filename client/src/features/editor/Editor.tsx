@@ -1,9 +1,14 @@
-import { useRef, useState, useEffect } from "react";
+import { useRef, useState, useEffect, useCallback } from "react";
 import type { Source } from "@/shared/lib/api";
 import { Button } from "@/components/ui/button";
 import { PlayIcon, PencilIcon, CheckIcon, XIcon } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryQuery } from "@/shared/hooks/useQueryQuery";
+import {
+  useCreateQueryVersionMutation,
+  useQueryVersionsQuery
+} from "@/shared/hooks/useQueryVersionsQuery";
+import { useQueryByIdQuery } from "@/shared/hooks/useQueriesQuery";
 import { useAppStore } from "@/shared/store/useAppStore";
 import { LanguageIdEnum } from "@/shared/lib/monaco-setup";
 import { MonacoSQLEditor } from "./MonacoSQLEditor";
@@ -18,6 +23,8 @@ interface EditorProps {
   schemasError?: unknown;
   onQueryExecution?: (results: object[]) => void;
   onQueryStatusChange?: (isRunning: boolean) => void;
+  initialQueryId?: string | null;
+  onQueryLoad?: (loadQuery: (queryId: string | null) => Promise<void>) => void;
 }
 
 export function Editor({
@@ -25,7 +32,9 @@ export function Editor({
   schemasLoading,
   schemasError,
   onQueryExecution,
-  onQueryStatusChange
+  onQueryStatusChange,
+  initialQueryId = null,
+  onQueryLoad
 }: EditorProps) {
   const editorContainerRef = useRef<HTMLDivElement>(null);
   const [isRunning, setIsRunning] = useState(false);
@@ -33,7 +42,9 @@ export function Editor({
   const [queryName, setQueryName] = useState<string>("");
   const [editingName, setEditingName] = useState(false);
   const [tempName, setTempName] = useState("");
-  const [queryId, setQueryId] = useState<string | null>(null);
+  const [queryId, setQueryId] = useState<string | null>(initialQueryId);
+  const [originalQueryContent, setOriginalQueryContent] = useState<string>("");
+  const lastSavedContentRef = useRef<string>("");
 
   // Get editor content and proposed changes from appStore
   const {
@@ -43,6 +54,31 @@ export function Editor({
     acceptProposedChanges,
     rejectProposedChanges
   } = useAppStore();
+
+  // Mutation for creating query versions
+  const createQueryVersionMutation = useCreateQueryVersionMutation();
+
+  // Hook to load existing query if queryId is provided
+  const { data: loadedQuery, isLoading: isLoadingQuery } = useQueryByIdQuery(queryId || "");
+
+  // Hook to load query versions to get the latest SQL content
+  const { data: queryVersions, isLoading: isLoadingVersions } = useQueryVersionsQuery(
+    queryId || ""
+  );
+
+  // Effect to load query content when query and versions are fetched
+  useEffect(() => {
+    if (loadedQuery && queryVersions && !isLoadingQuery && !isLoadingVersions) {
+      setQueryName(loadedQuery.name || "");
+
+      // Get the latest version (versions should be sorted by created_at desc)
+      const latestVersion = queryVersions[0];
+      const queryContent = latestVersion?.sql || "";
+
+      setEditorContent(queryContent);
+      setOriginalQueryContent(queryContent);
+    }
+  }, [loadedQuery, queryVersions, isLoadingQuery, isLoadingVersions, setEditorContent]);
 
   // Helper to map dbtype to Monaco language
   function getMonacoLanguage(dbtype?: string): string {
@@ -112,12 +148,15 @@ export function Editor({
 
   const isEditorActive = selectedSource && !schemasLoading && !schemasError;
 
-  const handleRunQuery = (sqlToRun?: string) => {
+  const handleRunQuery = async (sqlToRun?: string) => {
     if (!selectedSource) return;
 
     const queryToRun =
       sqlToRun || (proposedChanges ? proposedChanges.proposedContent : editorContent);
     if (!queryToRun.trim()) return;
+
+    // Create version in background without blocking the run
+    createVersionIfChanged("run");
 
     setIsRunning(true);
     if (onQueryStatusChange) {
@@ -138,12 +177,19 @@ export function Editor({
 
   const handleCreateQuery = async () => {
     if (!selectedSource) return;
+
+    // Create version if current query has changed before creating new one
+    await createVersionIfChanged("on_exit");
+
     setEditorContent("");
     setQueryName("");
     setQueryId(null);
+    setOriginalQueryContent(""); // Reset original content for new query
+
     try {
       const created = await createQuery({ source_id: selectedSource.id });
       setQueryId(created.id);
+      setOriginalQueryContent(""); // New query starts with empty content
       toast.success("Query created");
     } catch {
       toast.error("Failed to create query");
@@ -170,6 +216,109 @@ export function Editor({
       toast.error("Failed to update query name");
     }
   };
+
+  // Function to check if query has changed
+  const hasQueryChanged = () => {
+    const currentContent = proposedChanges ? proposedChanges.proposedContent : editorContent;
+    return originalQueryContent.trim() !== currentContent.trim() && currentContent.trim() !== "";
+  };
+
+  // Function to create a version if query has changed
+  const createVersionIfChanged = useCallback(
+    async (saveTrigger: "run" | "on_exit" | "ai") => {
+      if (!queryId || !hasQueryChanged()) return;
+
+      const currentContent = proposedChanges ? proposedChanges.proposedContent : editorContent;
+
+      // Prevent duplicate saves
+      if (lastSavedContentRef.current === currentContent.trim()) return;
+
+      try {
+        await createQueryVersionMutation.mutateAsync({
+          query_id: queryId,
+          sql: currentContent,
+          save_trigger: saveTrigger,
+          created_by: "00000000-0000-0000-0000-000000000000" // TODO: Replace with actual user ID
+        });
+
+        // Update the original content and last saved content after successful version creation
+        setOriginalQueryContent(currentContent);
+        lastSavedContentRef.current = currentContent.trim();
+
+        if (saveTrigger === "run") {
+          toast.success("Query version saved before execution");
+        }
+      } catch (error) {
+        console.error("Failed to create query version:", error);
+        toast.error("Failed to save query version");
+      }
+    },
+    [
+      queryId,
+      originalQueryContent,
+      editorContent,
+      proposedChanges,
+      createQueryVersionMutation,
+      setOriginalQueryContent
+    ]
+  );
+
+  // Function to load a different query (with version saving)
+  const loadQuery = useCallback(
+    async (newQueryId: string | null) => {
+      // Save current query version if it has changed
+      await createVersionIfChanged("on_exit");
+
+      // Set new query ID which will trigger the loading effects
+      setQueryId(newQueryId);
+      lastSavedContentRef.current = ""; // Reset for new query
+    },
+    [createVersionIfChanged, setQueryId]
+  );
+
+  // Effect to handle initialQueryId changes (when parent component changes the query)
+  useEffect(() => {
+    if (initialQueryId !== queryId) {
+      loadQuery(initialQueryId);
+    }
+  }, [initialQueryId]);
+
+  // Effect to save version when AI proposes changes
+  useEffect(() => {
+    if (proposedChanges && queryId) {
+      // Check if proposed content is different from original
+      const proposedContent = proposedChanges.proposedContent;
+      if (originalQueryContent.trim() !== proposedContent.trim() && proposedContent.trim() !== "") {
+        createVersionIfChanged("ai");
+      }
+    }
+  }, [proposedChanges, queryId, originalQueryContent, createVersionIfChanged]);
+
+  // Effect to handle page/tab close (keep this for browser close)
+  useEffect(() => {
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (hasQueryChanged()) {
+        // This will show a confirmation dialog
+        event.preventDefault();
+
+        // Try to save the version (though it might not complete due to page unload)
+        createVersionIfChanged("on_exit");
+      }
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+    };
+  }, [hasQueryChanged, createVersionIfChanged]);
+
+  // Effect to expose loadQuery function to parent
+  useEffect(() => {
+    if (onQueryLoad) {
+      onQueryLoad(loadQuery);
+    }
+  }, [onQueryLoad, loadQuery]);
 
   return (
     <div ref={editorContainerRef} className="h-full flex flex-col">
