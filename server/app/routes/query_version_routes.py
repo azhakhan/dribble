@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, Depends
 from app.schemas.query import (
     CreateQueryVersionRequest,
     QueryVersionResponse,

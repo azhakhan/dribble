@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, Depends
 from app.schemas.query import QueryRunResponse
 from app.core.db import get_db
 from app.controllers.query_service import QueryRunService
