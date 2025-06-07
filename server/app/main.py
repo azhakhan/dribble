@@ -1,7 +1,10 @@
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
 from app.routes.sources import router as sources_router
-from app.routes.query import router as query_router
+from app.routes.query_routes import router as query_router
+from app.routes.query_version_routes import router as query_version_router
+from app.routes.query_run_routes import router as query_run_router
+from app.routes.query_execution_routes import router as query_execution_router
 from app.routes.llm import router as llm_router
 from app.routes.chat import router as chat_router
 from app.core.start import ensure_user_and_workspace
@@ -40,5 +43,8 @@ async def health():
 
 app.include_router(sources_router)
 app.include_router(query_router)
+app.include_router(query_version_router)
+app.include_router(query_run_router)
+app.include_router(query_execution_router)
 app.include_router(llm_router)
 app.include_router(chat_router)
