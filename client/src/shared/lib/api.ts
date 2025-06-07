@@ -47,7 +47,7 @@ export const getSourceStatus = async (sourceId: string): Promise<SourceStatus> =
 };
 
 export const executeQuery = async (source_id: string, query: string) => {
-  const response = await api.post<{ query_id: string }>("query/execute/", {
+  const response = await api.post<{ query_id: string }>("/execution/", {
     source_id,
     query
   });
@@ -56,7 +56,7 @@ export const executeQuery = async (source_id: string, query: string) => {
 
 export const getQueryResults = async (query_id: string) => {
   try {
-    const response = await api.get<object[]>(`query/results/${query_id}/`);
+    const response = await api.get<object[]>(`/execution/results/${query_id}`);
     return response.data;
   } catch (error) {
     if (axios.isAxiosError(error) && error.response?.status === 202) {
@@ -362,50 +362,50 @@ export const deleteQuery = async (queryId: string): Promise<void> => {
 // ==================== QUERY VERSION API ====================
 
 export const getQueryVersions = async (queryId: string): Promise<QueryVersion[]> => {
-  const response = await api.get<QueryVersion[]>(`/query/${queryId}/versions/`);
+  const response = await api.get<QueryVersion[]>(`/versions/query/${queryId}/`);
   return response.data;
 };
 
 export const getLatestQueryVersion = async (queryId: string): Promise<QueryVersion | null> => {
-  const response = await api.get<QueryVersion | null>(`/query/${queryId}/versions/latest`);
+  const response = await api.get<QueryVersion | null>(`/versions/query/${queryId}/latest`);
   return response.data;
 };
 
 export const getQueryVersionById = async (versionId: string): Promise<QueryVersion> => {
-  const response = await api.get<QueryVersion>(`/query/versions/${versionId}`);
+  const response = await api.get<QueryVersion>(`/versions/${versionId}`);
   return response.data;
 };
 
 export const createQueryVersion = async (
   data: CreateQueryVersionRequest
 ): Promise<QueryVersion> => {
-  const response = await api.post<QueryVersion>("/query/versions/", data);
+  const response = await api.post<QueryVersion>("/versions/", data);
   return response.data;
 };
 
 export const deleteQueryVersion = async (versionId: string): Promise<void> => {
-  await api.delete(`/query/versions/${versionId}`);
+  await api.delete(`/versions/${versionId}`);
 };
 
 // ==================== QUERY RUN API ====================
 
 export const getQueryRunsByQueryId = async (queryId: string): Promise<QueryRun[]> => {
-  const response = await api.get<QueryRun[]>(`/query/runs/query/${queryId}`);
+  const response = await api.get<QueryRun[]>(`/runs/query/${queryId}`);
   return response.data;
 };
 
 export const getQueryRunsByVersionId = async (versionId: string): Promise<QueryRun[]> => {
-  const response = await api.get<QueryRun[]>(`/query/runs/version/${versionId}`);
+  const response = await api.get<QueryRun[]>(`/runs/version/${versionId}`);
   return response.data;
 };
 
 export const getQueryRunById = async (runId: string): Promise<QueryRun> => {
-  const response = await api.get<QueryRun>(`/query/runs/run/${runId}`);
+  const response = await api.get<QueryRun>(`/runs/${runId}`);
   return response.data;
 };
 
 export const deleteQueryRun = async (runId: string): Promise<void> => {
-  await api.delete(`/query/runs/${runId}`);
+  await api.delete(`/runs/${runId}`);
 };
 
 export default api;
