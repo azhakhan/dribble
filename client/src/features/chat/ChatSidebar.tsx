@@ -51,7 +51,8 @@ export function ChatSidebar() {
     addMessage,
     chatLoading,
     setChatLoading,
-    editorContent,
+    openTabs,
+    activeTabId,
     setProposedChanges,
     sessionId,
     generateNewSession,
@@ -59,6 +60,10 @@ export function ChatSidebar() {
     setSessionId,
     loadMessagesFromServer
   } = useAppStore();
+
+  // Get active tab's content instead of global editorContent
+  const activeTab = activeTabId ? openTabs.find((tab) => tab.id === activeTabId) : null;
+  const editorContent = activeTab?.editorContent || "";
 
   const { data: llms = [] } = useLLMsQuery();
   const { data: selectedLLM } = useLLMQuery(selectedLLMId || undefined);

@@ -372,13 +372,26 @@ export const useAppStore = create<AppState>()(
       setProposedChanges: (changes) => set({ proposedChanges: changes }),
       acceptProposedChanges: () =>
         set((state) => {
-          if (state.proposedChanges) {
+          if (state.proposedChanges && state.activeTabId) {
+            // Update the active tab's content instead of global editorContent
+            const updatedTabs = state.openTabs.map((tab) =>
+              tab.id === state.activeTabId
+                ? {
+                    ...tab,
+                    editorContent: state.proposedChanges!.proposedContent,
+                    isDirty: true
+                  }
+                : tab
+            );
+
             return {
+              openTabs: updatedTabs,
+              // Keep global editorContent for backward compatibility but also update it
               editorContent: state.proposedChanges.proposedContent,
               proposedChanges: null
             };
           }
-          return state;
+          return { proposedChanges: null };
         }),
       rejectProposedChanges: () => set({ proposedChanges: null }),
 
@@ -503,7 +516,26 @@ export const useAppStore = create<AppState>()(
             activeTabId: newActiveTabId
           };
         }),
-      setActiveTab: (tabId) => set({ activeTabId: tabId }),
+      setActiveTab: (tabId) =>
+        set((state) => {
+          // Find the tab being activated
+          const activeTab = tabId ? state.openTabs.find((tab) => tab.id === tabId) : null;
+
+          // If the tab has a query, get the query's source and set it as selected source for chat
+          let selectedSource = state.selectedSource;
+          if (activeTab?.queryId && state.queries[activeTab.queryId]) {
+            const query = state.queries[activeTab.queryId];
+            const querySource = query.source_id ? state.sources[query.source_id] : null;
+            if (querySource) {
+              selectedSource = querySource;
+            }
+          }
+
+          return {
+            activeTabId: tabId,
+            selectedSource
+          };
+        }),
       updateTabContent: (tabId, content) =>
         set((state) => ({
           openTabs: state.openTabs.map((tab) => (tab.id === tabId ? { ...tab, ...content } : tab))
@@ -535,7 +567,10 @@ export const useAppStore = create<AppState>()(
           const versions = updatedState.queryVersions[queryId] || [];
           const latestVersion = versions[0];
 
-          // Update tab with loaded data
+          // Get the source for this query to set as selected source for chat
+          const querySource = query?.source_id ? updatedState.sources[query.source_id] : null;
+
+          // Update tab with loaded data and set query's source as selected source for chat
           set((state) => ({
             openTabs: state.openTabs.map((t) =>
               t.id === tabId
@@ -550,7 +585,9 @@ export const useAppStore = create<AppState>()(
                     isLoadingVersions: false
                   }
                 : t
-            )
+            ),
+            // Set the query's source as the selected source for chat
+            selectedSource: querySource || state.selectedSource
           }));
         } catch (error) {
           console.error("Failed to load query:", error);
