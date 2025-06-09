@@ -9,8 +9,7 @@ import {
   Table,
   Loader2,
   MoreVertical,
-  AlertCircle,
-  Power
+  AlertCircle
 } from "lucide-react";
 import { PostgresIcon, MySQLIcon, SQLiteIcon } from "../icons";
 import { getColumnTypeIcon } from "./ColumnTypeIcons";
@@ -303,27 +302,6 @@ const FileTreeItem = ({
               </TooltipProvider>
             )}
 
-            {/* Connect button for sources that aren't connected */}
-            {isSource && !isConnected && !isLoading && (
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-3 w-3 ml-1 hover:bg-accent cursor-pointer"
-                      onClick={handleConnectClick}
-                    >
-                      <Power style={{ width: "12px", height: "12px" }} strokeWidth={1} />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>Connect to source</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            )}
-
             {/* Actions dropdown */}
             <DropdownMenu open={dropdownOpen} onOpenChange={setDropdownOpen}>
               <DropdownMenuTrigger asChild>
@@ -337,6 +315,12 @@ const FileTreeItem = ({
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-40">
+                {!isConnected && !isLoading && node.id && (
+                  <>
+                    <DropdownMenuItem onClick={handleConnectClick}>Connect</DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                  </>
+                )}
                 {isConnected && node.id && (
                   <>
                     <DropdownMenuItem
