@@ -31,8 +31,18 @@ The following hooks were completely redundant with `useAppStore` functionality a
    - Centralized sources cache in `allSources` and `sources` state
 
 6. **`useConnectedSourcesQuery.ts`** - Connected sources now handled by:
+
    - `loadConnectedSources()` store action
    - Centralized cache in `connectedSourcesData` and `connectedSources` state
+
+7. **`useSourceSchemasQuery.ts`** - Schema loading now handled by:
+
+   - `loadSourceSchema()` store action
+   - Centralized schema cache in `sourceSchemaMap` state
+
+8. **`useConnectedSourcesSchemas.ts`** - Connected schemas now handled by:
+   - `loadConnectedSourcesSchemas()` store action
+   - Automatic schema loading and file tree generation
 
 ### 🔄 **Created Store-Integrated Hooks**
 
@@ -44,7 +54,9 @@ const { data: sources, isLoading, error } = useStoreSources();
 const { data: connectedSources } = useStoreConnectedSources();
 const { data: query } = useStoreQuery(queryId);
 const { data: versions } = useStoreQueryVersions(queryId);
+const { data: schema } = useStoreSourceSchema(sourceId);
 const { createQuery, createVersion } = useStoreQueryMutations();
+useStoreConnectedSourcesSchemas(connectedSources); // Auto-loads schemas
 ```
 
 ### ✅ **Kept Specialized Hooks**
@@ -55,10 +67,8 @@ These hooks remain because they handle specialized functionality not suitable fo
 2. **`useLLMsQuery.ts`** - LLM data fetching
 3. **`useConnectSourceMutation.ts`** - Complex connection logic
 4. **`useSourceStatusQuery.ts`** - Real-time status polling
-5. **`useSourceSchemasQuery.ts`** - Schema fetching with retry logic
-6. **`useConnectedSourcesSchemas.ts`** - Schema integration with store
-7. **`useQueryQuery.ts`** - Table data display queries (specialized polling logic)
-8. **`useChatLLMQuery.ts`** - Chat LLM specific queries
+5. **`useQueryQuery.ts`** - Table data display queries (specialized polling logic)
+6. **`useChatLLMQuery.ts`** - Chat LLM specific queries
 
 ## Best Practices Established
 
@@ -126,7 +136,7 @@ These hooks remain because they handle specialized functionality not suitable fo
 
 ### 📊 **Benefits Achieved**
 
-1. **Reduced Bundle Size** - Eliminated 6 redundant hook files (50% reduction)
+1. **Reduced Bundle Size** - Eliminated 8 redundant hook files (67% reduction)
 2. **Simplified State Management** - Single source of truth in store
 3. **Better Performance** - No duplicate API calls, shared caching
 4. **Improved Developer Experience** - Consistent patterns, less context switching
@@ -149,7 +159,7 @@ For future hook consolidation:
 
 Consider consolidating these remaining hooks if they become redundant:
 
-- `useSourceSchemasQuery.ts` - Could be integrated into store if schema loading becomes more centralized
 - `useChatQuery.ts` - Could be partially integrated if chat state needs to be global
+- `useQueryQuery.ts` - Could be integrated if table data display becomes part of global state
 
-The current architecture provides a clean separation between global application state (store) and specialized server state (React Query hooks).
+The current architecture provides a clean separation between global application state (store) and specialized server state (React Query hooks). Schema loading is now fully integrated into the store with automatic file tree generation and error handling.

@@ -4,8 +4,11 @@ import { useAppStore } from "@/shared/store/useAppStore";
 import { SidebarTabs } from "@/features/sources/SidebarTabs";
 import { QueryTabs } from "@/features/query/QueryTabs";
 import { ChatSidebar } from "@/features/chat/ChatSidebar";
-import { useStoreSources, useStoreConnectedSources } from "@/shared/hooks/useStoreQueries";
-import { useSourceSchemasQuery } from "@/shared/hooks/useSourceSchemasQuery";
+import {
+  useStoreSources,
+  useStoreConnectedSources,
+  useStoreSourceSchema
+} from "@/shared/hooks/useStoreQueries";
 import { useSourceStatusQuery } from "@/shared/hooks/useSourceStatusQuery";
 import { sourcesToFileTreeNodes } from "@/shared/lib/fileTreeUtils";
 import type { Source, ConnectedSource, Query } from "@/shared/lib/api";
@@ -57,7 +60,7 @@ export function IdePage() {
   }, [connectedSourcesData, setConnectedSources]);
 
   // Query for selected source schemas - only if the source is connected
-  const { data: sourceSchemas } = useSourceSchemasQuery(
+  const { data: sourceSchemas } = useStoreSourceSchema(
     selectedSource?.id && connectedSourceIds.has(selectedSource.id) ? selectedSource.id : undefined
   );
 

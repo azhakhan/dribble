@@ -1,5 +1,6 @@
 import { useEffect, useMemo } from "react";
 import { useAppStore } from "@/shared/store/useAppStore";
+import type { ConnectedSource } from "@/shared/lib/api";
 
 /**
  * Custom hook that provides sources data from the store
@@ -116,5 +117,61 @@ export function useStoreQueryMutations() {
   return {
     createQuery,
     createVersion
+  };
+}
+
+/**
+ * Custom hook that provides source schema data from the store
+ * with automatic loading and React Query-like interface
+ */
+export function useStoreSourceSchema(sourceId: string | undefined) {
+  const { sourceSchemaMap, loadingSchemas, sourceSchemaErrors, loadSourceSchema } = useAppStore();
+
+  useEffect(() => {
+    if (sourceId && !sourceSchemaMap[sourceId] && !loadingSchemas.has(sourceId)) {
+      loadSourceSchema(sourceId);
+    }
+  }, [sourceId, sourceSchemaMap, loadingSchemas, loadSourceSchema]);
+
+  return {
+    data: sourceId ? sourceSchemaMap[sourceId] || null : null,
+    isLoading: sourceId ? loadingSchemas.has(sourceId) : false,
+    error: sourceId && sourceSchemaErrors[sourceId] ? new Error(sourceSchemaErrors[sourceId]) : null
+  };
+}
+
+/**
+ * Custom hook that loads schemas for all connected sources and integrates with store
+ */
+export function useStoreConnectedSourcesSchemas(connectedSources: ConnectedSource[] | undefined) {
+  const { loadingSchemas, sourceSchemaErrors, loadConnectedSourcesSchemas } = useAppStore();
+
+  useEffect(() => {
+    if (connectedSources && connectedSources.length > 0) {
+      loadConnectedSourcesSchemas(connectedSources);
+    }
+  }, [connectedSources, loadConnectedSourcesSchemas]);
+
+  // Calculate loading state - true if any connected source is loading
+  const isLoading = useMemo(() => {
+    if (!connectedSources) return false;
+    return connectedSources.some((source) => loadingSchemas.has(source.id));
+  }, [connectedSources, loadingSchemas]);
+
+  // Calculate error state - if any connected source has an error
+  const error = useMemo(() => {
+    if (!connectedSources) return null;
+    const firstError = connectedSources.find((source) => sourceSchemaErrors[source.id]);
+    return firstError ? new Error(sourceSchemaErrors[firstError.id]) : null;
+  }, [connectedSources, sourceSchemaErrors]);
+
+  return {
+    isLoading,
+    error,
+    refetch: () => {
+      if (connectedSources) {
+        loadConnectedSourcesSchemas(connectedSources);
+      }
+    }
   };
 }

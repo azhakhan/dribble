@@ -11,6 +11,7 @@ import {
   getQueryResults,
   getSources,
   getConnectedSources,
+  getSourceSchemas,
   type ConnectedSource
 } from "@/shared/lib/api";
 import type { FileNode } from "@/shared/lib/fileTreeUtils";
@@ -93,6 +94,7 @@ interface QueryState {
   loadingVersions: Set<string>; // Set of query IDs whose versions are being loaded
   loadingSources: boolean; // Loading all sources
   loadingConnectedSources: boolean; // Loading connected sources
+  loadingSchemas: Set<string>; // Set of source IDs whose schemas are being loaded
 
   // Actions for centralized query management
   loadQuery: (queryId: string) => Promise<void>;
@@ -104,6 +106,8 @@ interface QueryState {
   // Enhanced source management
   loadSources: () => Promise<void>;
   loadConnectedSources: () => Promise<void>;
+  loadSourceSchema: (sourceId: string) => Promise<void>;
+  loadConnectedSourcesSchemas: (connectedSources: ConnectedSource[]) => Promise<void>;
   setSources: (sources: Source[]) => void;
   setConnectedSources: (connectedSourceIds: string[]) => void;
   setConnectedSourcesData: (connectedSources: ConnectedSource[]) => void;
@@ -317,6 +321,7 @@ export const useAppStore = create<AppState>()(
       connectedSourcesData: [],
       loadingSources: false,
       loadingConnectedSources: false,
+      loadingSchemas: new Set(),
 
       // Panel actions
       setPanelSizes: (sizes) => set({ panelSizes: sizes }),
@@ -957,7 +962,66 @@ export const useAppStore = create<AppState>()(
         set({
           connectedSourcesData: connectedSources,
           connectedSources: new Set(connectedSources.map((s) => s.id))
-        })
+        }),
+
+      // Schema loading actions
+      loadSourceSchema: async (sourceId: string) => {
+        const currentState = get();
+        if (currentState.sourceSchemaMap[sourceId] || currentState.loadingSchemas.has(sourceId)) {
+          return;
+        }
+
+        set((state) => ({
+          loadingSchemas: new Set(state.loadingSchemas).add(sourceId)
+        }));
+
+        try {
+          const schemas = await getSourceSchemas(sourceId);
+          set((state) => ({
+            sourceSchemaMap: {
+              ...state.sourceSchemaMap,
+              [sourceId]: schemas
+            },
+            loadingSchemas: new Set([...state.loadingSchemas].filter((id) => id !== sourceId))
+          }));
+
+          // Clear any existing error for this source
+          get().setSourceSchemaError(sourceId, null);
+
+          // Generate and set children nodes from schema data
+          const { schemaToFileTreeNodes } = await import("@/shared/lib/fileTreeUtils");
+          const generatedChildren = schemaToFileTreeNodes(schemas, sourceId);
+          get().setSourceGeneratedChildren(sourceId, generatedChildren);
+        } catch (error) {
+          console.error(`Failed to load schema for source ${sourceId}:`, error);
+          const errorMessage = error instanceof Error ? error.message : "Unknown error";
+
+          set((state) => ({
+            loadingSchemas: new Set([...state.loadingSchemas].filter((id) => id !== sourceId))
+          }));
+
+          // Set error and clear children
+          get().setSourceSchemaError(sourceId, errorMessage);
+          get().setSourceGeneratedChildren(sourceId, []);
+        }
+      },
+
+      loadConnectedSourcesSchemas: async (connectedSources: ConnectedSource[]) => {
+        if (!connectedSources || connectedSources.length === 0) return;
+
+        const currentState = get();
+
+        // Clean up data for disconnected sources
+        const connectedSourceIds = connectedSources.map((s) => s.id);
+        currentState.cleanupDisconnectedSources(connectedSourceIds);
+
+        // Load schemas for all connected sources in parallel
+        await Promise.allSettled(
+          connectedSources.map(async (source) => {
+            await currentState.loadSourceSchema(source.id);
+          })
+        );
+      }
     }),
     {
       name: "dribble-app-storage",

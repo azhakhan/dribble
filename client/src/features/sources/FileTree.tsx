@@ -32,8 +32,10 @@ import {
   useDisconnectSourceMutation
 } from "@/shared/hooks/useConnectSourceMutation";
 import { useSourceStatusQuery } from "@/shared/hooks/useSourceStatusQuery";
-import { useStoreConnectedSources } from "@/shared/hooks/useStoreQueries";
-import { useConnectedSourcesSchemas } from "@/shared/hooks/useConnectedSourcesSchemas";
+import {
+  useStoreConnectedSources,
+  useStoreConnectedSourcesSchemas
+} from "@/shared/hooks/useStoreQueries";
 import type { ConnectedSource } from "@/shared/lib/api";
 
 interface FileTreeProps {
@@ -412,7 +414,7 @@ export const FileTree = ({ data, onSourceSelect, onTableDoubleClick }: FileTreeP
   }, [connectedSourcesData]);
 
   // Fetch schemas for all connected sources and update AppState
-  useConnectedSourcesSchemas(connectedSourcesData);
+  useStoreConnectedSourcesSchemas(connectedSourcesData);
 
   return (
     <div className="h-full flex flex-col">
