@@ -1,10 +1,10 @@
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
 from app.routes.sources import router as sources_router
-from app.routes.query_routes import router as query_router
-from app.routes.query_version_routes import router as query_version_router
-from app.routes.query_run_routes import router as query_run_router
-from app.routes.query_execution_routes import router as query_execution_router
+from app.routes.query import router as query_router
+from app.routes.query_version import router as query_version_router
+from app.routes.query_run import router as query_run_router
+from app.routes.query_execution import router as query_execution_router
 from app.routes.llm import router as llm_router
 from app.routes.chat import router as chat_router
 from app.core.start import ensure_user_and_workspace

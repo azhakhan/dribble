@@ -15,7 +15,7 @@ const TabButton = memo(
   }: {
     tab: { id: string; title: string; isDirty: boolean };
     isActive: boolean;
-    onTabClick: (tabId: string) => void;
+    onTabClick: (tabId: string) => Promise<void>;
     onCloseTab: (tabId: string, e: React.MouseEvent) => void;
   }) => (
     <div
@@ -80,8 +80,8 @@ function QueryTabsComponent() {
 
   // Handle tab click to make it active
   const handleTabClick = useCallback(
-    (tabId: string) => {
-      setActiveTab(tabId);
+    async (tabId: string) => {
+      await setActiveTab(tabId);
     },
     [setActiveTab]
   );

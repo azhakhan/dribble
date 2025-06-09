@@ -4,6 +4,7 @@ import type { Source, SourceStatus, Query, QueryVersion, QueryRun } from "@/shar
 import {
   getQueryById,
   getQueryVersions,
+  getLatestQueryVersion,
   createQuery,
   createQueryVersion,
   executeQuery as apiExecuteQuery,
@@ -89,6 +90,7 @@ interface QueryState {
   // Actions for centralized query management
   loadQuery: (queryId: string) => Promise<void>;
   loadQueryVersions: (queryId: string) => Promise<void>;
+  loadLatestQueryVersion: (queryId: string) => Promise<QueryVersion | null>;
   setQuery: (queryId: string, query: Query) => void;
   setQueryVersions: (queryId: string, versions: QueryVersion[]) => void;
   setSources: (sources: Source[]) => void;
@@ -516,30 +518,85 @@ export const useAppStore = create<AppState>()(
             activeTabId: newActiveTabId
           };
         }),
-      setActiveTab: (tabId) =>
-        set((state) => {
-          // Find the tab being activated
-          const activeTab = tabId ? state.openTabs.find((tab) => tab.id === tabId) : null;
+      setActiveTab: async (tabId) => {
+        // Set the active tab immediately for UI responsiveness
+        set(() => ({ activeTabId: tabId }));
 
-          // If the tab has a query, get the query's source and set it as selected source for chat
-          let selectedSource = state.selectedSource;
-          if (activeTab?.queryId && state.queries[activeTab.queryId]) {
-            const query = state.queries[activeTab.queryId];
-            const querySource = query.source_id ? state.sources[query.source_id] : null;
+        if (!tabId) return;
+
+        const currentState = get();
+        const activeTab = currentState.openTabs.find((tab) => tab.id === tabId);
+
+        if (!activeTab) return;
+
+        // If the tab has a query, load its latest content and set source
+        if (activeTab.queryId) {
+          try {
+            // Load the latest version of the query
+            const latestVersion = await currentState.loadLatestQueryVersion(activeTab.queryId);
+
+            // Get the query and its source
+            const query = currentState.queries[activeTab.queryId];
+            const querySource = query?.source_id ? currentState.sources[query.source_id] : null;
+
+            // Update the tab with the latest content and set the query's source as selected
+            set((state) => ({
+              openTabs: state.openTabs.map((tab) =>
+                tab.id === tabId
+                  ? {
+                      ...tab,
+                      editorContent: latestVersion?.sql || tab.editorContent,
+                      lastSavedContent: latestVersion?.sql || tab.lastSavedContent,
+                      originalContent: latestVersion?.sql || tab.originalContent
+                    }
+                  : tab
+              ),
+              selectedSource: querySource || state.selectedSource,
+              // Update global editorContent for backward compatibility
+              editorContent: latestVersion?.sql || activeTab.editorContent
+            }));
+          } catch (error) {
+            console.error("Failed to load latest query version when switching tabs:", error);
+            // Still set the source even if loading fails
+            const query = currentState.queries[activeTab.queryId];
+            const querySource = query?.source_id ? currentState.sources[query.source_id] : null;
             if (querySource) {
-              selectedSource = querySource;
+              set(() => ({ selectedSource: querySource }));
             }
           }
+        } else {
+          // For tabs without a queryId, just update the global editorContent
+          set((prevState) => ({
+            editorContent: activeTab.editorContent,
+            selectedSource: currentState.sources[activeTab.sourceId] || prevState.selectedSource
+          }));
+        }
+      },
+      updateTabContent: (tabId, content) =>
+        set((state) => {
+          const updatedTabs = state.openTabs.map((tab) => {
+            if (tab.id === tabId) {
+              const updatedTab = { ...tab, ...content };
+
+              // If editor content is being updated, check if it makes the tab dirty
+              if (content.editorContent !== undefined) {
+                updatedTab.isDirty = content.editorContent.trim() !== tab.lastSavedContent.trim();
+              }
+
+              return updatedTab;
+            }
+            return tab;
+          });
+
+          // Also update global editorContent if this is the active tab and editorContent is being updated
+          const isActiveTab = state.activeTabId === tabId;
+          const updatingEditorContent = content.editorContent !== undefined;
 
           return {
-            activeTabId: tabId,
-            selectedSource
+            openTabs: updatedTabs,
+            ...(isActiveTab && updatingEditorContent && { editorContent: content.editorContent })
           };
         }),
-      updateTabContent: (tabId, content) =>
-        set((state) => ({
-          openTabs: state.openTabs.map((tab) => (tab.id === tabId ? { ...tab, ...content } : tab))
-        })),
       updateTabTitle: (tabId, title) =>
         set((state) => ({
           openTabs: state.openTabs.map((tab) => (tab.id === tabId ? { ...tab, title } : tab))
@@ -559,20 +616,18 @@ export const useAppStore = create<AppState>()(
         }));
 
         try {
-          // Load query and versions concurrently
-          await Promise.all([state.loadQuery(queryId), state.loadQueryVersions(queryId)]);
-
-          const updatedState = get();
-          const query = updatedState.queries[queryId];
-          const versions = updatedState.queryVersions[queryId] || [];
-          const latestVersion = versions[0];
+          // Load query and latest version concurrently
+          const [query, latestVersion] = await Promise.all([
+            state.loadQuery(queryId).then(() => get().queries[queryId]),
+            state.loadLatestQueryVersion(queryId)
+          ]);
 
           // Get the source for this query to set as selected source for chat
-          const querySource = query?.source_id ? updatedState.sources[query.source_id] : null;
+          const querySource = query?.source_id ? get().sources[query.source_id] : null;
 
           // Update tab with loaded data and set query's source as selected source for chat
-          set((state) => ({
-            openTabs: state.openTabs.map((t) =>
+          set((prevState) => ({
+            openTabs: prevState.openTabs.map((t) =>
               t.id === tabId
                 ? {
                     ...t,
@@ -587,7 +642,10 @@ export const useAppStore = create<AppState>()(
                 : t
             ),
             // Set the query's source as the selected source for chat
-            selectedSource: querySource || state.selectedSource
+            selectedSource: querySource || prevState.selectedSource,
+            // Update global editorContent if this is the active tab
+            editorContent:
+              prevState.activeTabId === tabId ? latestVersion?.sql || "" : prevState.editorContent
           }));
         } catch (error) {
           console.error("Failed to load query:", error);
@@ -645,6 +703,34 @@ export const useAppStore = create<AppState>()(
         }
       },
 
+      loadLatestQueryVersion: async (queryId) => {
+        try {
+          const latestVersion = await getLatestQueryVersion(queryId);
+
+          // Update the queryVersions cache if we have it
+          const currentState = get();
+          if (currentState.queryVersions[queryId] && latestVersion) {
+            // Insert the latest version at the beginning if it's not already there
+            const existingVersions = currentState.queryVersions[queryId];
+            const latestExists = existingVersions.some((v) => v.id === latestVersion.id);
+
+            if (!latestExists) {
+              set((state) => ({
+                queryVersions: {
+                  ...state.queryVersions,
+                  [queryId]: [latestVersion, ...existingVersions]
+                }
+              }));
+            }
+          }
+
+          return latestVersion;
+        } catch (error) {
+          console.error(`Failed to load latest version for query ${queryId}:`, error);
+          return null;
+        }
+      },
+
       setQuery: (queryId, query) =>
         set((state) => ({
           queries: { ...state.queries, [queryId]: query }
@@ -684,10 +770,28 @@ export const useAppStore = create<AppState>()(
         }));
 
         try {
-          // Step 1: Execute query and get a query ID
+          // Step 1: Save query version if this tab has an existing query and content has changed
+          if (tab.queryId && queryToRun.trim() !== tab.lastSavedContent.trim()) {
+            await currentState.saveQueryVersion(tab.queryId, queryToRun, "run");
+
+            // Update the tab's saved content tracking
+            set((prevState) => ({
+              openTabs: prevState.openTabs.map((t) =>
+                t.id === tabId
+                  ? {
+                      ...t,
+                      lastSavedContent: queryToRun,
+                      isDirty: false // Mark as clean since we just saved
+                    }
+                  : t
+              )
+            }));
+          }
+
+          // Step 2: Execute query and get a query ID
           const queryId = await apiExecuteQuery(tab.sourceId, queryToRun);
 
-          // Step 2: Poll for results until we get a final response
+          // Step 3: Poll for results until we get a final response
           const pollForResults = async (maxAttempts = 50): Promise<object[]> => {
             // Limit the number of attempts to prevent infinite loops
             if (maxAttempts <= 0) {

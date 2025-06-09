@@ -29,7 +29,6 @@ export function SimplifiedEditor({ tabId }: SimplifiedEditorProps) {
     updateTabTitle,
     executeQuery,
     createNewQuery,
-    saveQueryVersion,
     loadQueryInTab,
     acceptProposedChanges,
     rejectProposedChanges
@@ -98,13 +97,7 @@ export function SimplifiedEditor({ tabId }: SimplifiedEditorProps) {
       if (!queryToRun.trim()) return;
 
       try {
-        // Save version if needed and query exists
-        if (currentTab.queryId && queryToRun !== currentTab.lastSavedContent) {
-          await saveQueryVersion(currentTab.queryId, queryToRun, "run");
-          updateTabContent(tabId, { lastSavedContent: queryToRun });
-          toast.success("Query version saved");
-        }
-
+        // executeQuery now handles saving the version automatically
         await executeQuery(tabId, queryToRun);
         toast.success("Query executed successfully");
       } catch (error) {
@@ -112,16 +105,7 @@ export function SimplifiedEditor({ tabId }: SimplifiedEditorProps) {
         toast.error("Failed to execute query");
       }
     },
-    [
-      canRunQueries,
-      currentTab,
-      proposedChanges,
-      saveQueryVersion,
-      executeQuery,
-      tabId,
-      updateTabContent,
-      isSourceConnected
-    ]
+    [canRunQueries, currentTab, proposedChanges, executeQuery, tabId, isSourceConnected]
   );
 
   // Handle create new query
