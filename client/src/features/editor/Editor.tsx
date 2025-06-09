@@ -9,7 +9,6 @@ import { MonacoDiffEditor } from "./MonacoDiffEditor";
 import { ProposedChangesBar } from "./ProposedChangesBar";
 import { Input } from "@/components/ui/input";
 import { useState } from "react";
-import { updateQuery } from "@/shared/lib/api";
 
 interface EditorProps {
   tabId: string;
@@ -27,13 +26,12 @@ export function Editor({ tabId }: EditorProps) {
     connectedSources,
     proposedChanges,
     updateTabContent,
-    updateTabTitle,
     executeQuery,
     createNewQuery,
     loadQueryInTab,
     acceptProposedChanges,
     rejectProposedChanges,
-    setQuery
+    updateQueryName
   } = useAppStore();
 
   // Find current tab - memoized to prevent unnecessary re-computations
@@ -140,21 +138,15 @@ export function Editor({ tabId }: EditorProps) {
     if (!currentTab?.queryId) return;
 
     try {
-      // Update query in the API
-      const updatedQuery = await updateQuery(currentTab.queryId, {
-        name: tempName.trim() || "Untitled Query"
-      });
-      // Update query in the store
-      setQuery(currentTab.queryId, updatedQuery);
-      // Update tab title
-      updateTabTitle(tabId, tempName.trim() || "Untitled Query");
+      // Use the centralized updateQueryName from the store
+      await updateQueryName(currentTab.queryId, tempName.trim() || "Untitled Query");
       setEditingName(false);
       toast.success("Query name updated");
     } catch (error) {
       console.error("Failed to update query name:", error);
       toast.error("Failed to update query name");
     }
-  }, [currentTab?.queryId, tempName, updateTabTitle, tabId, setQuery]);
+  }, [currentTab?.queryId, tempName, updateQueryName]);
 
   if (!currentTab) {
     return (

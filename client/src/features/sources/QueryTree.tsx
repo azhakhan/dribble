@@ -10,13 +10,13 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useQuery } from "@tanstack/react-query";
 import { getQueries, getSources } from "@/shared/lib/api";
+import { useAppStore } from "@/shared/store/useAppStore";
 import type { Query, Source } from "@/shared/lib/api";
 
 interface QueryTreeProps {
   onQuerySelect?: (query: Query) => void;
   onQueryDoubleClick?: (query: Query) => void;
   selectedQueryId?: string;
-  onQueryNameUpdate?: (queryId: string, newName: string) => void;
 }
 
 interface QueryTreeSourceProps {
@@ -25,7 +25,6 @@ interface QueryTreeSourceProps {
   onQuerySelect?: (query: Query) => void;
   onQueryDoubleClick?: (query: Query) => void;
   selectedQueryId?: string;
-  onQueryNameUpdate?: (queryId: string, newName: string) => void;
 }
 
 interface QueryTreeItemProps {
@@ -33,19 +32,20 @@ interface QueryTreeItemProps {
   onQuerySelect?: (query: Query) => void;
   onQueryDoubleClick?: (query: Query) => void;
   isSelected?: boolean;
-  onQueryNameUpdate?: (queryId: string, newName: string) => void;
 }
 
 const QueryTreeItem = ({
   query,
   onQuerySelect,
   onQueryDoubleClick,
-  isSelected,
-  onQueryNameUpdate
+  isSelected
 }: QueryTreeItemProps) => {
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editingName, setEditingName] = useState(query.name || `Query ${query.id.slice(0, 8)}`);
+
+  // Get the centralized updateQueryName function from the store
+  const { updateQueryName } = useAppStore();
 
   const handleQueryClick = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -66,10 +66,14 @@ const QueryTreeItem = ({
     setDropdownOpen(false);
   };
 
-  const handleNameSubmit = (e: React.KeyboardEvent<HTMLInputElement>) => {
+  const handleNameSubmit = async (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") {
-      if (onQueryNameUpdate && editingName.trim() !== query.name) {
-        onQueryNameUpdate(query.id, editingName.trim());
+      if (editingName.trim() !== query.name) {
+        try {
+          await updateQueryName(query.id, editingName.trim());
+        } catch (error) {
+          console.error("Failed to update query name:", error);
+        }
       }
       setIsEditing(false);
     } else if (e.key === "Escape") {
@@ -78,9 +82,13 @@ const QueryTreeItem = ({
     }
   };
 
-  const handleNameBlur = () => {
-    if (onQueryNameUpdate && editingName.trim() !== query.name) {
-      onQueryNameUpdate(query.id, editingName.trim());
+  const handleNameBlur = async () => {
+    if (editingName.trim() !== query.name) {
+      try {
+        await updateQueryName(query.id, editingName.trim());
+      } catch (error) {
+        console.error("Failed to update query name:", error);
+      }
     }
     setIsEditing(false);
   };
@@ -141,8 +149,7 @@ const QueryTreeSource = ({
   queries,
   onQuerySelect,
   onQueryDoubleClick,
-  selectedQueryId,
-  onQueryNameUpdate
+  selectedQueryId
 }: QueryTreeSourceProps) => {
   const [isOpen, setIsOpen] = useState(false);
 
@@ -229,7 +236,6 @@ const QueryTreeSource = ({
               onQuerySelect={onQuerySelect}
               onQueryDoubleClick={onQueryDoubleClick}
               isSelected={selectedQueryId === query.id}
-              onQueryNameUpdate={onQueryNameUpdate}
             />
           ))}
         </div>
@@ -248,8 +254,7 @@ const QueryTreeSource = ({
 export const QueryTree = ({
   onQuerySelect,
   onQueryDoubleClick,
-  selectedQueryId,
-  onQueryNameUpdate
+  selectedQueryId
 }: QueryTreeProps) => {
   // Fetch queries grouped by source
   const {
@@ -324,7 +329,6 @@ export const QueryTree = ({
                 onQuerySelect={onQuerySelect}
                 onQueryDoubleClick={onQueryDoubleClick}
                 selectedQueryId={selectedQueryId}
-                onQueryNameUpdate={onQueryNameUpdate}
               />
             ))}
           </div>

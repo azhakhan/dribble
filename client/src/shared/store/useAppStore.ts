@@ -7,6 +7,7 @@ import {
   getLatestQueryVersion,
   createQuery,
   createQueryVersion,
+  updateQuery,
   executeQuery as apiExecuteQuery,
   getQueryResults,
   getSources,
@@ -118,6 +119,7 @@ interface QueryState {
   // Query creation and management
   createNewQuery: (sourceId: string) => Promise<string>;
   saveQueryVersion: (queryId: string, sql: string, saveTrigger: "run" | "ai") => Promise<void>;
+  updateQueryName: (queryId: string, newName: string) => Promise<void>;
 }
 
 // FileTree state
@@ -915,6 +917,30 @@ export const useAppStore = create<AppState>()(
           await currentState.loadQueryVersions(queryId);
         } catch (error) {
           console.error("Failed to save query version:", error);
+          throw error;
+        }
+      },
+
+      updateQueryName: async (queryId, newName) => {
+        try {
+          // Update the query name on the server
+          const updatedQuery = await updateQuery(queryId, { name: newName });
+
+          // Update the query in the store
+          set((state) => ({
+            queries: { ...state.queries, [queryId]: updatedQuery }
+          }));
+
+          // Update the tab title if the query is open in a tab
+          const currentState = get();
+          const tab = currentState.openTabs.find((tab) => tab.queryId === queryId);
+          if (tab) {
+            set((state) => ({
+              openTabs: state.openTabs.map((t) => (t.id === tab.id ? { ...t, title: newName } : t))
+            }));
+          }
+        } catch (error) {
+          console.error("Failed to update query name:", error);
           throw error;
         }
       },

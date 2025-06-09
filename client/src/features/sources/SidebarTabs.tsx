@@ -14,7 +14,6 @@ interface SidebarTabsProps {
   onQuerySelect?: (query: Query) => void;
   onQueryDoubleClick?: (query: Query) => void;
   selectedQueryId?: string;
-  onQueryNameUpdate?: (queryId: string, newName: string) => void;
 }
 
 type TabType = "sources" | "queries";
@@ -27,8 +26,7 @@ export const SidebarTabs = ({
   onTableDoubleClick,
   onQuerySelect,
   onQueryDoubleClick,
-  selectedQueryId,
-  onQueryNameUpdate
+  selectedQueryId
 }: SidebarTabsProps) => {
   const [activeTab, setActiveTab] = useState<TabType>("sources");
 
@@ -57,7 +55,6 @@ export const SidebarTabs = ({
           onQuerySelect={onQuerySelect}
           onQueryDoubleClick={onQueryDoubleClick}
           selectedQueryId={selectedQueryId}
-          onQueryNameUpdate={onQueryNameUpdate}
         />
       );
     }

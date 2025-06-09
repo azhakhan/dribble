@@ -1,6 +1,5 @@
 import { useMemo, useCallback, useEffect } from "react";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
-import { useQueryClient } from "@tanstack/react-query";
 import { useAppStore } from "@/shared/store/useAppStore";
 import { SidebarTabs } from "@/features/sources/SidebarTabs";
 import { QueryTabs } from "@/features/query/QueryTabs";
@@ -12,12 +11,9 @@ import {
 } from "@/shared/hooks/useStoreQueries";
 import { useSourceStatusQuery } from "@/shared/hooks/useSourceStatusQuery";
 import { sourcesToFileTreeNodes } from "@/shared/lib/fileTreeUtils";
-import { updateQuery } from "@/shared/lib/api";
 import type { Source, ConnectedSource, Query } from "@/shared/lib/api";
 
 export function IdePage() {
-  const queryClient = useQueryClient();
-
   // Get state and actions from Zustand store
   const {
     panelSizes,
@@ -36,8 +32,7 @@ export function IdePage() {
     setSources,
     setConnectedSources,
     loadQueryInTab,
-    executeQuery,
-    updateTabTitle
+    executeQuery
   } = useAppStore();
 
   // Query for all sources
@@ -218,29 +213,6 @@ export function IdePage() {
     [handleQuerySelect, executeQuery]
   );
 
-  // Handle query name updates from QueryTree
-  const handleQueryNameUpdate = useCallback(
-    async (queryId: string, newName: string) => {
-      try {
-        // Update the query name on the server
-        await updateQuery(queryId, { name: newName });
-
-        // Update the tab title if the query is open in a tab
-        const tab = openTabs.find((tab) => tab.queryId === queryId);
-        if (tab) {
-          updateTabTitle(tab.id, newName);
-        }
-
-        // Invalidate queries cache to refresh the QueryTree
-        await queryClient.invalidateQueries({ queryKey: ["queries"] });
-      } catch (error) {
-        console.error("Failed to update query name:", error);
-        // You might want to show a toast notification here
-      }
-    },
-    [openTabs, updateTabTitle, queryClient]
-  );
-
   return (
     <div className="flex-1 min-h-0">
       <PanelGroup direction="horizontal" onLayout={(newSizes) => setPanelSizes(newSizes)}>
@@ -255,7 +227,6 @@ export function IdePage() {
               onQuerySelect={handleQuerySelect}
               onQueryDoubleClick={handleQueryDoubleClick}
               selectedQueryId={selectedQueryId}
-              onQueryNameUpdate={handleQueryNameUpdate}
             />
           </div>
         </Panel>
