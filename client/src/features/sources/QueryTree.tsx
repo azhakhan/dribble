@@ -9,7 +9,7 @@ import {
   DropdownMenuTrigger
 } from "@/components/ui/dropdown-menu";
 import { useQuery } from "@tanstack/react-query";
-import { getQueries, getSources } from "@/shared/lib/api";
+import { getQueries } from "@/shared/lib/api";
 import { useAppStore } from "@/shared/store/useAppStore";
 import type { Query, Source } from "@/shared/lib/api";
 
@@ -257,13 +257,13 @@ export const QueryTree = ({
   selectedQueryId
 }: QueryTreeProps) => {
   // Get queries and sources from the centralized store
-  const { queries, sources: storeSourcesMap, setQuery } = useAppStore();
-
-  // Fetch sources to get source names and types (fallback if store is empty)
-  const { data: apiSources, isLoading: sourcesLoading } = useQuery({
-    queryKey: ["sources"],
-    queryFn: getSources
-  });
+  const {
+    queries,
+    sources: storeSourcesMap,
+    setQuery,
+    loadSources,
+    loadingSources
+  } = useAppStore();
 
   // Fetch queries grouped by source (for initial load only)
   const {
@@ -274,6 +274,13 @@ export const QueryTree = ({
     queryKey: ["queries"],
     queryFn: getQueries
   });
+
+  // Load sources from store if not already loaded
+  useEffect(() => {
+    if (Object.keys(storeSourcesMap).length === 0 && !loadingSources) {
+      loadSources();
+    }
+  }, [storeSourcesMap, loadingSources, loadSources]);
 
   // Update store cache when fresh API data arrives
   useEffect(() => {
@@ -289,12 +296,10 @@ export const QueryTree = ({
     }
   }, [queriesData, queries, setQuery]);
 
-  // Create sources map - prefer store data, fallback to API data
+  // Create sources map from store only
   const sourceMap = useMemo(() => {
-    const sources =
-      Object.keys(storeSourcesMap).length > 0 ? Object.values(storeSourcesMap) : apiSources || [];
-    return new Map(sources.map((source) => [source.id, source]));
-  }, [storeSourcesMap, apiSources]);
+    return new Map(Object.values(storeSourcesMap).map((source) => [source.id, source]));
+  }, [storeSourcesMap]);
 
   // Group store queries by source ID
   const queriesBySource = useMemo(() => {
@@ -324,7 +329,7 @@ export const QueryTree = ({
       .filter((item) => item.source);
   }, [queries, queriesBySource, queriesData, sourceMap]);
 
-  if (queriesLoading || sourcesLoading) {
+  if (queriesLoading || loadingSources) {
     return (
       <div className="h-full flex flex-col">
         <div className="flex-1 overflow-y-auto">
