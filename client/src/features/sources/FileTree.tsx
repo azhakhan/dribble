@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { useAppStore } from "@/shared/store/useAppStore";
 import {
   ChevronRight,
@@ -9,13 +9,11 @@ import {
   Table,
   Loader2,
   MoreVertical,
-  AlertCircle,
-  Power
+  AlertCircle
 } from "lucide-react";
 import { PostgresIcon, MySQLIcon, SQLiteIcon } from "../icons";
 import { getColumnTypeIcon } from "./ColumnTypeIcons";
 import type { FileNode } from "@/shared/lib/fileTreeUtils";
-import { AddSource } from "@/features/sources/dialogs/AddSource";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -33,8 +31,10 @@ import {
   useDisconnectSourceMutation
 } from "@/shared/hooks/useConnectSourceMutation";
 import { useSourceStatusQuery } from "@/shared/hooks/useSourceStatusQuery";
-import { useConnectedSourcesQuery } from "@/shared/hooks/useConnectedSourcesQuery";
-import { useConnectedSourcesSchemas } from "@/shared/hooks/useConnectedSourcesSchemas";
+import {
+  useStoreConnectedSources,
+  useStoreConnectedSourcesSchemas
+} from "@/shared/hooks/useStoreQueries";
 import type { ConnectedSource } from "@/shared/lib/api";
 
 interface FileTreeProps {
@@ -87,6 +87,17 @@ const FileTreeItem = ({
   // Get source status if this is a source node AND it's connected
   const isConnected = isSource && node.id && connectedSourceIds.has(node.id);
   const { data: sourceStatus } = useSourceStatusQuery(isConnected ? node.id : undefined);
+
+  // Debug connection state for sources
+  useEffect(() => {
+    if (isSource && node.id) {
+      console.log(`🔗 Source ${node.name} (${node.id}) connection state:`, {
+        isConnected,
+        sourceStatus,
+        connectedSourceIds: Array.from(connectedSourceIds)
+      });
+    }
+  }, [isSource, node.id, node.name, isConnected, sourceStatus, connectedSourceIds]);
 
   // Auto-collapse source when it gets disconnected
   useEffect(() => {
@@ -226,7 +237,7 @@ const FileTreeItem = ({
         className={`flex items-center py-1 px-2 text-sm cursor-pointer hover:bg-accent/50 ${
           isSelected ? "bg-accent" : ""
         }`}
-        style={{ paddingLeft: `${level * 12}px` }}
+        style={level > 0 ? { paddingLeft: `${level * 12}px` } : {}}
         onClick={handleItemClick}
         onDoubleClick={handleDoubleClick}
       >
@@ -291,27 +302,6 @@ const FileTreeItem = ({
               </TooltipProvider>
             )}
 
-            {/* Connect button for sources that aren't connected */}
-            {isSource && !isConnected && !isLoading && (
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-3 w-3 ml-1 hover:bg-accent cursor-pointer"
-                      onClick={handleConnectClick}
-                    >
-                      <Power style={{ width: "12px", height: "12px" }} strokeWidth={1} />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>Connect to source</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            )}
-
             {/* Actions dropdown */}
             <DropdownMenu open={dropdownOpen} onOpenChange={setDropdownOpen}>
               <DropdownMenuTrigger asChild>
@@ -325,6 +315,12 @@ const FileTreeItem = ({
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-40">
+                {!isConnected && !isLoading && node.id && (
+                  <>
+                    <DropdownMenuItem onClick={handleConnectClick}>Connect</DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                  </>
+                )}
                 {isConnected && node.id && (
                   <>
                     <DropdownMenuItem
@@ -403,27 +399,28 @@ const FileTreeItem = ({
 
 export const FileTree = ({ data, onSourceSelect, onTableDoubleClick }: FileTreeProps) => {
   // Fetch connected sources on component mount
-  const { data: connectedSourcesData } = useConnectedSourcesQuery();
+  const { data: connectedSourcesData } = useStoreConnectedSources();
 
   // Create a set of connected source IDs for easy lookup
   const connectedSourceIds = useMemo(() => {
     if (!connectedSourcesData) return new Set<string>();
     const ids = new Set(connectedSourcesData.map((source: ConnectedSource) => source.id));
+    console.log("🔗 Connected source IDs in FileTree:", Array.from(ids));
     return ids;
   }, [connectedSourcesData]);
 
   // Fetch schemas for all connected sources and update AppState
-  useConnectedSourcesSchemas(connectedSourcesData);
+  useStoreConnectedSourcesSchemas(connectedSourcesData);
+
+  // Debug connected sources changes
+  useEffect(() => {
+    console.log("🔗 Connected sources data changed in FileTree:", connectedSourcesData);
+  }, [connectedSourcesData]);
 
   return (
     <div className="h-full flex flex-col">
-      {/* Fixed header */}
-      <div className="flex-shrink-0 p-2 font-semibold text-sm border-b flex items-center justify-between">
-        <span>Sources</span>
-        <AddSource className="hover:text-foreground text-muted-foreground" />
-      </div>
       {/* Scrollable content */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto mt-2">
         {data.map((node, index) => (
           <FileTreeItem
             key={index}

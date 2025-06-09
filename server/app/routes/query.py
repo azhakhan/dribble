@@ -1,103 +1,68 @@
-from fastapi import APIRouter, HTTPException, Depends, Response
+from fastapi import APIRouter, Depends
 from app.schemas.query import (
-    ExecuteQueryRequest,
     CreateQueryRequest,
     UpdateQueryRequest,
+    QueryResponse,
+    CreateEphemeralQueryRequest,
+    ConvertEphemeralQueryRequest,
 )
-from app.controllers.query import execute_in_worker
 from app.core.db import get_db
+from app.controllers.query_service import QueryService
 from sqlalchemy.orm import Session
-from app.models import Query
 from uuid import UUID
-from app.core._redis import get_result
+from typing import List, Dict
+from app.dependencies import get_current_user
 
 router = APIRouter(prefix="/query", tags=["query"])
 
 
-@router.post("/")
-async def query(request: CreateQueryRequest, db: Session = Depends(get_db)):
-    try:
-        # create query
-        query = Query(name=request.name, query=request.query, source_id=request.database_id)
-        db.add(query)
-        db.commit()
-        db.refresh(query)
-        return query
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
+@router.get("/", response_model=Dict[UUID, List[QueryResponse]])
+async def get_all_queries(db: Session = Depends(get_db)):
+    """Get all queries grouped by source_id"""
+    return QueryService.get_all_queries_grouped_by_source(db)
 
 
-@router.put("/{query_id}")
-async def update(query_id: UUID, request: UpdateQueryRequest, db: Session = Depends(get_db)):
-    # Check if query exists first
-    query = db.query(Query).filter_by(id=query_id).first()
-    if not query:
-        raise HTTPException(status_code=404, detail="Query not found")
+@router.get("/{query_id}", response_model=QueryResponse)
+async def get_query_by_id(query_id: UUID, db: Session = Depends(get_db)):
+    """Get a specific query by ID"""
+    return QueryService.get_query_by_id(db, query_id)
 
-    try:
-        # update query
-        query.name = request.name if request.name else query.name
-        query.query = request.query if request.query else query.query
-        db.commit()
-        db.refresh(query)
-        return query
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
+
+@router.post("/", response_model=QueryResponse)
+async def create_query(
+    request: CreateQueryRequest, db: Session = Depends(get_db), user=Depends(get_current_user)
+):
+    """Create a new query"""
+    return QueryService.create_query(db, request, user.id)
+
+
+@router.post("/ephemeral", response_model=QueryResponse)
+async def get_or_create_ephemeral_query(
+    request: CreateEphemeralQueryRequest,
+    db: Session = Depends(get_db),
+    user=Depends(get_current_user),
+):
+    """Get existing ephemeral query or create new one for table preview"""
+    return QueryService.get_or_create_ephemeral_query(db, request, user.id)
+
+
+@router.put("/{query_id}", response_model=QueryResponse)
+async def update_query(query_id: UUID, request: UpdateQueryRequest, db: Session = Depends(get_db)):
+    """Update a query"""
+    # TODO: save who updated the query
+    return QueryService.update_query(db, query_id, request)
+
+
+@router.put("/{query_id}/convert", response_model=QueryResponse)
+async def convert_ephemeral_to_regular(
+    query_id: UUID, request: ConvertEphemeralQueryRequest, db: Session = Depends(get_db)
+):
+    """Convert an ephemeral query to a regular query"""
+    return QueryService.convert_ephemeral_to_regular(db, query_id, request)
 
 
 @router.delete("/{query_id}")
-async def delete(query_id: UUID, db: Session = Depends(get_db)):
-    # Check if query exists first
-    query = db.query(Query).filter_by(id=query_id).first()
-    if not query:
-        raise HTTPException(status_code=404, detail="Query not found")
-
-    try:
-        db.delete(query)
-        db.commit()
-        return {"message": "Query deleted successfully"}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
-
-
-@router.post("/execute/")
-async def execute_query_string(request: ExecuteQueryRequest):
-    try:
-        return execute_in_worker(request.source_id, request.query)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
-
-
-@router.post("/{query_id}/execute/")
-async def execute_query_id(query_id: UUID, db: Session = Depends(get_db)):
-    try:
-        query = db.query(Query).filter_by(id=query_id).first()
-        execute_in_worker(query.source_id, query.query, db)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
-
-
-@router.get("/results/{query_id}/")
-async def get_query_results(query_id: UUID, response: Response):
-    try:
-        # check for results in redis
-        result = await get_result(query_id)
-        if not result:
-            raise HTTPException(status_code=404, detail="Query results not found")
-        if result.get("status") == "running":
-            response.status_code = 202
-            return {"status": "running"}
-        if result.get("status") == "error":
-            response.status_code = 500
-            return {"status": "error", "error": result["error"]}
-        if result.get("status") == "success":
-            return result["data"] if result.get("data") else []
-        else:
-            response.status_code = 500
-            return {"status": "error", "error": "Unknown error"}
-    except HTTPException:
-        # Re-raise HTTPExceptions (like 404) without converting to 500
-        raise
-    except Exception as e:
-        # Only catch non-HTTP exceptions and convert to 500
-        raise HTTPException(status_code=500, detail=str(e)) from e
+async def delete_query(query_id: UUID, db: Session = Depends(get_db)):
+    """Delete a query"""
+    # TODO: check if user has permission to delete the query
+    return QueryService.delete_query(db, query_id)

@@ -1,161 +1,271 @@
-import { useRef, useState, useEffect } from "react";
-import type { Source } from "@/shared/lib/api";
+import { useRef, useCallback, useMemo } from "react";
 import { Button } from "@/components/ui/button";
-import { PlayIcon } from "lucide-react";
+import { PlayIcon, PencilIcon, CheckIcon, XIcon, Database } from "lucide-react";
 import { toast } from "sonner";
-import { useQueryQuery } from "@/shared/hooks/useQueryQuery";
 import { useAppStore } from "@/shared/store/useAppStore";
 import { LanguageIdEnum } from "@/shared/lib/monaco-setup";
 import { MonacoSQLEditor } from "./MonacoSQLEditor";
 import { MonacoDiffEditor } from "./MonacoDiffEditor";
 import { ProposedChangesBar } from "./ProposedChangesBar";
+import { Input } from "@/components/ui/input";
+import { useState } from "react";
 
 interface EditorProps {
-  selectedSource: Source | null;
-  schemasLoading: boolean;
-  schemasError?: unknown;
-  onQueryExecution?: (results: object[]) => void;
-  onQueryStatusChange?: (isRunning: boolean) => void;
+  tabId: string;
 }
 
-export function Editor({
-  selectedSource,
-  schemasLoading,
-  schemasError,
-  onQueryExecution,
-  onQueryStatusChange
-}: EditorProps) {
+export function Editor({ tabId }: EditorProps) {
   const editorContainerRef = useRef<HTMLDivElement>(null);
-  const [isRunning, setIsRunning] = useState(false);
-  const [activeQuery, setActiveQuery] = useState<{ sourceId: string; sql: string } | null>(null);
+  const [editingName, setEditingName] = useState(false);
+  const [tempName, setTempName] = useState("");
 
-  // Get editor content and proposed changes from appStore
+  // Get all needed state from the store using selectors
   const {
-    editorContent,
-    setEditorContent,
+    openTabs,
+    sources,
+    connectedSources,
     proposedChanges,
+    updateTabContent,
+    executeQuery,
+    createNewQuery,
+    loadQueryInTab,
     acceptProposedChanges,
-    rejectProposedChanges
+    rejectProposedChanges,
+    updateQueryName
   } = useAppStore();
 
+  // Find current tab - memoized to prevent unnecessary re-computations
+  const currentTab = useMemo(() => openTabs.find((tab) => tab.id === tabId), [openTabs, tabId]);
+
+  // Get source for this tab - memoized
+  const tabSource = useMemo(() => {
+    if (!currentTab) return null;
+    return sources[currentTab.sourceId] || null;
+  }, [currentTab, sources]);
+
+  // Check if source is connected - memoized
+  const isSourceConnected = useMemo(
+    () => (tabSource ? connectedSources.has(tabSource.id) : false),
+    [tabSource, connectedSources]
+  );
+
+  // Check editor readiness - memoized
+  const isEditorReady = useMemo(
+    () => tabSource && !currentTab?.isLoadingQuery && !currentTab?.isLoadingVersions,
+    [tabSource, currentTab?.isLoadingQuery, currentTab?.isLoadingVersions]
+  );
+
+  const canRunQueries = isEditorReady && isSourceConnected;
+
   // Helper to map dbtype to Monaco language
-  function getMonacoLanguage(dbtype?: string): string {
+  const getMonacoLanguage = useCallback((dbtype?: string): string => {
     if (!dbtype) return LanguageIdEnum.MYSQL;
     switch (dbtype.toLowerCase()) {
       case "postgres":
         return LanguageIdEnum.PG;
       case "mysql":
         return LanguageIdEnum.MYSQL;
-      // Add more mappings if needed
       default:
         return LanguageIdEnum.MYSQL;
     }
-  }
+  }, []);
 
-  // Use the query hook with enabled set to false by default
-  // We'll enable it manually when the user clicks the Run button
-  const {
-    data: queryResults,
-    isLoading,
-    error: queryError
-  } = useQueryQuery(
-    activeQuery?.sourceId || "",
-    activeQuery?.sql || "",
-    {
-      enabled: !!activeQuery
+  // Handle content changes
+  const handleContentChange = useCallback(
+    (content: string) => {
+      if (!currentTab) return;
+
+      // Update tab content
+      updateTabContent(tabId, {
+        editorContent: content,
+        isDirty: content !== currentTab.lastSavedContent
+      });
     },
-    "manual"
+    [currentTab, tabId, updateTabContent]
   );
 
-  // Reset active query when query completes or errors
-  useEffect(() => {
-    if (activeQuery && (queryResults || queryError)) {
-      setIsRunning(false);
-      if (onQueryStatusChange) {
-        onQueryStatusChange(false);
+  // Handle query execution
+  const handleRunQuery = useCallback(
+    async (sqlToRun?: string) => {
+      if (!canRunQueries || !currentTab) {
+        if (!isSourceConnected) {
+          toast.error("Cannot run query: Source is not connected");
+        }
+        return;
       }
-      setActiveQuery(null);
-    }
-  }, [activeQuery, queryResults, queryError, onQueryStatusChange]);
 
-  // Update isRunning state based on loading status
-  useEffect(() => {
-    if (activeQuery) {
-      setIsRunning(isLoading);
-      if (onQueryStatusChange) {
-        onQueryStatusChange(isLoading);
-      }
-    }
-  }, [isLoading, activeQuery, onQueryStatusChange]);
+      const queryToRun =
+        sqlToRun || (proposedChanges ? proposedChanges.proposedContent : currentTab.editorContent);
+      if (!queryToRun.trim()) return;
 
-  // Handle query results when they arrive
-  useEffect(() => {
-    if (queryResults && onQueryExecution) {
-      if (Array.isArray(queryResults) && queryResults.length > 0) {
-        onQueryExecution(queryResults);
+      try {
+        // executeQuery now handles saving the version automatically
+        await executeQuery(tabId, queryToRun);
         toast.success("Query executed successfully");
-      } else {
-        onQueryExecution([{ message: "Query returned no data" }]);
-        toast.info("Query executed but returned no data");
+      } catch (error) {
+        console.error("Failed to execute query:", error);
+        toast.error("Failed to execute query");
       }
-    } else if (queryError && onQueryExecution) {
-      onQueryExecution([{ error: "Error executing query" }]);
-      toast.error("Failed to retrieve query results");
+    },
+    [canRunQueries, currentTab, proposedChanges, executeQuery, tabId, isSourceConnected]
+  );
+
+  // Handle create new query
+  const handleCreateQuery = useCallback(async () => {
+    if (!tabSource) return;
+
+    try {
+      const queryId = await createNewQuery(tabSource.id);
+      await loadQueryInTab(tabId, queryId);
+      toast.success("Query created");
+    } catch (error) {
+      console.error("Failed to create query:", error);
+      toast.error("Failed to create query");
     }
-  }, [queryResults, queryError, onQueryExecution]);
+  }, [tabSource, createNewQuery, loadQueryInTab, tabId]);
 
-  const isEditorActive = selectedSource && !schemasLoading && !schemasError;
+  // Handle name editing
+  const startEditingName = useCallback(() => {
+    if (!currentTab) return;
+    setTempName(currentTab.title);
+    setEditingName(true);
+  }, [currentTab]);
 
-  const handleRunQuery = (sqlToRun?: string) => {
-    if (!selectedSource) return;
+  const cancelEditingName = useCallback(() => {
+    setEditingName(false);
+    setTempName("");
+  }, []);
 
-    const queryToRun =
-      sqlToRun || (proposedChanges ? proposedChanges.proposedContent : editorContent);
-    if (!queryToRun.trim()) return;
+  const saveEditingName = useCallback(async () => {
+    if (!currentTab?.queryId) return;
 
-    setIsRunning(true);
-    if (onQueryStatusChange) {
-      onQueryStatusChange(true);
+    try {
+      // Use the centralized updateQueryName from the store
+      await updateQueryName(currentTab.queryId, tempName.trim() || "Untitled Query");
+      setEditingName(false);
+      toast.success("Query name updated");
+    } catch (error) {
+      console.error("Failed to update query name:", error);
+      toast.error("Failed to update query name");
     }
+  }, [currentTab?.queryId, tempName, updateQueryName]);
 
-    // Provide initial empty results to indicate query is running
-    if (onQueryExecution) {
-      onQueryExecution([{ status: "Query running..." }]);
-    }
+  if (!currentTab) {
+    return (
+      <div className="h-full flex items-center justify-center text-muted-foreground">
+        Tab not found
+      </div>
+    );
+  }
 
-    // Set the active query which will trigger the useQueryQuery hook
-    setActiveQuery({
-      sourceId: selectedSource.id,
-      sql: queryToRun
-    });
-  };
+  if (currentTab.isLoadingQuery || currentTab.isLoadingVersions) {
+    return (
+      <div className="h-full flex items-center justify-center text-muted-foreground">
+        Loading query...
+      </div>
+    );
+  }
 
   return (
     <div ref={editorContainerRef} className="h-full flex flex-col">
       {/* Fixed header with run button only */}
-      <div className="flex-shrink-0 flex justify-end items-center gap-2 p-2 border-b">
-        <Button
-          onClick={() => handleRunQuery()}
-          disabled={!isEditorActive || isRunning}
-          className="gap-1 text-xs cursor-pointer"
-          size="sm"
-        >
-          <PlayIcon size={16} />
-          Run
-        </Button>
+      <div className="flex-shrink-0 flex justify-between items-center gap-2 p-2 border-b">
+        {/* Query metadata on the left */}
+        <div className="flex items-center gap-2 min-w-0">
+          <div className="flex items-center gap-1">
+            <Database
+              className={`h-4 w-4 ${isSourceConnected ? "text-green-600" : "text-red-500"}`}
+              strokeWidth={1.5}
+            />
+            <span className="truncate font-medium text-xs text-muted-foreground">
+              {tabSource?.name || "No source selected"}
+            </span>
+            {!isSourceConnected && tabSource && (
+              <span className="text-xs text-red-500 font-medium">(Disconnected)</span>
+            )}
+          </div>
+          <span className="text-xs text-muted-foreground">/</span>
+          <span className="truncate font-semibold text-xs relative group" style={{ minWidth: 0 }}>
+            {editingName ? (
+              <span className="flex items-center gap-1">
+                <Input
+                  className="h-6 px-2 py-0 text-xs w-32"
+                  value={tempName}
+                  autoFocus
+                  onChange={(e) => setTempName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") saveEditingName();
+                    if (e.key === "Escape") cancelEditingName();
+                  }}
+                  disabled={!currentTab.queryId}
+                />
+                <button
+                  className="ml-1 text-green-600 hover:text-green-800"
+                  onClick={saveEditingName}
+                  tabIndex={-1}
+                  aria-label="Save name"
+                  disabled={!currentTab.queryId}
+                >
+                  <CheckIcon size={16} />
+                </button>
+                <button
+                  className="ml-0.5 text-red-500 hover:text-red-700"
+                  onClick={cancelEditingName}
+                  tabIndex={-1}
+                  aria-label="Cancel edit"
+                >
+                  <XIcon size={16} />
+                </button>
+              </span>
+            ) : (
+              <span className="flex items-center gap-1 group/query-name">
+                <span>{currentTab.title || "Untitled query"}</span>
+                <button
+                  className="opacity-0 group-hover/query-name:opacity-100 ml-1 transition-opacity"
+                  onClick={startEditingName}
+                  tabIndex={-1}
+                  aria-label="Edit name"
+                >
+                  <PencilIcon size={14} />
+                </button>
+              </span>
+            )}
+          </span>
+        </div>
+
+        {/* Action buttons on the right */}
+        <div className="flex items-center gap-2">
+          <Button
+            onClick={handleCreateQuery}
+            disabled={!isEditorReady || currentTab.queryRunning}
+            className="gap-1 text-xs cursor-pointer"
+            size="sm"
+          >
+            Create Query
+          </Button>
+          <Button
+            onClick={() => handleRunQuery()}
+            disabled={!canRunQueries || currentTab.queryRunning}
+            className="gap-1 text-xs cursor-pointer"
+            size="sm"
+            title={!isSourceConnected ? "Source is not connected" : ""}
+          >
+            <PlayIcon size={16} />
+            {currentTab.queryRunning ? "Running..." : "Run"}
+          </Button>
+        </div>
       </div>
+
       {/* Scrollable editor content */}
       <div className="flex-1 min-h-0 relative">
-        {!isEditorActive && (
+        {!isEditorReady && (
           <div className="absolute inset-0 flex items-center justify-center bg-background/80 z-10">
             <p className="text-muted-foreground text-sm">
-              {!selectedSource
+              {!tabSource
                 ? "Select a source to write SQL queries"
-                : schemasLoading
-                  ? "Loading schema..."
-                  : schemasError
-                    ? "Error loading schema"
-                    : ""}
+                : currentTab.isLoadingQuery || currentTab.isLoadingVersions
+                  ? "Loading query..."
+                  : "Editor not ready"}
             </p>
           </div>
         )}
@@ -165,15 +275,15 @@ export function Editor({
           <MonacoDiffEditor
             originalContent={proposedChanges.originalContent}
             proposedContent={proposedChanges.proposedContent}
-            language={getMonacoLanguage(selectedSource?.dbtype)}
+            language={getMonacoLanguage(tabSource?.dbtype)}
             readOnly={true}
           />
         ) : (
           <MonacoSQLEditor
-            value={editorContent}
-            onChange={setEditorContent}
-            language={getMonacoLanguage(selectedSource?.dbtype)}
-            readOnly={!isEditorActive}
+            value={currentTab.editorContent}
+            onChange={handleContentChange}
+            language={getMonacoLanguage(tabSource?.dbtype)}
+            readOnly={!isEditorReady}
           />
         )}
       </div>

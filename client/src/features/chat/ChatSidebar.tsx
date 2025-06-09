@@ -51,7 +51,8 @@ export function ChatSidebar() {
     addMessage,
     chatLoading,
     setChatLoading,
-    editorContent,
+    openTabs,
+    activeTabId,
     setProposedChanges,
     sessionId,
     generateNewSession,
@@ -59,6 +60,10 @@ export function ChatSidebar() {
     setSessionId,
     loadMessagesFromServer
   } = useAppStore();
+
+  // Get active tab's content instead of global editorContent
+  const activeTab = activeTabId ? openTabs.find((tab) => tab.id === activeTabId) : null;
+  const editorContent = activeTab?.editorContent || "";
 
   const { data: llms = [] } = useLLMsQuery();
   const { data: selectedLLM } = useLLMQuery(selectedLLMId || undefined);
@@ -236,7 +241,7 @@ export function ChatSidebar() {
   return (
     <div className="h-full flex flex-col">
       {/* Chat Session Header */}
-      <div className="flex-shrink-0 p-2 font-semibold text-sm border-b border-border/50 bg-muted/10 flex items-center justify-between">
+      <div className="flex-shrink-0 h-10 px-3 font-semibold text-sm border-b border-border/50 bg-muted/10 flex items-center justify-between">
         <span>{getCurrentSessionName()}</span>
 
         {/* Actions on the right */}

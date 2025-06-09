@@ -20,7 +20,7 @@ interface AddSourceProps {
   onSourceAdded?: () => void;
 }
 
-export const AddSource = ({ className, onSourceAdded }: AddSourceProps) => {
+export const AddSource = ({ onSourceAdded }: AddSourceProps) => {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [testing, setTesting] = useState(false);
@@ -192,14 +192,14 @@ export const AddSource = ({ className, onSourceAdded }: AddSourceProps) => {
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         <Button
-          variant="ghost"
-          size="icon"
-          className={`p-0 h-auto w-auto ${className} cursor-pointer`}
+          variant="outline"
+          size="sm"
+          className="hover:text-foreground text-muted-foreground cursor-pointer"
           onClick={() => setOpen(true)}
           data-testid="add-source-button"
         >
-          <PlusCircle className="h-4 w-4" />
-          <span className="sr-only">Add Source</span>
+          <PlusCircle className="h-4 w-4" strokeWidth={1.5} />
+          <span className="text-xs">Add Source</span>
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-[500px]">

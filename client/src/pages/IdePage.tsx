@@ -1,26 +1,17 @@
-import { useEffect, useMemo } from "react";
+import { useMemo, useCallback, useEffect } from "react";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
-
-import { FileTree } from "@/features/sources/FileTree";
-import { sourcesToFileTreeNodes } from "@/shared/lib/fileTreeUtils";
-import { TableDataDisplay } from "@/features/tables/TableDataDisplay";
-import { ChatSidebar } from "@/features/chat/ChatSidebar";
-import { Editor } from "@/features/editor/Editor";
-import { useSourcesQuery } from "@/shared/hooks/useSourcesQuery";
-import { useSourceSchemasQuery } from "@/shared/hooks/useSourceSchemasQuery";
-import { useQueryQuery } from "@/shared/hooks/useQueryQuery";
-import { useSourceStatusQuery } from "@/shared/hooks/useSourceStatusQuery";
-import { useConnectedSourcesQuery } from "@/shared/hooks/useConnectedSourcesQuery";
-import type { Source, ConnectedSource } from "@/shared/lib/api";
 import { useAppStore } from "@/shared/store/useAppStore";
-
-const sampleFileTree = [
-  {
-    name: "Loading...",
-    type: "folder" as const,
-    children: []
-  }
-];
+import { SidebarTabs } from "@/features/sources/SidebarTabs";
+import { QueryTabs } from "@/features/query/QueryTabs";
+import { ChatSidebar } from "@/features/chat/ChatSidebar";
+import {
+  useStoreSources,
+  useStoreConnectedSources,
+  useStoreSourceSchema
+} from "@/shared/hooks/useStoreQueries";
+import { useSourceStatusQuery } from "@/shared/hooks/useSourceStatusQuery";
+import { sourcesToFileTreeNodes } from "@/shared/lib/fileTreeUtils";
+import type { Source, ConnectedSource, Query } from "@/shared/lib/api";
 
 export function IdePage() {
   // Get state and actions from Zustand store
@@ -30,22 +21,26 @@ export function IdePage() {
     selectedSource,
     setSelectedSource,
     setSourceSchema,
-    selectedTableData,
-    setSelectedTableData,
-    queryResults,
-    setQueryResults,
-    queryRunning,
-    setQueryRunning,
     sourceSchemaErrors,
     setSourceSchemaError,
-    setSourceStatus
+    setSourceStatus,
+    openQueryTab,
+    activeTabId,
+    openTabs,
+    setActiveTab,
+    setSources,
+    setConnectedSources,
+    loadQueryInTab,
+    executeQuery,
+    getOrCreateEphemeralQuery,
+    loadLatestQueryVersion
   } = useAppStore();
 
   // Query for all sources
-  const { data: sources, isLoading: sourcesLoading, error: sourcesError } = useSourcesQuery();
+  const { data: sources, isLoading: sourcesLoading, error: sourcesError } = useStoreSources();
 
   // Get connected sources
-  const { data: connectedSourcesData } = useConnectedSourcesQuery();
+  const { data: connectedSourcesData } = useStoreConnectedSources();
 
   // Create a set of connected source IDs for easy lookup
   const connectedSourceIds = useMemo(() => {
@@ -53,12 +48,21 @@ export function IdePage() {
     return new Set(connectedSourcesData.map((source: ConnectedSource) => source.id));
   }, [connectedSourcesData]);
 
+  // Update store with sources and connected sources when they change
+  useEffect(() => {
+    if (sources) {
+      setSources(sources);
+    }
+  }, [sources, setSources]);
+
+  useEffect(() => {
+    if (connectedSourcesData) {
+      setConnectedSources(connectedSourcesData.map((s: ConnectedSource) => s.id));
+    }
+  }, [connectedSourcesData, setConnectedSources]);
+
   // Query for selected source schemas - only if the source is connected
-  const {
-    data: sourceSchemas,
-    isLoading: schemasLoading,
-    error: schemasError
-  } = useSourceSchemasQuery(
+  const { data: sourceSchemas } = useStoreSourceSchema(
     selectedSource?.id && connectedSourceIds.has(selectedSource.id) ? selectedSource.id : undefined
   );
 
@@ -66,39 +70,6 @@ export function IdePage() {
   const { data: selectedSourceStatus } = useSourceStatusQuery(
     selectedSource?.id && connectedSourceIds.has(selectedSource.id) ? selectedSource.id : undefined
   );
-
-  // Query for table data using the useQueryQuery hook
-  const {
-    data: tableQueryResults,
-    isLoading,
-    error: tableQueryError
-  } = useQueryQuery(
-    selectedTableData?.sourceId || "",
-    selectedTableData?.query || "",
-    {
-      enabled: !!selectedTableData
-    },
-    "table"
-  );
-
-  // Update query results when the table query completes
-  useEffect(() => {
-    if (tableQueryResults) {
-      setQueryResults(tableQueryResults);
-    } else if (tableQueryError) {
-      console.error("Error executing table query:", tableQueryError);
-      setQueryResults([{ error: "Error loading table data" }]);
-    }
-  }, [tableQueryResults, tableQueryError, setQueryResults]);
-
-  // Update query running state based on loading state
-  useEffect(() => {
-    if (selectedTableData) {
-      setQueryRunning(isLoading);
-    } else {
-      setQueryRunning(false);
-    }
-  }, [isLoading, selectedTableData, setQueryRunning]);
 
   // Update schema map when new schema data is loaded
   useEffect(() => {
@@ -111,90 +82,195 @@ export function IdePage() {
     }
   }, [selectedSource, sourceSchemas, sourceSchemaErrors, setSourceSchema, setSourceSchemaError]);
 
-  // Track schema errors by source
+  // Update source status when new status data is loaded
   useEffect(() => {
-    if (schemasError && selectedSource?.id) {
-      setSourceSchemaError(selectedSource.id, "Error loading schemas");
-    }
-  }, [schemasError, selectedSource, setSourceSchemaError]);
-
-  // Track source statuses
-  useEffect(() => {
-    if (selectedSourceStatus && selectedSource?.id) {
+    if (selectedSource?.id && selectedSourceStatus) {
       setSourceStatus(selectedSource.id, selectedSourceStatus);
     }
-  }, [selectedSourceStatus, selectedSource, setSourceStatus]);
+  }, [selectedSource, selectedSourceStatus, setSourceStatus]);
 
-  // Build file tree data with sources only - schema children are handled by FileTree component via AppState
-  const fileTreeData = sources ? sourcesToFileTreeNodes(sources) : sampleFileTree;
+  // Transform sources to file tree structure - memoized
+  const fileTreeData = useMemo(() => {
+    if (!sources) return [];
+    return sourcesToFileTreeNodes(sources);
+  }, [sources]);
 
-  const handleSourceSelect = (source: Source) => {
-    setSelectedSource(source);
-  };
+  // Get the currently selected query ID based on the active tab
+  const selectedQueryId = useMemo(() => {
+    if (!activeTabId) return undefined;
+    const activeTab = openTabs.find((tab) => tab.id === activeTabId);
+    return activeTab?.queryId || undefined;
+  }, [activeTabId, openTabs]);
 
-  // Handle table double-click
-  const handleTableDoubleClick = async (sourceId: string, tableName: string) => {
-    // Build the query to select all data from the table with a limit
-    const query = `SELECT * FROM ${tableName} LIMIT 101`;
+  // Handle source selection
+  const handleSourceSelect = useCallback(
+    (source: Source) => {
+      setSelectedSource(source);
+    },
+    [setSelectedSource]
+  );
 
-    // Set the selected table data with the query
-    setSelectedTableData({ sourceId, tableName, query });
+  // Handle table double-click - create or switch to existing ephemeral query tab
+  const handleTableDoubleClick = useCallback(
+    async (sourceId: string, tableName: string) => {
+      try {
+        // Extract schema and table from tableName (format: "schema.table")
+        const parts = tableName.split(".");
+        const schema = parts.length > 1 ? parts[0] : "public";
+        const table = parts.length > 1 ? parts[1] : parts[0];
 
-    // Clear previous query results and set loading state
-    setQueryResults(null);
-    setQueryRunning(true);
-  };
+        // Get or create ephemeral query
+        const ephemeralQuery = await getOrCreateEphemeralQuery(sourceId, schema, table);
+        console.log("Ephemeral query for table double-click:", ephemeralQuery);
 
-  // Handle SQL query execution
-  const handleQueryExecution = (results: object[]) => {
-    setQueryResults(results);
-    // Clear table selection since we're viewing custom query results
-    setSelectedTableData(null);
-  };
+        // Check if this ephemeral query is already open in a tab
+        const existingTab = openTabs.find((tab) => tab.queryId === ephemeralQuery.id);
+
+        if (existingTab) {
+          // Switch to existing tab and execute query
+          setActiveTab(existingTab.id);
+          await executeQuery(existingTab.id);
+          return;
+        }
+
+        // Get the latest version to get the SQL
+        const latestVersion = await loadLatestQueryVersion(ephemeralQuery.id);
+        const sql = latestVersion?.sql || `SELECT * FROM ${schema}.${table} LIMIT 101`;
+
+        // Create a new tab for this ephemeral query
+        openQueryTab({
+          queryId: ephemeralQuery.id,
+          sourceId,
+          title: `${schema}.${table}`,
+          isDirty: false,
+          editorContent: sql,
+          queryResults: null,
+          queryRunning: true,
+          selectedTableData: { sourceId, tableName, query: sql },
+          isLoadingQuery: false,
+          isLoadingVersions: false,
+          lastSavedContent: sql,
+          originalContent: sql
+        });
+
+        // Execute the query immediately
+        setTimeout(async () => {
+          const state = useAppStore.getState();
+          const newTab = state.openTabs[state.openTabs.length - 1];
+          if (newTab) {
+            await executeQuery(newTab.id);
+          }
+        }, 100);
+      } catch (error) {
+        console.error("Failed to handle table double-click:", error);
+        // Fallback to old behavior
+        const query = `SELECT * FROM ${tableName} LIMIT 101`;
+        openQueryTab({
+          queryId: null,
+          sourceId,
+          title: tableName,
+          isDirty: false,
+          editorContent: query,
+          queryResults: null,
+          queryRunning: true,
+          selectedTableData: { sourceId, tableName, query },
+          isLoadingQuery: false,
+          isLoadingVersions: false,
+          lastSavedContent: "",
+          originalContent: ""
+        });
+      }
+    },
+    [
+      getOrCreateEphemeralQuery,
+      loadLatestQueryVersion,
+      openTabs,
+      setActiveTab,
+      executeQuery,
+      openQueryTab
+    ]
+  );
+
+  // Handle query selection from QueryTree
+  const handleQuerySelect = useCallback(
+    async (query: Query) => {
+      // Check if query is already open in a tab
+      const existingTab = openTabs.find((tab) => tab.queryId === query.id);
+
+      if (existingTab) {
+        // Switch to existing tab
+        setActiveTab(existingTab.id);
+      } else {
+        // Open new tab for this query
+        openQueryTab({
+          queryId: query.id,
+          sourceId: query.source_id,
+          title: query.name || `Query ${query.id.slice(0, 8)}`,
+          isDirty: false,
+          editorContent: "", // Will be loaded by loadQueryInTab
+          queryResults: null,
+          queryRunning: false,
+          selectedTableData: null,
+          isLoadingQuery: true,
+          isLoadingVersions: true,
+          lastSavedContent: "",
+          originalContent: ""
+        });
+
+        // Get the newly created tab ID from the store
+        const state = useAppStore.getState();
+        const newTab = state.openTabs[state.openTabs.length - 1]; // Latest tab
+
+        if (newTab) {
+          // Load query data in the background
+          await loadQueryInTab(newTab.id, query.id);
+        }
+      }
+    },
+    [openTabs, setActiveTab, openQueryTab, loadQueryInTab]
+  );
+
+  // Handle query double-click from QueryTree - open in tab and execute
+  const handleQueryDoubleClick = useCallback(
+    async (query: Query) => {
+      // First, handle the selection (open in tab)
+      await handleQuerySelect(query);
+
+      // Then execute the query after a brief delay to ensure tab is set up
+      setTimeout(async () => {
+        const state = useAppStore.getState();
+        const activeTab = state.openTabs.find((tab) => tab.queryId === query.id);
+
+        if (activeTab) {
+          await executeQuery(activeTab.id);
+        }
+      }, 100);
+    },
+    [handleQuerySelect, executeQuery]
+  );
 
   return (
     <div className="flex-1 min-h-0">
       <PanelGroup direction="horizontal" onLayout={(newSizes) => setPanelSizes(newSizes)}>
         <Panel defaultSize={panelSizes[0]} minSize={15}>
           <div className="h-full border-r select-none">
-            {sourcesLoading ? (
-              <div className="p-4 text-sm text-muted-foreground">Loading sources...</div>
-            ) : sourcesError ? (
-              <div className="p-4 text-sm text-red-500">Error loading sources</div>
-            ) : (
-              <FileTree
-                data={fileTreeData}
-                onSourceSelect={handleSourceSelect}
-                onTableDoubleClick={handleTableDoubleClick}
-              />
-            )}
+            <SidebarTabs
+              sources={fileTreeData}
+              sourcesLoading={sourcesLoading}
+              sourcesError={sourcesError}
+              onSourceSelect={handleSourceSelect}
+              onTableDoubleClick={handleTableDoubleClick}
+              onQuerySelect={handleQuerySelect}
+              onQueryDoubleClick={handleQueryDoubleClick}
+              selectedQueryId={selectedQueryId}
+            />
           </div>
         </Panel>
 
         <PanelResizeHandle className="w-1 bg-border hover:bg-primary transition-colors" />
 
         <Panel defaultSize={panelSizes[1]} minSize={30}>
-          <PanelGroup direction="vertical" storage={localStorage} autoSaveId="editor-layout">
-            <Panel defaultSize={60} minSize={30}>
-              <TableDataDisplay
-                tableData={selectedTableData}
-                queryResults={queryResults}
-                isQueryRunning={queryRunning}
-              />
-            </Panel>
-
-            <PanelResizeHandle className="h-1 bg-border hover:bg-primary transition-colors" />
-
-            <Panel defaultSize={40} minSize={10}>
-              <Editor
-                selectedSource={selectedSource}
-                schemasLoading={schemasLoading}
-                schemasError={schemasError}
-                onQueryExecution={handleQueryExecution}
-                onQueryStatusChange={setQueryRunning}
-              />
-            </Panel>
-          </PanelGroup>
+          <QueryTabs />
         </Panel>
 
         <PanelResizeHandle className="w-1 bg-border hover:bg-primary transition-colors" />

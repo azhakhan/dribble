@@ -47,7 +47,7 @@ export const getSourceStatus = async (sourceId: string): Promise<SourceStatus> =
 };
 
 export const executeQuery = async (source_id: string, query: string) => {
-  const response = await api.post<{ query_id: string }>("query/execute/", {
+  const response = await api.post<{ query_id: string }>("/execution/", {
     source_id,
     query
   });
@@ -56,7 +56,7 @@ export const executeQuery = async (source_id: string, query: string) => {
 
 export const getQueryResults = async (query_id: string) => {
   try {
-    const response = await api.get<object[]>(`query/results/${query_id}/`);
+    const response = await api.get<object[]>(`/execution/results/${query_id}`);
     return response.data;
   } catch (error) {
     if (axios.isAxiosError(error) && error.response?.status === 202) {
@@ -275,6 +275,164 @@ export const getChatMessages = async (sessionId: string): Promise<ChatMessagesRe
 export const getChatSessions = async (): Promise<ChatSessionsResponse> => {
   const response = await api.get<ChatSessionsResponse>("/chat/sessions");
   return response.data;
+};
+
+// ==================== QUERY, VERSION, RUN TYPES ====================
+
+export type UUID = string;
+
+export interface Query {
+  id: UUID;
+  name?: string;
+  is_ephemeral?: boolean;
+  preview_key?: string;
+  source_id: UUID;
+  created_by: UUID;
+  created_at: string;
+}
+
+export interface CreateQueryRequest {
+  source_id: UUID;
+  is_ephemeral?: boolean;
+  preview_key?: string;
+}
+
+export interface UpdateQueryRequest {
+  name?: string;
+  is_ephemeral?: boolean;
+}
+
+export interface QueryVersion {
+  id: UUID;
+  sql: string;
+  save_trigger: "manual" | "run" | "ai" | "on_exit";
+  query_id: UUID;
+  created_by: UUID;
+  created_at: string;
+}
+
+export interface CreateQueryVersionRequest {
+  sql: string;
+  save_trigger: "manual" | "run" | "ai" | "on_exit";
+  query_id: UUID;
+  created_by: UUID;
+}
+
+export interface QueryRun {
+  id: UUID;
+  result_message?: string;
+  error_message?: string;
+  row_count?: number;
+  execution_time_ms?: number;
+  query_version_id: UUID;
+  created_by: UUID;
+  created_at: string;
+}
+
+export interface CreateQueryRunRequest {
+  result_message?: string;
+  error_message?: string;
+  row_count?: number;
+  execution_time_ms?: number;
+  query_version_id: UUID;
+  created_by: UUID;
+}
+
+// ==================== QUERY API ====================
+
+export const getQueries = async (): Promise<Record<string, Query[]>> => {
+  const response = await api.get<Record<string, Query[]>>("/query/");
+  return response.data;
+};
+
+export const getQueryById = async (queryId: string): Promise<Query> => {
+  const response = await api.get<Query>(`/query/${queryId}`);
+  return response.data;
+};
+
+export const createQuery = async (data: CreateQueryRequest): Promise<Query> => {
+  const response = await api.post<Query>("/query/", data);
+  return response.data;
+};
+
+export const updateQuery = async (queryId: string, data: UpdateQueryRequest): Promise<Query> => {
+  const response = await api.put<Query>(`/query/${queryId}`, data);
+  return response.data;
+};
+
+export const deleteQuery = async (queryId: string): Promise<void> => {
+  await api.delete(`/query/${queryId}`);
+};
+
+// ==================== EPHEMERAL QUERY API ====================
+
+export const getOrCreateEphemeralQuery = async (
+  sourceId: string,
+  schema: string,
+  table: string
+): Promise<Query> => {
+  const previewKey = `${sourceId}.${schema}.${table}`;
+  const response = await api.post<Query>("/query/ephemeral", {
+    source_id: sourceId,
+    preview_key: previewKey
+  });
+  return response.data;
+};
+
+export const convertEphemeralToRegular = async (queryId: string, name: string): Promise<Query> => {
+  const response = await api.put<Query>(`/query/${queryId}/convert`, {
+    name
+  });
+  return response.data;
+};
+
+// ==================== QUERY VERSION API ====================
+
+export const getQueryVersions = async (queryId: string): Promise<QueryVersion[]> => {
+  const response = await api.get<QueryVersion[]>(`/versions/query/${queryId}/`);
+  return response.data;
+};
+
+export const getLatestQueryVersion = async (queryId: string): Promise<QueryVersion | null> => {
+  const response = await api.get<QueryVersion | null>(`/versions/query/${queryId}/latest`);
+  return response.data;
+};
+
+export const getQueryVersionById = async (versionId: string): Promise<QueryVersion> => {
+  const response = await api.get<QueryVersion>(`/versions/${versionId}`);
+  return response.data;
+};
+
+export const createQueryVersion = async (
+  data: CreateQueryVersionRequest
+): Promise<QueryVersion> => {
+  const response = await api.post<QueryVersion>("/versions/", data);
+  return response.data;
+};
+
+export const deleteQueryVersion = async (versionId: string): Promise<void> => {
+  await api.delete(`/versions/${versionId}`);
+};
+
+// ==================== QUERY RUN API ====================
+
+export const getQueryRunsByQueryId = async (queryId: string): Promise<QueryRun[]> => {
+  const response = await api.get<QueryRun[]>(`/runs/query/${queryId}`);
+  return response.data;
+};
+
+export const getQueryRunsByVersionId = async (versionId: string): Promise<QueryRun[]> => {
+  const response = await api.get<QueryRun[]>(`/runs/version/${versionId}`);
+  return response.data;
+};
+
+export const getQueryRunById = async (runId: string): Promise<QueryRun> => {
+  const response = await api.get<QueryRun>(`/runs/${runId}`);
+  return response.data;
+};
+
+export const deleteQueryRun = async (runId: string): Promise<void> => {
+  await api.delete(`/runs/${runId}`);
 };
 
 export default api;

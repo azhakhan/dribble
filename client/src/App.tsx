@@ -2,8 +2,10 @@ import { ThemeProvider } from "@/components/theme-provider";
 import { BrowserRouter as Router, Routes, Route, useNavigate, Link } from "react-router-dom";
 import { ModeToggle } from "@/components/mode-toggle";
 import logo from "@/assets/logo.png";
-import { IdePage, SettingsPage } from "@/pages";
+import { SettingsPage } from "@/pages";
 import { SettingsIcon } from "lucide-react";
+import { IdePage } from "./pages/IdePage";
+
 function TopMenu() {
   const navigate = useNavigate();
 
