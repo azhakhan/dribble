@@ -27,12 +27,13 @@ export function IdePage() {
     openQueryTab,
     activeTabId,
     openTabs,
-    updateTabContent,
     setActiveTab,
     setSources,
     setConnectedSources,
     loadQueryInTab,
-    executeQuery
+    executeQuery,
+    getOrCreateEphemeralQuery,
+    loadLatestQueryVersion
   } = useAppStore();
 
   // Query for all sources
@@ -109,50 +110,84 @@ export function IdePage() {
     [setSelectedSource]
   );
 
-  // Handle table double-click - create or switch to existing tab
+  // Handle table double-click - create or switch to existing ephemeral query tab
   const handleTableDoubleClick = useCallback(
     async (sourceId: string, tableName: string) => {
-      // Build the query to select all data from the table with a limit
-      const query = `SELECT * FROM ${tableName} LIMIT 101`;
+      try {
+        // Extract schema and table from tableName (format: "schema.table")
+        const parts = tableName.split(".");
+        const schema = parts.length > 1 ? parts[0] : "public";
+        const table = parts.length > 1 ? parts[1] : parts[0];
 
-      // Check if there's already an active tab for this source that we can reuse
-      if (activeTabId && openTabs.length > 0) {
-        const activeTab = openTabs.find((tab) => tab.id === activeTabId);
-        if (
-          activeTab &&
-          activeTab.sourceId === sourceId &&
-          !activeTab.selectedTableData &&
-          !activeTab.queryResults
-        ) {
-          // Use the active empty tab
-          updateTabContent(activeTabId, {
-            selectedTableData: { sourceId, tableName, query },
-            queryResults: null,
-            queryRunning: true,
-            title: tableName,
-            editorContent: query
-          });
+        // Get or create ephemeral query
+        const ephemeralQuery = await getOrCreateEphemeralQuery(sourceId, schema, table);
+
+        // Check if this ephemeral query is already open in a tab
+        const existingTab = openTabs.find((tab) => tab.queryId === ephemeralQuery.id);
+
+        if (existingTab) {
+          // Switch to existing tab and execute query
+          setActiveTab(existingTab.id);
+          await executeQuery(existingTab.id);
           return;
         }
-      }
 
-      // Create a new tab for this table
-      openQueryTab({
-        queryId: null,
-        sourceId,
-        title: tableName,
-        isDirty: false,
-        editorContent: query,
-        queryResults: null,
-        queryRunning: true,
-        selectedTableData: { sourceId, tableName, query },
-        isLoadingQuery: false,
-        isLoadingVersions: false,
-        lastSavedContent: "",
-        originalContent: ""
-      });
+        // Get the latest version to get the SQL
+        const latestVersion = await loadLatestQueryVersion(ephemeralQuery.id);
+        const sql = latestVersion?.sql || `SELECT * FROM ${schema}.${table} LIMIT 101`;
+
+        // Create a new tab for this ephemeral query
+        openQueryTab({
+          queryId: ephemeralQuery.id,
+          sourceId,
+          title: `${schema}.${table}`,
+          isDirty: false,
+          editorContent: sql,
+          queryResults: null,
+          queryRunning: true,
+          selectedTableData: { sourceId, tableName, query: sql },
+          isLoadingQuery: false,
+          isLoadingVersions: false,
+          lastSavedContent: sql,
+          originalContent: sql
+        });
+
+        // Execute the query immediately
+        setTimeout(async () => {
+          const state = useAppStore.getState();
+          const newTab = state.openTabs[state.openTabs.length - 1];
+          if (newTab) {
+            await executeQuery(newTab.id);
+          }
+        }, 100);
+      } catch (error) {
+        console.error("Failed to handle table double-click:", error);
+        // Fallback to old behavior
+        const query = `SELECT * FROM ${tableName} LIMIT 101`;
+        openQueryTab({
+          queryId: null,
+          sourceId,
+          title: tableName,
+          isDirty: false,
+          editorContent: query,
+          queryResults: null,
+          queryRunning: true,
+          selectedTableData: { sourceId, tableName, query },
+          isLoadingQuery: false,
+          isLoadingVersions: false,
+          lastSavedContent: "",
+          originalContent: ""
+        });
+      }
     },
-    [activeTabId, openTabs, updateTabContent, openQueryTab]
+    [
+      getOrCreateEphemeralQuery,
+      loadLatestQueryVersion,
+      openTabs,
+      setActiveTab,
+      executeQuery,
+      openQueryTab
+    ]
   );
 
   // Handle query selection from QueryTree

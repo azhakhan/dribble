@@ -7,10 +7,13 @@ from enum import Enum
 
 class CreateQueryRequest(BaseModel):
     source_id: UUID
+    is_ephemeral: Optional[bool] = False
+    preview_key: Optional[str] = None
 
 
 class UpdateQueryRequest(BaseModel):
     name: Optional[str] = None
+    is_ephemeral: Optional[bool] = None
 
 
 class ExecuteQueryRequest(BaseModel):
@@ -73,9 +76,21 @@ class QueryRunResponse(BaseModel):
 class QueryResponse(BaseModel):
     id: UUID
     name: Optional[str]
+    is_ephemeral: Optional[bool]
+    preview_key: Optional[str]
     source_id: UUID
     created_by: UUID
     created_at: datetime
 
     class Config:
         from_attributes = True
+
+
+# Ephemeral query schemas
+class CreateEphemeralQueryRequest(BaseModel):
+    source_id: UUID
+    preview_key: str
+
+
+class ConvertEphemeralQueryRequest(BaseModel):
+    name: str

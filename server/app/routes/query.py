@@ -3,6 +3,8 @@ from app.schemas.query import (
     CreateQueryRequest,
     UpdateQueryRequest,
     QueryResponse,
+    CreateEphemeralQueryRequest,
+    ConvertEphemeralQueryRequest,
 )
 from app.core.db import get_db
 from app.controllers.query_service import QueryService
@@ -34,11 +36,29 @@ async def create_query(
     return QueryService.create_query(db, request, user.id)
 
 
+@router.post("/ephemeral", response_model=QueryResponse)
+async def get_or_create_ephemeral_query(
+    request: CreateEphemeralQueryRequest,
+    db: Session = Depends(get_db),
+    user=Depends(get_current_user),
+):
+    """Get existing ephemeral query or create new one for table preview"""
+    return QueryService.get_or_create_ephemeral_query(db, request, user.id)
+
+
 @router.put("/{query_id}", response_model=QueryResponse)
 async def update_query(query_id: UUID, request: UpdateQueryRequest, db: Session = Depends(get_db)):
     """Update a query"""
     # TODO: save who updated the query
     return QueryService.update_query(db, query_id, request)
+
+
+@router.put("/{query_id}/convert", response_model=QueryResponse)
+async def convert_ephemeral_to_regular(
+    query_id: UUID, request: ConvertEphemeralQueryRequest, db: Session = Depends(get_db)
+):
+    """Convert an ephemeral query to a regular query"""
+    return QueryService.convert_ephemeral_to_regular(db, query_id, request)
 
 
 @router.delete("/{query_id}")

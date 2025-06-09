@@ -13,6 +13,8 @@ import {
   getSources,
   getConnectedSources,
   getSourceSchemas,
+  getOrCreateEphemeralQuery,
+  convertEphemeralToRegular,
   type ConnectedSource
 } from "@/shared/lib/api";
 import type { FileNode } from "@/shared/lib/fileTreeUtils";
@@ -120,6 +122,10 @@ interface QueryState {
   createNewQuery: (sourceId: string) => Promise<string>;
   saveQueryVersion: (queryId: string, sql: string, saveTrigger: "run" | "ai") => Promise<void>;
   updateQueryName: (queryId: string, newName: string) => Promise<void>;
+
+  // Ephemeral query management
+  getOrCreateEphemeralQuery: (sourceId: string, schema: string, table: string) => Promise<Query>;
+  convertEphemeralToRegular: (queryId: string, name: string) => Promise<Query>;
 }
 
 // FileTree state
@@ -941,6 +947,47 @@ export const useAppStore = create<AppState>()(
           }
         } catch (error) {
           console.error("Failed to update query name:", error);
+          throw error;
+        }
+      },
+
+      getOrCreateEphemeralQuery: async (sourceId, schema, table) => {
+        try {
+          const query = await getOrCreateEphemeralQuery(sourceId, schema, table);
+
+          // Update the query in the store
+          set((state) => ({
+            queries: { ...state.queries, [query.id]: query }
+          }));
+
+          return query;
+        } catch (error) {
+          console.error("Failed to get or create ephemeral query:", error);
+          throw error;
+        }
+      },
+
+      convertEphemeralToRegular: async (queryId, name) => {
+        try {
+          const updatedQuery = await convertEphemeralToRegular(queryId, name);
+
+          // Update the query in the store
+          set((state) => ({
+            queries: { ...state.queries, [queryId]: updatedQuery }
+          }));
+
+          // Update the tab title if the query is open in a tab
+          const currentState = get();
+          const tab = currentState.openTabs.find((tab) => tab.queryId === queryId);
+          if (tab) {
+            set((state) => ({
+              openTabs: state.openTabs.map((t) => (t.id === tab.id ? { ...t, title: name } : t))
+            }));
+          }
+
+          return updatedQuery;
+        } catch (error) {
+          console.error("Failed to convert ephemeral query to regular:", error);
           throw error;
         }
       },

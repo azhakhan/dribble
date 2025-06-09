@@ -284,6 +284,8 @@ export type UUID = string;
 export interface Query {
   id: UUID;
   name?: string;
+  is_ephemeral?: boolean;
+  preview_key?: string;
   source_id: UUID;
   created_by: UUID;
   created_at: string;
@@ -291,10 +293,13 @@ export interface Query {
 
 export interface CreateQueryRequest {
   source_id: UUID;
+  is_ephemeral?: boolean;
+  preview_key?: string;
 }
 
 export interface UpdateQueryRequest {
   name?: string;
+  is_ephemeral?: boolean;
 }
 
 export interface QueryVersion {
@@ -357,6 +362,28 @@ export const updateQuery = async (queryId: string, data: UpdateQueryRequest): Pr
 
 export const deleteQuery = async (queryId: string): Promise<void> => {
   await api.delete(`/query/${queryId}`);
+};
+
+// ==================== EPHEMERAL QUERY API ====================
+
+export const getOrCreateEphemeralQuery = async (
+  sourceId: string,
+  schema: string,
+  table: string
+): Promise<Query> => {
+  const previewKey = `${sourceId}.${schema}.${table}`;
+  const response = await api.post<Query>("/query/ephemeral", {
+    source_id: sourceId,
+    preview_key: previewKey
+  });
+  return response.data;
+};
+
+export const convertEphemeralToRegular = async (queryId: string, name: string): Promise<Query> => {
+  const response = await api.put<Query>(`/query/${queryId}/convert`, {
+    name
+  });
+  return response.data;
 };
 
 // ==================== QUERY VERSION API ====================
