@@ -14,21 +14,38 @@ import type { Query, Source } from "@/shared/lib/api";
 
 interface QueryTreeProps {
   onQuerySelect?: (query: Query) => void;
+  onQueryDoubleClick?: (query: Query) => void;
+  selectedQueryId?: string;
+  onQueryNameUpdate?: (queryId: string, newName: string) => void;
 }
 
 interface QueryTreeSourceProps {
   source: Source;
   queries: Query[];
   onQuerySelect?: (query: Query) => void;
+  onQueryDoubleClick?: (query: Query) => void;
+  selectedQueryId?: string;
+  onQueryNameUpdate?: (queryId: string, newName: string) => void;
 }
 
 interface QueryTreeItemProps {
   query: Query;
   onQuerySelect?: (query: Query) => void;
+  onQueryDoubleClick?: (query: Query) => void;
+  isSelected?: boolean;
+  onQueryNameUpdate?: (queryId: string, newName: string) => void;
 }
 
-const QueryTreeItem = ({ query, onQuerySelect }: QueryTreeItemProps) => {
+const QueryTreeItem = ({
+  query,
+  onQuerySelect,
+  onQueryDoubleClick,
+  isSelected,
+  onQueryNameUpdate
+}: QueryTreeItemProps) => {
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editingName, setEditingName] = useState(query.name || `Query ${query.id.slice(0, 8)}`);
 
   const handleQueryClick = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -37,11 +54,45 @@ const QueryTreeItem = ({ query, onQuerySelect }: QueryTreeItemProps) => {
     }
   };
 
+  const handleQueryDoubleClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (onQueryDoubleClick) {
+      onQueryDoubleClick(query);
+    }
+  };
+
+  const handleEdit = () => {
+    setIsEditing(true);
+    setDropdownOpen(false);
+  };
+
+  const handleNameSubmit = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      if (onQueryNameUpdate && editingName.trim() !== query.name) {
+        onQueryNameUpdate(query.id, editingName.trim());
+      }
+      setIsEditing(false);
+    } else if (e.key === "Escape") {
+      setEditingName(query.name || `Query ${query.id.slice(0, 8)}`);
+      setIsEditing(false);
+    }
+  };
+
+  const handleNameBlur = () => {
+    if (onQueryNameUpdate && editingName.trim() !== query.name) {
+      onQueryNameUpdate(query.id, editingName.trim());
+    }
+    setIsEditing(false);
+  };
+
   return (
     <div
-      className="flex items-center py-1 px-2 text-sm cursor-pointer hover:bg-accent/50"
+      className={`flex items-center py-1 px-2 text-sm cursor-pointer hover:bg-accent/50 ${
+        isSelected ? "bg-accent text-accent-foreground" : ""
+      }`}
       style={{ paddingLeft: "24px" }}
       onClick={handleQueryClick}
+      onDoubleClick={handleQueryDoubleClick}
     >
       {/* Icon for query */}
       <div className="mr-1.5 flex items-center">
@@ -49,7 +100,20 @@ const QueryTreeItem = ({ query, onQuerySelect }: QueryTreeItemProps) => {
       </div>
 
       {/* Query name */}
-      <span className="flex-grow truncate">{query.name || `Query ${query.id.slice(0, 8)}`}</span>
+      {isEditing ? (
+        <input
+          type="text"
+          value={editingName}
+          onChange={(e) => setEditingName(e.target.value)}
+          onKeyDown={handleNameSubmit}
+          onBlur={handleNameBlur}
+          className="flex-grow bg-transparent border-none outline-none focus:ring-0 text-sm"
+          autoFocus
+          onClick={(e) => e.stopPropagation()}
+        />
+      ) : (
+        <span className="flex-grow truncate">{query.name || `Query ${query.id.slice(0, 8)}`}</span>
+      )}
 
       {/* Actions dropdown */}
       <DropdownMenu open={dropdownOpen} onOpenChange={setDropdownOpen}>
@@ -64,8 +128,7 @@ const QueryTreeItem = ({ query, onQuerySelect }: QueryTreeItemProps) => {
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-40">
-          <DropdownMenuItem>Edit</DropdownMenuItem>
-          <DropdownMenuItem>Rename</DropdownMenuItem>
+          <DropdownMenuItem onClick={handleEdit}>Rename</DropdownMenuItem>
           <DropdownMenuItem className="text-destructive">Delete</DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
@@ -73,7 +136,14 @@ const QueryTreeItem = ({ query, onQuerySelect }: QueryTreeItemProps) => {
   );
 };
 
-const QueryTreeSource = ({ source, queries, onQuerySelect }: QueryTreeSourceProps) => {
+const QueryTreeSource = ({
+  source,
+  queries,
+  onQuerySelect,
+  onQueryDoubleClick,
+  selectedQueryId,
+  onQueryNameUpdate
+}: QueryTreeSourceProps) => {
   const [isOpen, setIsOpen] = useState(false);
 
   const handleChevronClick = (e: React.MouseEvent) => {
@@ -153,7 +223,14 @@ const QueryTreeSource = ({ source, queries, onQuerySelect }: QueryTreeSourceProp
       {isOpen && queries.length > 0 && (
         <div>
           {queries.map((query) => (
-            <QueryTreeItem key={query.id} query={query} onQuerySelect={onQuerySelect} />
+            <QueryTreeItem
+              key={query.id}
+              query={query}
+              onQuerySelect={onQuerySelect}
+              onQueryDoubleClick={onQueryDoubleClick}
+              isSelected={selectedQueryId === query.id}
+              onQueryNameUpdate={onQueryNameUpdate}
+            />
           ))}
         </div>
       )}
@@ -168,7 +245,12 @@ const QueryTreeSource = ({ source, queries, onQuerySelect }: QueryTreeSourceProp
   );
 };
 
-export const QueryTree = ({ onQuerySelect }: QueryTreeProps) => {
+export const QueryTree = ({
+  onQuerySelect,
+  onQueryDoubleClick,
+  selectedQueryId,
+  onQueryNameUpdate
+}: QueryTreeProps) => {
   // Fetch queries grouped by source
   const {
     data: queriesData,
@@ -240,6 +322,9 @@ export const QueryTree = ({ onQuerySelect }: QueryTreeProps) => {
                 source={source}
                 queries={queries}
                 onQuerySelect={onQuerySelect}
+                onQueryDoubleClick={onQueryDoubleClick}
+                selectedQueryId={selectedQueryId}
+                onQueryNameUpdate={onQueryNameUpdate}
               />
             ))}
           </div>

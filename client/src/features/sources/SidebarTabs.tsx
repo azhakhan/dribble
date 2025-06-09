@@ -12,6 +12,9 @@ interface SidebarTabsProps {
   onSourceSelect?: (source: { id: string; name: string; dbtype: string }) => void;
   onTableDoubleClick?: (sourceId: string, tableName: string) => void;
   onQuerySelect?: (query: Query) => void;
+  onQueryDoubleClick?: (query: Query) => void;
+  selectedQueryId?: string;
+  onQueryNameUpdate?: (queryId: string, newName: string) => void;
 }
 
 type TabType = "sources" | "queries";
@@ -22,7 +25,10 @@ export const SidebarTabs = ({
   sourcesError,
   onSourceSelect,
   onTableDoubleClick,
-  onQuerySelect
+  onQuerySelect,
+  onQueryDoubleClick,
+  selectedQueryId,
+  onQueryNameUpdate
 }: SidebarTabsProps) => {
   const [activeTab, setActiveTab] = useState<TabType>("sources");
 
@@ -46,7 +52,14 @@ export const SidebarTabs = ({
     }
 
     if (activeTab === "queries") {
-      return <QueryTree onQuerySelect={onQuerySelect} />;
+      return (
+        <QueryTree
+          onQuerySelect={onQuerySelect}
+          onQueryDoubleClick={onQueryDoubleClick}
+          selectedQueryId={selectedQueryId}
+          onQueryNameUpdate={onQueryNameUpdate}
+        />
+      );
     }
 
     return null;
