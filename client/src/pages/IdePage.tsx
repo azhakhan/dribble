@@ -191,6 +191,70 @@ export function IdePage() {
     ]
   );
 
+  // Handle table single-click - create or switch to existing ephemeral query tab (without executing)
+  const handleTableSelect = useCallback(
+    async (sourceId: string, tableName: string) => {
+      try {
+        // Extract schema and table from tableName (format: "schema.table")
+        const parts = tableName.split(".");
+        const schema = parts.length > 1 ? parts[0] : "public";
+        const table = parts.length > 1 ? parts[1] : parts[0];
+
+        // Get or create ephemeral query
+        const ephemeralQuery = await getOrCreateEphemeralQuery(sourceId, schema, table);
+        console.log("Ephemeral query for table select:", ephemeralQuery);
+
+        // Check if this ephemeral query is already open in a tab
+        const existingTab = openTabs.find((tab) => tab.queryId === ephemeralQuery.id);
+
+        if (existingTab) {
+          // Switch to existing tab (without executing)
+          setActiveTab(existingTab.id);
+          return;
+        }
+
+        // Get the latest version to get the SQL
+        const latestVersion = await loadLatestQueryVersion(ephemeralQuery.id);
+        const sql = latestVersion?.sql || `SELECT * FROM ${schema}.${table} LIMIT 101`;
+
+        // Create a new tab for this ephemeral query (without executing)
+        openQueryTab({
+          queryId: ephemeralQuery.id,
+          sourceId,
+          title: `${schema}.${table}`,
+          isDirty: false,
+          editorContent: sql,
+          queryResults: null,
+          queryRunning: false,
+          selectedTableData: { sourceId, tableName, query: sql },
+          isLoadingQuery: false,
+          isLoadingVersions: false,
+          lastSavedContent: sql,
+          originalContent: sql
+        });
+      } catch (error) {
+        console.error("Failed to handle table select:", error);
+        // Fallback to old behavior
+        const query = `SELECT * FROM ${tableName} LIMIT 101`;
+        openQueryTab({
+          queryId: null,
+          sourceId,
+          title: tableName,
+          isDirty: false,
+          editorContent: query,
+          queryResults: null,
+          queryRunning: false,
+          selectedTableData: { sourceId, tableName, query },
+          isLoadingQuery: false,
+          isLoadingVersions: false,
+          lastSavedContent: "",
+          originalContent: ""
+        });
+      }
+    },
+    [getOrCreateEphemeralQuery, loadLatestQueryVersion, openTabs, setActiveTab, openQueryTab]
+  );
+
   // Handle query selection from QueryTree
   const handleQuerySelect = useCallback(
     async (query: Query) => {
@@ -259,6 +323,7 @@ export function IdePage() {
               sourcesLoading={sourcesLoading}
               sourcesError={sourcesError}
               onSourceSelect={handleSourceSelect}
+              onTableSelect={handleTableSelect}
               onTableDoubleClick={handleTableDoubleClick}
               onQuerySelect={handleQuerySelect}
               onQueryDoubleClick={handleQueryDoubleClick}

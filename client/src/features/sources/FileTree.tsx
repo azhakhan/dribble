@@ -41,6 +41,7 @@ interface FileTreeProps {
   data: FileNode[];
   onSourceSelect?: (source: { id: string; name: string; dbtype: string }) => void;
   onTableDoubleClick?: (sourceId: string, tableName: string) => void;
+  onTableSelect?: (sourceId: string, tableName: string) => void;
 }
 
 interface FileTreeItemProps {
@@ -48,6 +49,7 @@ interface FileTreeItemProps {
   level?: number;
   onSourceSelect?: (source: { id: string; name: string; dbtype: string }) => void;
   onTableDoubleClick?: (sourceId: string, tableName: string) => void;
+  onTableSelect?: (sourceId: string, tableName: string) => void;
   connectedSourceIds: Set<string>;
 }
 
@@ -56,6 +58,7 @@ const FileTreeItem = ({
   level = 0,
   onSourceSelect,
   onTableDoubleClick,
+  onTableSelect,
   connectedSourceIds
 }: FileTreeItemProps) => {
   // Get state and actions from Zustand store
@@ -138,12 +141,33 @@ const FileTreeItem = ({
   const handleItemClick = (e: React.MouseEvent) => {
     e.stopPropagation();
 
-    // Set this node as selected
+    // Set this node as selected for all items
     if (node.id) {
       setSelectedNodeId(node.id);
     }
 
-    // For all database objects, just select them
+    if (isColumn) {
+      // For columns, just select them (no expansion or other actions)
+      return;
+    }
+
+    // Check if this is an actual table/view (has sourceId) vs organizational folder (no sourceId)
+    const isActualTable = isTable && node.sourceId;
+
+    if (isActualTable && onTableSelect && node.sourceId) {
+      // For actual tables/views, open ephemeral query on single click (without expansion)
+      onTableSelect(node.sourceId, node.name);
+      return; // Don't do anything else for tables
+    }
+
+    // For sources, schemas, folders, and organizational table/view groupings: expand/collapse on single click
+    if ((isSource && isConnected) || isSchema || isFolder || (isTable && !node.sourceId)) {
+      if (hasChildren) {
+        setIsOpen(!isOpen);
+      }
+    }
+
+    // For sources, also call onSourceSelect
     if (isSource && onSourceSelect && node.id) {
       onSourceSelect({
         id: node.id,
@@ -163,20 +187,35 @@ const FileTreeItem = ({
   const handleDoubleClick = (e: React.MouseEvent) => {
     e.stopPropagation();
 
+    if (isColumn) {
+      // For columns, just select them (no other actions)
+      return;
+    }
+
+    // Check if this is an actual table/view (has sourceId) vs organizational folder (no sourceId)
+    const isActualTable = isTable && node.sourceId;
+
     if (isSource) {
       // If source is not connected, connect to it first
       if (!isConnected && node.id) {
         handleConnectClick(e);
       } else if (hasChildren) {
-        // If source is already connected, open its children
+        // If source is already connected, toggle children
         setIsOpen(!isOpen);
       }
-    } else if ((isSchema || isFolder) && hasChildren) {
-      // For schemas and folders, show children on double-click
-      setIsOpen(!isOpen);
-    } else if (isTable && onTableDoubleClick && node.id) {
-      // For tables and views, query them (both are "table" type)
-      if (node.sourceId) {
+    } else if (isSchema || isFolder || (isTable && !node.sourceId)) {
+      // For schemas, folders, and organizational table/view groupings: toggle children visibility
+      if (hasChildren) {
+        setIsOpen(!isOpen);
+      }
+    } else if (isActualTable) {
+      // For actual tables/views: expand children AND open + run ephemeral query
+      if (hasChildren) {
+        setIsOpen(!isOpen);
+      }
+
+      if (onTableDoubleClick && node.sourceId) {
+        // Open and run ephemeral query on double click
         onTableDoubleClick(node.sourceId, node.name);
       }
     }
@@ -378,6 +417,7 @@ const FileTreeItem = ({
               level={level + 1}
               onSourceSelect={onSourceSelect}
               onTableDoubleClick={onTableDoubleClick}
+              onTableSelect={onTableSelect}
               connectedSourceIds={connectedSourceIds}
             />
           ))}
@@ -397,7 +437,12 @@ const FileTreeItem = ({
   );
 };
 
-export const FileTree = ({ data, onSourceSelect, onTableDoubleClick }: FileTreeProps) => {
+export const FileTree = ({
+  data,
+  onSourceSelect,
+  onTableDoubleClick,
+  onTableSelect
+}: FileTreeProps) => {
   // Fetch connected sources on component mount
   const { data: connectedSourcesData } = useStoreConnectedSources();
 
@@ -427,6 +472,7 @@ export const FileTree = ({ data, onSourceSelect, onTableDoubleClick }: FileTreeP
             node={node}
             onSourceSelect={onSourceSelect}
             onTableDoubleClick={onTableDoubleClick}
+            onTableSelect={onTableSelect}
             connectedSourceIds={connectedSourceIds}
           />
         ))}
