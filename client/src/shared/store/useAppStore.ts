@@ -830,7 +830,13 @@ export const useAppStore = create<AppState>()(
 
         try {
           // Step 1: Save query version if this tab has an existing query and content has changed
-          if (tab.queryId && queryToRun.trim() !== tab.lastSavedContent.trim()) {
+          // Skip version saving for ephemeral queries that haven't been manually modified
+          const shouldSaveVersion =
+            tab.queryId &&
+            queryToRun.trim() !== tab.lastSavedContent.trim() &&
+            !(currentState.queries[tab.queryId]?.is_ephemeral && !tab.isDirty);
+
+          if (shouldSaveVersion && tab.queryId) {
             await currentState.saveQueryVersion(tab.queryId, queryToRun, "run");
 
             // Update the tab's saved content tracking
