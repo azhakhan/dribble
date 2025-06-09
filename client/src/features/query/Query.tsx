@@ -2,7 +2,7 @@ import { memo } from "react";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 import { useAppStore } from "@/shared/store/useAppStore";
 import { TableDataDisplay } from "@/features/tables/TableDataDisplay";
-import { SimplifiedEditor } from "@/features/editor/SimplifiedEditor";
+import { Editor } from "@/features/editor/Editor";
 
 interface QueryProps {
   tabId: string;
@@ -34,7 +34,7 @@ function QueryComponent({ tabId }: QueryProps) {
         <PanelResizeHandle className="h-1 bg-border hover:bg-primary transition-colors" />
 
         <Panel defaultSize={40} minSize={10}>
-          <SimplifiedEditor tabId={tabId} />
+          <Editor tabId={tabId} />
         </Panel>
       </PanelGroup>
     </div>
