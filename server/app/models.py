@@ -1,7 +1,7 @@
 from sqlalchemy import Column, DateTime, String, JSON, ForeignKey, Integer, Boolean
 from sqlalchemy.orm import declarative_base, relationship
 from sqlalchemy import Enum as SqlEnum
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import UUID, JSONB
 import enum
 import uuid
 from datetime import datetime
@@ -70,6 +70,8 @@ class Query(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     name = Column(String, nullable=True)
+    is_ephemeral = Column(Boolean, default=False)
+    preview_key = Column(String, nullable=True)  # e.g. "source.schema.table"
     created_by = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
     created_by_user = relationship("User", back_populates="queries")
     source_id = Column(UUID(as_uuid=True), ForeignKey("sources.id"), nullable=False)
@@ -103,6 +105,7 @@ class QueryRun(Base):
     __tablename__ = "query_runs"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    modifiers = Column(JSONB, nullable=True)
     result_message = Column(String, nullable=True)
     error_message = Column(String, nullable=True)
     row_count = Column(Integer, nullable=True)
