@@ -10,7 +10,7 @@ from app.schemas.query import (
 from uuid import UUID
 from typing import List, Dict
 from itertools import groupby
-from app.schemas.query import CreateQueryVersionRequest
+from app.schemas.query_version import CreateQueryVersionRequest
 
 
 class QueryService:

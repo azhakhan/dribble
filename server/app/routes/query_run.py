@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends
-from app.schemas.query import QueryRunResponse
+from app.schemas.query_run import QueryRunResponse, CreateQueryRunRequest
 from app.core.db import get_db
 from app.controllers.query_service import QueryRunService
 from sqlalchemy.orm import Session
@@ -31,3 +31,16 @@ async def get_query_run_by_id(run_id: UUID, db: Session = Depends(get_db)):
 async def delete_query_run(run_id: UUID, db: Session = Depends(get_db)):
     """Delete a query run"""
     return QueryRunService.delete_run(db, run_id)
+
+
+# called by worker
+@router.post("/")
+async def create_query_run(run: CreateQueryRunRequest):
+    """Create a query run"""
+    return QueryRunService.create_run(run)
+
+
+@router.put("/{run_id}")
+async def update_query_run(run_id: UUID, run: CreateQueryRunRequest, db: Session = Depends(get_db)):
+    """Update a query run"""
+    return QueryRunService.update_run(db, run_id, run)
