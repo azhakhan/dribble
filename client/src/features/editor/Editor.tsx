@@ -31,9 +31,7 @@ export function Editor({ tabId }: EditorProps) {
     loadQueryInTab,
     acceptProposedChanges,
     rejectProposedChanges,
-    updateQueryName,
-    queries,
-    convertEphemeralToRegular
+    updateQueryName
   } = useAppStore();
 
   // Find current tab - memoized to prevent unnecessary re-computations
@@ -74,40 +72,16 @@ export function Editor({ tabId }: EditorProps) {
 
   // Handle content changes
   const handleContentChange = useCallback(
-    async (content: string) => {
+    (content: string) => {
       if (!currentTab) return;
 
-      // Check if this is an ephemeral query being edited
-      if (currentTab.queryId && queries[currentTab.queryId]?.is_ephemeral) {
-        const query = queries[currentTab.queryId];
-
-        // If content has changed from the original, convert to regular query
-        if (content.trim() !== currentTab.originalContent.trim()) {
-          try {
-            // Generate a name based on source, schema, table, and date
-            const now = new Date();
-            const dateStr = now.toISOString().split("T")[0]; // YYYY-MM-DD format
-            const sourceName = tabSource?.name || "unknown";
-            const previewParts = query.preview_key?.split(".") || [];
-            const schema = previewParts[previewParts.length - 2] || "unknown";
-            const table = previewParts[previewParts.length - 1] || "unknown";
-            const defaultName = `${sourceName} ${schema} ${table} ${dateStr}`;
-
-            await convertEphemeralToRegular(currentTab.queryId, defaultName);
-            toast.success("Query converted to regular query");
-          } catch (error) {
-            console.error("Failed to convert ephemeral query:", error);
-            toast.error("Failed to convert query");
-          }
-        }
-      }
-
+      // Update tab content
       updateTabContent(tabId, {
         editorContent: content,
         isDirty: content !== currentTab.lastSavedContent
       });
     },
-    [currentTab, tabId, updateTabContent, queries, convertEphemeralToRegular, tabSource]
+    [currentTab, tabId, updateTabContent]
   );
 
   // Handle query execution

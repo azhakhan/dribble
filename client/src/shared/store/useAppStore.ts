@@ -794,6 +794,33 @@ export const useAppStore = create<AppState>()(
         const queryToRun = sql || tab.editorContent;
         if (!queryToRun.trim()) return;
 
+        // Check if this is an ephemeral query that has been modified
+        if (tab.queryId && currentState.queries[tab.queryId]?.is_ephemeral) {
+          const query = currentState.queries[tab.queryId];
+
+          // Only convert if the tab is marked as dirty (user has made changes)
+          // This prevents automatic conversion on the initial table double-click execution
+          if (tab.isDirty && queryToRun.trim() !== tab.originalContent.trim()) {
+            try {
+              console.log("Converting ephemeral query to regular before execution");
+
+              // Generate a name based on source, schema, table, and date
+              const now = new Date();
+              const dateStr = now.toISOString().split("T")[0]; // YYYY-MM-DD format
+              const sourceName = source.name || "unknown";
+              const previewParts = query.preview_key?.split(".") || [];
+              const schema = previewParts[previewParts.length - 2] || "unknown";
+              const table = previewParts[previewParts.length - 1] || "unknown";
+              const defaultName = `${sourceName} ${schema} ${table} ${dateStr}`;
+
+              await currentState.convertEphemeralToRegular(tab.queryId, defaultName);
+            } catch (error) {
+              console.error("Failed to convert ephemeral query:", error);
+              // Continue with execution even if conversion fails
+            }
+          }
+        }
+
         // Set running state
         set(() => ({
           openTabs: currentState.openTabs.map((t) =>
@@ -955,6 +982,8 @@ export const useAppStore = create<AppState>()(
         try {
           const query = await getOrCreateEphemeralQuery(sourceId, schema, table);
 
+          console.log("Created/retrieved ephemeral query:", query);
+
           // Update the query in the store
           set((state) => ({
             queries: { ...state.queries, [query.id]: query }
@@ -969,7 +998,12 @@ export const useAppStore = create<AppState>()(
 
       convertEphemeralToRegular: async (queryId, name) => {
         try {
+          console.log("Converting ephemeral query to regular:", { queryId, name });
+          console.log("Query before conversion:", get().queries[queryId]);
+
           const updatedQuery = await convertEphemeralToRegular(queryId, name);
+
+          console.log("Query after conversion:", updatedQuery);
 
           // Update the query in the store
           set((state) => ({

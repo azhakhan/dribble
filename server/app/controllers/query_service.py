@@ -110,11 +110,15 @@ class QueryService:
     def convert_ephemeral_to_regular(
         db: Session, query_id: UUID, request: ConvertEphemeralQueryRequest
     ) -> Query:
-        """Convert an ephemeral query to a regular query"""
+        """Convert an ephemeral query to a regular query (idempotent)"""
         query = get_or_404(db, Query, query_id, "Query not found")
 
+        # If already regular, just update the name and return
         if not query.is_ephemeral:
-            raise ValueError("Query is not ephemeral")
+            if request.name and request.name != query.name:
+                query.name = request.name
+                return safe_update(db, query)
+            return query
 
         # Update query to be regular
         query.is_ephemeral = False

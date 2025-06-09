@@ -121,6 +121,7 @@ export function IdePage() {
 
         // Get or create ephemeral query
         const ephemeralQuery = await getOrCreateEphemeralQuery(sourceId, schema, table);
+        console.log("Ephemeral query for table double-click:", ephemeralQuery);
 
         // Check if this ephemeral query is already open in a tab
         const existingTab = openTabs.find((tab) => tab.queryId === ephemeralQuery.id);
