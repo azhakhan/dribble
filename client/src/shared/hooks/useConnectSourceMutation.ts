@@ -99,7 +99,6 @@ export function useDisconnectSourceMutation() {
   const queryClient = useQueryClient();
   const {
     setSourceGeneratedChildren,
-    setSourceSchema,
     setSourceSchemaError,
     removeSourceStatus,
     loadConnectedSources
@@ -134,10 +133,22 @@ export function useDisconnectSourceMutation() {
       removeSourceStatus(sourceId);
       console.log("🗑️ Removed source status for:", sourceId);
 
-      // Clear schema data from cache and app store
+      // Clear schema data from cache and app store - PROPERLY REMOVE IT
       queryClient.removeQueries({ queryKey: ["sourceSchemas", sourceId] });
-      setSourceSchema(sourceId, {});
 
+      // Remove the sourceId from sourceSchemaMap instead of setting it to empty object
+      const currentState = useAppStore.getState();
+      const newSourceSchemaMap = { ...currentState.sourceSchemaMap };
+      delete newSourceSchemaMap[sourceId];
+
+      // Also clear any loading state for this source's schemas
+      const newLoadingSchemas = new Set(currentState.loadingSchemas);
+      newLoadingSchemas.delete(sourceId);
+
+      useAppStore.setState({
+        sourceSchemaMap: newSourceSchemaMap,
+        loadingSchemas: newLoadingSchemas
+      });
       // Clear generated children and error state
       setSourceGeneratedChildren(sourceId, []);
       setSourceSchemaError(sourceId, null);

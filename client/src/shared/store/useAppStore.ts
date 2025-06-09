@@ -381,12 +381,15 @@ export const useAppStore = create<AppState>()(
 
       // Source children actions
       setSourceGeneratedChildren: (sourceId, children) =>
-        set((state) => ({
-          sourceGeneratedChildren: {
-            ...state.sourceGeneratedChildren,
-            [sourceId]: children
-          }
-        })),
+        set((state) => {
+          console.log(`🌳 Setting generated children for source ${sourceId}:`, children);
+          return {
+            sourceGeneratedChildren: {
+              ...state.sourceGeneratedChildren,
+              [sourceId]: children
+            }
+          };
+        }),
 
       // Editor actions
       setEditorContent: (content) => set({ editorContent: content }),
@@ -967,7 +970,14 @@ export const useAppStore = create<AppState>()(
       // Schema loading actions
       loadSourceSchema: async (sourceId: string) => {
         const currentState = get();
-        if (currentState.sourceSchemaMap[sourceId] || currentState.loadingSchemas.has(sourceId)) {
+
+        if (currentState.sourceSchemaMap[sourceId]) {
+          console.log("✅ Schema already exists for source:", sourceId);
+          return;
+        }
+
+        if (currentState.loadingSchemas.has(sourceId)) {
+          console.log("⏳ Schema already loading for source:", sourceId);
           return;
         }
 
@@ -977,6 +987,7 @@ export const useAppStore = create<AppState>()(
 
         try {
           const schemas = await getSourceSchemas(sourceId);
+
           set((state) => ({
             sourceSchemaMap: {
               ...state.sourceSchemaMap,
@@ -991,9 +1002,9 @@ export const useAppStore = create<AppState>()(
           // Generate and set children nodes from schema data
           const { schemaToFileTreeNodes } = await import("@/shared/lib/fileTreeUtils");
           const generatedChildren = schemaToFileTreeNodes(schemas, sourceId);
+
           get().setSourceGeneratedChildren(sourceId, generatedChildren);
         } catch (error) {
-          console.error(`Failed to load schema for source ${sourceId}:`, error);
           const errorMessage = error instanceof Error ? error.message : "Unknown error";
 
           set((state) => ({
@@ -1007,7 +1018,10 @@ export const useAppStore = create<AppState>()(
       },
 
       loadConnectedSourcesSchemas: async (connectedSources: ConnectedSource[]) => {
-        if (!connectedSources || connectedSources.length === 0) return;
+        if (!connectedSources || connectedSources.length === 0) {
+          console.log("⚠️ No connected sources provided to loadConnectedSourcesSchemas");
+          return;
+        }
 
         const currentState = get();
 
@@ -1016,11 +1030,21 @@ export const useAppStore = create<AppState>()(
         currentState.cleanupDisconnectedSources(connectedSourceIds);
 
         // Load schemas for all connected sources in parallel
-        await Promise.allSettled(
+        const results = await Promise.allSettled(
           connectedSources.map(async (source) => {
-            await currentState.loadSourceSchema(source.id);
+            return await currentState.loadSourceSchema(source.id);
           })
         );
+
+        // Log results
+        results.forEach((result, index) => {
+          const sourceId = connectedSources[index].id;
+          if (result.status === "fulfilled") {
+            console.log("✅ Schema loaded successfully for:", sourceId);
+          } else {
+            console.error("❌ Schema loading failed for:", sourceId, result.reason);
+          }
+        });
       }
     }),
     {
