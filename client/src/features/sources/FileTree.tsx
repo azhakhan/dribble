@@ -32,7 +32,7 @@ import {
   useDisconnectSourceMutation
 } from "@/shared/hooks/useConnectSourceMutation";
 import { useSourceStatusQuery } from "@/shared/hooks/useSourceStatusQuery";
-import { useConnectedSourcesQuery } from "@/shared/hooks/useConnectedSourcesQuery";
+import { useStoreConnectedSources } from "@/shared/hooks/useStoreQueries";
 import { useConnectedSourcesSchemas } from "@/shared/hooks/useConnectedSourcesSchemas";
 import type { ConnectedSource } from "@/shared/lib/api";
 
@@ -402,7 +402,7 @@ const FileTreeItem = ({
 
 export const FileTree = ({ data, onSourceSelect, onTableDoubleClick }: FileTreeProps) => {
   // Fetch connected sources on component mount
-  const { data: connectedSourcesData } = useConnectedSourcesQuery();
+  const { data: connectedSourcesData } = useStoreConnectedSources();
 
   // Create a set of connected source IDs for easy lookup
   const connectedSourceIds = useMemo(() => {

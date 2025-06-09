@@ -4,8 +4,7 @@ import { useAppStore } from "@/shared/store/useAppStore";
 import { SidebarTabs } from "@/features/sources/SidebarTabs";
 import { QueryTabs } from "@/features/query/QueryTabs";
 import { ChatSidebar } from "@/features/chat/ChatSidebar";
-import { useSourcesQuery } from "@/shared/hooks/useSourcesQuery";
-import { useConnectedSourcesQuery } from "@/shared/hooks/useConnectedSourcesQuery";
+import { useStoreSources, useStoreConnectedSources } from "@/shared/hooks/useStoreQueries";
 import { useSourceSchemasQuery } from "@/shared/hooks/useSourceSchemasQuery";
 import { useSourceStatusQuery } from "@/shared/hooks/useSourceStatusQuery";
 import { sourcesToFileTreeNodes } from "@/shared/lib/fileTreeUtils";
@@ -33,10 +32,10 @@ export function IdePage() {
   } = useAppStore();
 
   // Query for all sources
-  const { data: sources, isLoading: sourcesLoading, error: sourcesError } = useSourcesQuery();
+  const { data: sources, isLoading: sourcesLoading, error: sourcesError } = useStoreSources();
 
   // Get connected sources
-  const { data: connectedSourcesData } = useConnectedSourcesQuery();
+  const { data: connectedSourcesData } = useStoreConnectedSources();
 
   // Create a set of connected source IDs for easy lookup
   const connectedSourceIds = useMemo(() => {

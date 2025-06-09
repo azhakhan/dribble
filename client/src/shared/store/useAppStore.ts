@@ -8,7 +8,10 @@ import {
   createQuery,
   createQueryVersion,
   executeQuery as apiExecuteQuery,
-  getQueryResults
+  getQueryResults,
+  getSources,
+  getConnectedSources,
+  type ConnectedSource
 } from "@/shared/lib/api";
 import type { FileNode } from "@/shared/lib/fileTreeUtils";
 
@@ -82,10 +85,14 @@ interface QueryState {
   queryVersions: Record<string, QueryVersion[]>; // queryId -> versions
   sources: Record<string, Source>; // sourceId -> Source
   connectedSources: Set<string>; // Set of connected source IDs
+  allSources: Source[]; // All available sources
+  connectedSourcesData: ConnectedSource[]; // Connected sources with status
 
   // Loading states
   loadingQueries: Set<string>; // Set of query IDs being loaded
   loadingVersions: Set<string>; // Set of query IDs whose versions are being loaded
+  loadingSources: boolean; // Loading all sources
+  loadingConnectedSources: boolean; // Loading connected sources
 
   // Actions for centralized query management
   loadQuery: (queryId: string) => Promise<void>;
@@ -93,8 +100,13 @@ interface QueryState {
   loadLatestQueryVersion: (queryId: string) => Promise<QueryVersion | null>;
   setQuery: (queryId: string, query: Query) => void;
   setQueryVersions: (queryId: string, versions: QueryVersion[]) => void;
+
+  // Enhanced source management
+  loadSources: () => Promise<void>;
+  loadConnectedSources: () => Promise<void>;
   setSources: (sources: Source[]) => void;
   setConnectedSources: (connectedSourceIds: string[]) => void;
+  setConnectedSourcesData: (connectedSources: ConnectedSource[]) => void;
 
   // Query execution
   executeQuery: (tabId: string, sql?: string) => Promise<void>;
@@ -301,6 +313,10 @@ export const useAppStore = create<AppState>()(
       connectedSources: new Set(),
       loadingQueries: new Set(),
       loadingVersions: new Set(),
+      allSources: [],
+      connectedSourcesData: [],
+      loadingSources: false,
+      loadingConnectedSources: false,
 
       // Panel actions
       setPanelSizes: (sizes) => set({ panelSizes: sizes }),
@@ -898,7 +914,50 @@ export const useAppStore = create<AppState>()(
       // Editor-related actions
       setSchemasLoading: (loading) => set({ schemasLoading: loading }),
       setSchemasError: (error) => set({ schemasError: error }),
-      setConnectedSourceIds: (sourceIds) => set({ connectedSourceIds: sourceIds })
+      setConnectedSourceIds: (sourceIds) => set({ connectedSourceIds: sourceIds }),
+
+      // Enhanced source management
+      loadSources: async () => {
+        const currentState = get();
+        if (currentState.loadingSources) return;
+
+        set({ loadingSources: true });
+        try {
+          const sources = await getSources();
+          set(() => ({
+            allSources: sources,
+            sources: sources.reduce((acc, source) => ({ ...acc, [source.id]: source }), {}),
+            loadingSources: false
+          }));
+        } catch (error) {
+          console.error("Failed to load sources:", error);
+          set({ loadingSources: false });
+        }
+      },
+
+      loadConnectedSources: async () => {
+        const currentState = get();
+        if (currentState.loadingConnectedSources) return;
+
+        set({ loadingConnectedSources: true });
+        try {
+          const connectedSources = await getConnectedSources();
+          set(() => ({
+            connectedSourcesData: connectedSources,
+            connectedSources: new Set(connectedSources.map((s) => s.id)),
+            loadingConnectedSources: false
+          }));
+        } catch (error) {
+          console.error("Failed to load connected sources:", error);
+          set({ loadingConnectedSources: false });
+        }
+      },
+
+      setConnectedSourcesData: (connectedSources) =>
+        set({
+          connectedSourcesData: connectedSources,
+          connectedSources: new Set(connectedSources.map((s) => s.id))
+        })
     }),
     {
       name: "dribble-app-storage",
