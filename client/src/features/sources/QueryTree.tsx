@@ -153,14 +153,10 @@ const QueryTreeSource = ({
 }: QueryTreeSourceProps) => {
   const [isOpen, setIsOpen] = useState(false);
 
-  const handleChevronClick = (e: React.MouseEvent) => {
+  const handleClick = (e: React.MouseEvent) => {
+    e.preventDefault();
     e.stopPropagation();
     setIsOpen(!isOpen);
-  };
-
-  const handleSourceClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    // Optionally handle source selection
   };
 
   const handleCreateQuery = (e: React.MouseEvent) => {
@@ -198,10 +194,11 @@ const QueryTreeSource = ({
     <div>
       <div
         className="flex items-center py-1 px-2 text-sm cursor-pointer hover:bg-accent/50"
-        onClick={handleSourceClick}
+        onClick={handleClick}
+        onDoubleClick={handleClick}
       >
         {/* Chevron for expandable items */}
-        <div className="w-4 h-4 mr-1 flex items-center justify-center" onClick={handleChevronClick}>
+        <div className="w-4 h-4 mr-1 flex items-center justify-center">
           {queries.length > 0 &&
             (isOpen ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />)}
         </div>
