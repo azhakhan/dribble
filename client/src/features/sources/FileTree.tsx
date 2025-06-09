@@ -41,7 +41,6 @@ interface FileTreeProps {
   data: FileNode[];
   onSourceSelect?: (source: { id: string; name: string; dbtype: string }) => void;
   onTableDoubleClick?: (sourceId: string, tableName: string) => void;
-  onTableSelect?: (sourceId: string, tableName: string) => void;
 }
 
 interface FileTreeItemProps {
@@ -49,7 +48,6 @@ interface FileTreeItemProps {
   level?: number;
   onSourceSelect?: (source: { id: string; name: string; dbtype: string }) => void;
   onTableDoubleClick?: (sourceId: string, tableName: string) => void;
-  onTableSelect?: (sourceId: string, tableName: string) => void;
   connectedSourceIds: Set<string>;
 }
 
@@ -58,7 +56,6 @@ const FileTreeItem = ({
   level = 0,
   onSourceSelect,
   onTableDoubleClick,
-  onTableSelect,
   connectedSourceIds
 }: FileTreeItemProps) => {
   // Get state and actions from Zustand store
@@ -154,10 +151,9 @@ const FileTreeItem = ({
     // Check if this is an actual table/view (has sourceId) vs organizational folder (no sourceId)
     const isActualTable = isTable && node.sourceId;
 
-    if (isActualTable && onTableSelect && node.sourceId) {
-      // For actual tables/views, open ephemeral query on single click (without expansion)
-      onTableSelect(node.sourceId, node.name);
-      return; // Don't do anything else for tables
+    if (isActualTable) {
+      // For actual tables/views, only select them on single click (no other actions)
+      return;
     }
 
     // For sources, schemas, folders, and organizational table/view groupings: expand/collapse on single click
@@ -209,11 +205,7 @@ const FileTreeItem = ({
         setIsOpen(!isOpen);
       }
     } else if (isActualTable) {
-      // For actual tables/views: expand children AND open + run ephemeral query
-      if (hasChildren) {
-        setIsOpen(!isOpen);
-      }
-
+      // For actual tables/views: only open + run ephemeral query (don't expand children)
       if (onTableDoubleClick && node.sourceId) {
         // Open and run ephemeral query on double click
         onTableDoubleClick(node.sourceId, node.name);
@@ -417,7 +409,6 @@ const FileTreeItem = ({
               level={level + 1}
               onSourceSelect={onSourceSelect}
               onTableDoubleClick={onTableDoubleClick}
-              onTableSelect={onTableSelect}
               connectedSourceIds={connectedSourceIds}
             />
           ))}
@@ -437,12 +428,7 @@ const FileTreeItem = ({
   );
 };
 
-export const FileTree = ({
-  data,
-  onSourceSelect,
-  onTableDoubleClick,
-  onTableSelect
-}: FileTreeProps) => {
+export const FileTree = ({ data, onSourceSelect, onTableDoubleClick }: FileTreeProps) => {
   // Fetch connected sources on component mount
   const { data: connectedSourcesData } = useStoreConnectedSources();
 
@@ -472,7 +458,6 @@ export const FileTree = ({
             node={node}
             onSourceSelect={onSourceSelect}
             onTableDoubleClick={onTableDoubleClick}
-            onTableSelect={onTableSelect}
             connectedSourceIds={connectedSourceIds}
           />
         ))}

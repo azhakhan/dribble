@@ -10,7 +10,6 @@ interface SidebarTabsProps {
   sourcesLoading: boolean;
   sourcesError: unknown;
   onSourceSelect?: (source: { id: string; name: string; dbtype: string }) => void;
-  onTableSelect?: (sourceId: string, tableName: string) => void;
   onTableDoubleClick?: (sourceId: string, tableName: string) => void;
   onQuerySelect?: (query: Query) => void;
   onQueryDoubleClick?: (query: Query) => void;
@@ -24,7 +23,6 @@ export const SidebarTabs = ({
   sourcesLoading,
   sourcesError,
   onSourceSelect,
-  onTableSelect,
   onTableDoubleClick,
   onQuerySelect,
   onQueryDoubleClick,
@@ -46,7 +44,6 @@ export const SidebarTabs = ({
         <SourcesPanel
           data={sources}
           onSourceSelect={onSourceSelect}
-          onTableSelect={onTableSelect}
           onTableDoubleClick={onTableDoubleClick}
         />
       );

@@ -5,16 +5,10 @@ import type { FileNode } from "@/shared/lib/fileTreeUtils";
 interface SourcesPanelProps {
   data: FileNode[];
   onSourceSelect?: (source: { id: string; name: string; dbtype: string }) => void;
-  onTableSelect?: (sourceId: string, tableName: string) => void;
   onTableDoubleClick?: (sourceId: string, tableName: string) => void;
 }
 
-export const SourcesPanel = ({
-  data,
-  onSourceSelect,
-  onTableSelect,
-  onTableDoubleClick
-}: SourcesPanelProps) => {
+export const SourcesPanel = ({ data, onSourceSelect, onTableDoubleClick }: SourcesPanelProps) => {
   return (
     <div className="h-full flex flex-col">
       {/* Tree content */}
@@ -22,7 +16,6 @@ export const SourcesPanel = ({
         <FileTree
           data={data}
           onSourceSelect={onSourceSelect}
-          onTableSelect={onTableSelect}
           onTableDoubleClick={onTableDoubleClick}
         />
       </div>

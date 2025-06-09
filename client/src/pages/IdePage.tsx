@@ -1,4 +1,4 @@
-import { useMemo, useCallback, useEffect } from "react";
+import { useMemo, useCallback, useEffect, useState } from "react";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 import { useAppStore } from "@/shared/store/useAppStore";
 import { SidebarTabs } from "@/features/sources/SidebarTabs";
@@ -95,11 +95,17 @@ export function IdePage() {
     return sourcesToFileTreeNodes(sources);
   }, [sources]);
 
-  // Get the currently selected query ID based on the active tab
-  const selectedQueryId = useMemo(() => {
-    if (!activeTabId) return undefined;
-    const activeTab = openTabs.find((tab) => tab.id === activeTabId);
-    return activeTab?.queryId || undefined;
+  // Track the selected query ID for highlighting in QueryTree (separate from open tabs)
+  const [selectedQueryId, setSelectedQueryId] = useState<string | undefined>(undefined);
+
+  // Update selected query ID when active tab changes (to keep selection in sync)
+  useEffect(() => {
+    if (activeTabId) {
+      const activeTab = openTabs.find((tab) => tab.id === activeTabId);
+      if (activeTab?.queryId) {
+        setSelectedQueryId(activeTab.queryId);
+      }
+    }
   }, [activeTabId, openTabs]);
 
   // Handle source selection
@@ -191,79 +197,28 @@ export function IdePage() {
     ]
   );
 
-  // Handle table single-click - create or switch to existing ephemeral query tab (without executing)
-  const handleTableSelect = useCallback(
-    async (sourceId: string, tableName: string) => {
-      try {
-        // Extract schema and table from tableName (format: "schema.table")
-        const parts = tableName.split(".");
-        const schema = parts.length > 1 ? parts[0] : "public";
-        const table = parts.length > 1 ? parts[1] : parts[0];
-
-        // Get or create ephemeral query
-        const ephemeralQuery = await getOrCreateEphemeralQuery(sourceId, schema, table);
-        console.log("Ephemeral query for table select:", ephemeralQuery);
-
-        // Check if this ephemeral query is already open in a tab
-        const existingTab = openTabs.find((tab) => tab.queryId === ephemeralQuery.id);
-
-        if (existingTab) {
-          // Switch to existing tab (without executing)
-          setActiveTab(existingTab.id);
-          return;
-        }
-
-        // Get the latest version to get the SQL
-        const latestVersion = await loadLatestQueryVersion(ephemeralQuery.id);
-        const sql = latestVersion?.sql || `SELECT * FROM ${schema}.${table} LIMIT 101`;
-
-        // Create a new tab for this ephemeral query (without executing)
-        openQueryTab({
-          queryId: ephemeralQuery.id,
-          sourceId,
-          title: `${schema}.${table}`,
-          isDirty: false,
-          editorContent: sql,
-          queryResults: null,
-          queryRunning: false,
-          selectedTableData: { sourceId, tableName, query: sql },
-          isLoadingQuery: false,
-          isLoadingVersions: false,
-          lastSavedContent: sql,
-          originalContent: sql
-        });
-      } catch (error) {
-        console.error("Failed to handle table select:", error);
-        // Fallback to old behavior
-        const query = `SELECT * FROM ${tableName} LIMIT 101`;
-        openQueryTab({
-          queryId: null,
-          sourceId,
-          title: tableName,
-          isDirty: false,
-          editorContent: query,
-          queryResults: null,
-          queryRunning: false,
-          selectedTableData: { sourceId, tableName, query },
-          isLoadingQuery: false,
-          isLoadingVersions: false,
-          lastSavedContent: "",
-          originalContent: ""
-        });
-      }
+  // Handle query selection from QueryTree - just select, don't open
+  const handleQuerySelect = useCallback(
+    (query: Query) => {
+      // Just set the selected query ID for UI highlighting
+      setSelectedQueryId(query.id);
     },
-    [getOrCreateEphemeralQuery, loadLatestQueryVersion, openTabs, setActiveTab, openQueryTab]
+    [setSelectedQueryId]
   );
 
-  // Handle query selection from QueryTree
-  const handleQuerySelect = useCallback(
+  // Handle query double-click from QueryTree - open in tab and execute
+  const handleQueryDoubleClick = useCallback(
     async (query: Query) => {
+      // Set as selected
+      setSelectedQueryId(query.id);
+
       // Check if query is already open in a tab
       const existingTab = openTabs.find((tab) => tab.queryId === query.id);
 
       if (existingTab) {
-        // Switch to existing tab
+        // Switch to existing tab and execute
         setActiveTab(existingTab.id);
+        await executeQuery(existingTab.id);
       } else {
         // Open new tab for this query
         openQueryTab({
@@ -286,31 +241,15 @@ export function IdePage() {
         const newTab = state.openTabs[state.openTabs.length - 1]; // Latest tab
 
         if (newTab) {
-          // Load query data in the background
+          // Load query data into the tab
           await loadQueryInTab(newTab.id, query.id);
+
+          // Execute the query after loading
+          await executeQuery(newTab.id);
         }
       }
     },
-    [openTabs, setActiveTab, openQueryTab, loadQueryInTab]
-  );
-
-  // Handle query double-click from QueryTree - open in tab and execute
-  const handleQueryDoubleClick = useCallback(
-    async (query: Query) => {
-      // First, handle the selection (open in tab)
-      await handleQuerySelect(query);
-
-      // Then execute the query after a brief delay to ensure tab is set up
-      setTimeout(async () => {
-        const state = useAppStore.getState();
-        const activeTab = state.openTabs.find((tab) => tab.queryId === query.id);
-
-        if (activeTab) {
-          await executeQuery(activeTab.id);
-        }
-      }, 100);
-    },
-    [handleQuerySelect, executeQuery]
+    [setSelectedQueryId, openTabs, setActiveTab, executeQuery, openQueryTab, loadQueryInTab]
   );
 
   return (
@@ -323,7 +262,6 @@ export function IdePage() {
               sourcesLoading={sourcesLoading}
               sourcesError={sourcesError}
               onSourceSelect={handleSourceSelect}
-              onTableSelect={handleTableSelect}
               onTableDoubleClick={handleTableDoubleClick}
               onQuerySelect={handleQuerySelect}
               onQueryDoubleClick={handleQueryDoubleClick}
