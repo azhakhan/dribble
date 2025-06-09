@@ -298,10 +298,13 @@ export const QueryTree = ({
     return new Map(Object.values(storeSourcesMap).map((source) => [source.id, source]));
   }, [storeSourcesMap]);
 
-  // Group store queries by source ID
+  // Group store queries by source ID, filtering out ephemeral queries for display
   const queriesBySource = useMemo(() => {
     const grouped: Record<string, Query[]> = {};
     Object.values(queries).forEach((query) => {
+      // Skip ephemeral queries in the UI - they shouldn't be shown in the query tree
+      if (query.is_ephemeral) return;
+
       if (!grouped[query.source_id]) {
         grouped[query.source_id] = [];
       }
@@ -318,9 +321,14 @@ export const QueryTree = ({
     return Object.entries(dataToUse)
       .map(([sourceId, sourceQueries]) => {
         const source = sourceMap.get(sourceId);
+        // Filter out ephemeral queries from API data as well
+        const filteredQueries = Array.isArray(sourceQueries)
+          ? sourceQueries.filter((query: Query) => !query.is_ephemeral)
+          : sourceQueries || [];
+
         return {
           source: source || { id: sourceId, name: `Unknown Source`, dbtype: "unknown" },
-          queries: sourceQueries || []
+          queries: filteredQueries
         };
       })
       .filter((item) => item.source);
