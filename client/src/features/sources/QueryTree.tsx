@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { ChevronRight, ChevronDown, Database, FileText, Plus, MoreVertical } from "lucide-react";
 import { PostgresIcon, MySQLIcon, SQLiteIcon } from "../icons";
 import { Button } from "@/components/ui/button";
@@ -256,7 +256,16 @@ export const QueryTree = ({
   onQueryDoubleClick,
   selectedQueryId
 }: QueryTreeProps) => {
-  // Fetch queries grouped by source
+  // Get queries and sources from the centralized store
+  const { queries, sources: storeSourcesMap, setQuery } = useAppStore();
+
+  // Fetch sources to get source names and types (fallback if store is empty)
+  const { data: apiSources, isLoading: sourcesLoading } = useQuery({
+    queryKey: ["sources"],
+    queryFn: getSources
+  });
+
+  // Fetch queries grouped by source (for initial load only)
   const {
     data: queriesData,
     isLoading: queriesLoading,
@@ -266,32 +275,54 @@ export const QueryTree = ({
     queryFn: getQueries
   });
 
-  // Fetch sources to get source names and types
-  const { data: sources, isLoading: sourcesLoading } = useQuery({
-    queryKey: ["sources"],
-    queryFn: getSources
-  });
+  // Update store cache when fresh API data arrives
+  useEffect(() => {
+    if (queriesData) {
+      Object.entries(queriesData).forEach(([, sourceQueries]) => {
+        (sourceQueries as Query[]).forEach((query: Query) => {
+          // Don't overwrite if we already have a more recent version in store
+          if (!queries[query.id]) {
+            setQuery(query.id, query);
+          }
+        });
+      });
+    }
+  }, [queriesData, queries, setQuery]);
 
-  // Create a map of source ID to source data for easy lookup
+  // Create sources map - prefer store data, fallback to API data
   const sourceMap = useMemo(() => {
-    if (!sources) return new Map();
+    const sources =
+      Object.keys(storeSourcesMap).length > 0 ? Object.values(storeSourcesMap) : apiSources || [];
     return new Map(sources.map((source) => [source.id, source]));
-  }, [sources]);
+  }, [storeSourcesMap, apiSources]);
 
-  // Prepare data for rendering
+  // Group store queries by source ID
+  const queriesBySource = useMemo(() => {
+    const grouped: Record<string, Query[]> = {};
+    Object.values(queries).forEach((query) => {
+      if (!grouped[query.source_id]) {
+        grouped[query.source_id] = [];
+      }
+      grouped[query.source_id].push(query);
+    });
+    return grouped;
+  }, [queries]);
+
+  // Prepare data for rendering - prefer store data, fallback to API data
   const sourceQueriesData = useMemo(() => {
-    if (!queriesData || !sources) return [];
+    // Use store queries if available, otherwise fall back to API data
+    const dataToUse = Object.keys(queries).length > 0 ? queriesBySource : queriesData || {};
 
-    return Object.entries(queriesData)
-      .map(([sourceId, queries]) => {
+    return Object.entries(dataToUse)
+      .map(([sourceId, sourceQueries]) => {
         const source = sourceMap.get(sourceId);
         return {
           source: source || { id: sourceId, name: `Unknown Source`, dbtype: "unknown" },
-          queries: queries || []
+          queries: sourceQueries || []
         };
       })
       .filter((item) => item.source);
-  }, [queriesData, sources, sourceMap]);
+  }, [queries, queriesBySource, queriesData, sourceMap]);
 
   if (queriesLoading || sourcesLoading) {
     return (
