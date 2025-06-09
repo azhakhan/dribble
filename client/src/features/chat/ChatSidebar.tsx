@@ -241,7 +241,7 @@ export function ChatSidebar() {
   return (
     <div className="h-full flex flex-col">
       {/* Chat Session Header */}
-      <div className="flex-shrink-0 p-2 font-semibold text-sm border-b border-border/50 bg-muted/10 flex items-center justify-between">
+      <div className="flex-shrink-0 h-10 px-3 font-semibold text-sm border-b border-border/50 bg-muted/10 flex items-center justify-between">
         <span>{getCurrentSessionName()}</span>
 
         {/* Actions on the right */}

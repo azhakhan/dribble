@@ -2,7 +2,7 @@ import { useMemo, useCallback, useEffect } from "react";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 import { useAppStore } from "@/shared/store/useAppStore";
 import { SidebarTabs } from "@/features/sources/SidebarTabs";
-import { OptimizedQueryTabs } from "@/features/query/OptimizedQueryTabs";
+import { QueryTabs } from "@/features/query/QueryTabs";
 import { ChatSidebar } from "@/features/chat/ChatSidebar";
 import { useSourcesQuery } from "@/shared/hooks/useSourcesQuery";
 import { useConnectedSourcesQuery } from "@/shared/hooks/useConnectedSourcesQuery";
@@ -11,7 +11,7 @@ import { useSourceStatusQuery } from "@/shared/hooks/useSourceStatusQuery";
 import { sourcesToFileTreeNodes } from "@/shared/lib/fileTreeUtils";
 import type { Source, ConnectedSource, Query } from "@/shared/lib/api";
 
-export function OptimizedIdePage() {
+export function IdePage() {
   // Get state and actions from Zustand store
   const {
     panelSizes,
@@ -203,7 +203,7 @@ export function OptimizedIdePage() {
         <PanelResizeHandle className="w-1 bg-border hover:bg-primary transition-colors" />
 
         <Panel defaultSize={panelSizes[1]} minSize={30}>
-          <OptimizedQueryTabs />
+          <QueryTabs />
         </Panel>
 
         <PanelResizeHandle className="w-1 bg-border hover:bg-primary transition-colors" />

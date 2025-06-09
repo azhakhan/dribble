@@ -2,7 +2,7 @@ import { X, Plus } from "lucide-react";
 import { useCallback, memo } from "react";
 import { cn } from "@/shared/lib/utils";
 import { Button } from "@/components/ui/button";
-import { SimplifiedQuery } from "./SimplifiedQuery";
+import { Query } from "./Query";
 import { useAppStore } from "@/shared/store/useAppStore";
 
 // Memoized tab button component to prevent unnecessary re-renders
@@ -20,7 +20,7 @@ const TabButton = memo(
   }) => (
     <div
       className={cn(
-        "flex items-center px-3 py-2 border-r cursor-pointer hover:bg-accent group min-w-0",
+        "flex items-center px-2 py-1.5 border-r cursor-pointer hover:bg-accent group min-w-0",
         isActive ? "bg-background border-b-2 border-b-primary" : ""
       )}
       onClick={() => onTabClick(tab.id)}
@@ -34,13 +34,13 @@ const TabButton = memo(
         onClick={(e) => onCloseTab(tab.id, e)}
         aria-label="Close tab"
       >
-        <X className="h-3 w-3" />
+        <X className="h-2.5 w-2.5" />
       </button>
     </div>
   )
 );
 
-function OptimizedQueryTabsComponent() {
+function QueryTabsComponent() {
   // Use selective subscriptions to prevent unnecessary re-renders
   const openTabs = useAppStore((state) => state.openTabs);
   const activeTabId = useAppStore((state) => state.activeTabId);
@@ -125,7 +125,7 @@ function OptimizedQueryTabsComponent() {
   return (
     <div className="h-full flex flex-col">
       {/* Tab bar */}
-      <div className="flex-shrink-0 flex items-stretch border-b bg-muted/30 min-h-[40px] overflow-x-auto">
+      <div className="flex-shrink-0 flex items-stretch border-b border-border/50 bg-muted/10 h-10 overflow-x-auto">
         {openTabs.map((tab) => (
           <TabButton
             key={tab.id}
@@ -139,20 +139,20 @@ function OptimizedQueryTabsComponent() {
         {/* New tab button */}
         <Button
           variant="ghost"
-          size="sm"
+          size="xs"
           onClick={handleNewTab}
           disabled={!selectedSource}
           className="h-full px-3 rounded-none hover:bg-accent flex-shrink-0"
         >
-          <Plus className="h-4 w-4" />
+          <Plus className="h-2 w-2" />
         </Button>
       </div>
 
       {/* Active tab content */}
-      <div className="flex-1 min-h-0">{activeTab && <SimplifiedQuery tabId={activeTab.id} />}</div>
+      <div className="flex-1 min-h-0">{activeTab && <Query tabId={activeTab.id} />}</div>
     </div>
   );
 }
 
 // Memoize the main component but be careful about when it should re-render
-export const OptimizedQueryTabs = memo(OptimizedQueryTabsComponent);
+export const QueryTabs = memo(QueryTabsComponent);

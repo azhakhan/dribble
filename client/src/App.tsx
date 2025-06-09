@@ -4,7 +4,7 @@ import { ModeToggle } from "@/components/mode-toggle";
 import logo from "@/assets/logo.png";
 import { SettingsPage } from "@/pages";
 import { SettingsIcon } from "lucide-react";
-import { OptimizedIdePage } from "./pages/OptimizedIdePage";
+import { IdePage } from "./pages/IdePage";
 
 function TopMenu() {
   const navigate = useNavigate();
@@ -40,8 +40,8 @@ function App() {
         <div className="h-screen flex flex-col overflow-hidden">
           <TopMenu />
           <Routes>
-            <Route path="/" element={<OptimizedIdePage />} />
-            <Route path="/ide" element={<OptimizedIdePage />} />
+            <Route path="/" element={<IdePage />} />
+            <Route path="/ide" element={<IdePage />} />
             <Route path="/settings" element={<SettingsPage />} />
           </Routes>
         </div>

@@ -4,11 +4,11 @@ import { useAppStore } from "@/shared/store/useAppStore";
 import { TableDataDisplay } from "@/features/tables/TableDataDisplay";
 import { SimplifiedEditor } from "@/features/editor/SimplifiedEditor";
 
-interface SimplifiedQueryProps {
+interface QueryProps {
   tabId: string;
 }
 
-function SimplifiedQueryComponent({ tabId }: SimplifiedQueryProps) {
+function QueryComponent({ tabId }: QueryProps) {
   // Use store selectors to get only the data we need for this specific tab
   const currentTab = useAppStore((state) => state.openTabs.find((tab) => tab.id === tabId));
 
@@ -43,4 +43,4 @@ function SimplifiedQueryComponent({ tabId }: SimplifiedQueryProps) {
 
 // Memoize the component to prevent unnecessary re-renders
 // Only re-render if the tabId changes
-export const SimplifiedQuery = memo(SimplifiedQueryComponent);
+export const Query = memo(QueryComponent);
