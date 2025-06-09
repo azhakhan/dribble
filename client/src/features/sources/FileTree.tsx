@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { useAppStore } from "@/shared/store/useAppStore";
 import {
   ChevronRight,
@@ -88,6 +88,17 @@ const FileTreeItem = ({
   // Get source status if this is a source node AND it's connected
   const isConnected = isSource && node.id && connectedSourceIds.has(node.id);
   const { data: sourceStatus } = useSourceStatusQuery(isConnected ? node.id : undefined);
+
+  // Debug connection state for sources
+  useEffect(() => {
+    if (isSource && node.id) {
+      console.log(`🔗 Source ${node.name} (${node.id}) connection state:`, {
+        isConnected,
+        sourceStatus,
+        connectedSourceIds: Array.from(connectedSourceIds)
+      });
+    }
+  }, [isSource, node.id, node.name, isConnected, sourceStatus, connectedSourceIds]);
 
   // Auto-collapse source when it gets disconnected
   useEffect(() => {
@@ -410,11 +421,17 @@ export const FileTree = ({ data, onSourceSelect, onTableDoubleClick }: FileTreeP
   const connectedSourceIds = useMemo(() => {
     if (!connectedSourcesData) return new Set<string>();
     const ids = new Set(connectedSourcesData.map((source: ConnectedSource) => source.id));
+    console.log("🔗 Connected source IDs in FileTree:", Array.from(ids));
     return ids;
   }, [connectedSourcesData]);
 
   // Fetch schemas for all connected sources and update AppState
   useStoreConnectedSourcesSchemas(connectedSourcesData);
+
+  // Debug connected sources changes
+  useEffect(() => {
+    console.log("🔗 Connected sources data changed in FileTree:", connectedSourcesData);
+  }, [connectedSourcesData]);
 
   return (
     <div className="h-full flex flex-col">
