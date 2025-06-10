@@ -2,6 +2,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
 import { useAppStore } from "@/shared/store/useAppStore";
+import { useState, useEffect } from "react";
 
 interface TableFilterBarProps {
   data: object[] | null;
@@ -23,13 +24,48 @@ export const TableFilterBar = ({ data, isLoading }: TableFilterBarProps) => {
   const { currentOffset, whereInput, orderByInput, pageSize, displaySize } =
     getTabFilterState(tabId);
 
+  // Local state for input fields to improve typing performance
+  const [localWhereInput, setLocalWhereInput] = useState(whereInput);
+  const [localOrderByInput, setLocalOrderByInput] = useState(orderByInput);
+
+  // Sync local state with store state when it changes externally
+  useEffect(() => {
+    setLocalWhereInput(whereInput);
+  }, [whereInput]);
+
+  useEffect(() => {
+    setLocalOrderByInput(orderByInput);
+  }, [orderByInput]);
+
+  // Debounced update for WHERE input
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (localWhereInput !== whereInput) {
+        setTableFilterWhere(localWhereInput);
+      }
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [localWhereInput, whereInput, setTableFilterWhere]);
+
+  // Debounced update for ORDER BY input
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (localOrderByInput !== orderByInput) {
+        setTableFilterOrderBy(localOrderByInput);
+      }
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [localOrderByInput, orderByInput, setTableFilterOrderBy]);
+
   // Calculate pagination state
   const dataLength = data?.length || 0;
   const hasNextPage = dataLength === pageSize; // If we got 501 records, there might be more
   const hasPrevPage = currentOffset > 0;
   const currentPage = Math.floor(currentOffset / displaySize) + 1;
 
-  // Check if any filters are active
+  // Check if any filters are active (use store values for this check)
   const hasActiveFilters = whereInput.trim() || orderByInput.trim();
 
   const handlePrevPage = async () => {
@@ -63,6 +99,11 @@ export const TableFilterBar = ({ data, isLoading }: TableFilterBarProps) => {
   const handleWhereSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    // Immediately sync local state to store state
+    if (localWhereInput !== whereInput) {
+      setTableFilterWhere(localWhereInput);
+    }
+
     // Execute query with updated filters
     if (activeTabId) {
       try {
@@ -76,6 +117,11 @@ export const TableFilterBar = ({ data, isLoading }: TableFilterBarProps) => {
   const handleOrderBySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    // Immediately sync local state to store state
+    if (localOrderByInput !== orderByInput) {
+      setTableFilterOrderBy(localOrderByInput);
+    }
+
     // Execute query with updated filters
     if (activeTabId) {
       try {
@@ -88,6 +134,10 @@ export const TableFilterBar = ({ data, isLoading }: TableFilterBarProps) => {
 
   const handleClearFilters = async () => {
     clearTableFilters();
+
+    // Also clear local state
+    setLocalWhereInput("");
+    setLocalOrderByInput("");
 
     // Execute query with cleared filters
     if (activeTabId) {
@@ -107,8 +157,8 @@ export const TableFilterBar = ({ data, isLoading }: TableFilterBarProps) => {
         <form onSubmit={handleWhereSubmit} className="flex items-center gap-1">
           <span className="text-muted-foreground">WHERE:</span>
           <Input
-            value={whereInput}
-            onChange={(e) => setTableFilterWhere(e.target.value)}
+            value={localWhereInput}
+            onChange={(e) => setLocalWhereInput(e.target.value)}
             placeholder="condition"
             className="h-6 text-xs w-32 "
             disabled={isLoading}
@@ -119,8 +169,8 @@ export const TableFilterBar = ({ data, isLoading }: TableFilterBarProps) => {
         <form onSubmit={handleOrderBySubmit} className="flex items-center gap-1">
           <span className="text-muted-foreground">ORDER BY:</span>
           <Input
-            value={orderByInput}
-            onChange={(e) => setTableFilterOrderBy(e.target.value)}
+            value={localOrderByInput}
+            onChange={(e) => setLocalOrderByInput(e.target.value)}
             placeholder="column"
             className="h-6 text-xs w-32"
             disabled={isLoading}
