@@ -195,6 +195,9 @@ export function MiniMonacoSQL({
         fixedOverflowWidgets: true,
         // Disable all validation and error checking
         renderValidationDecorations: "off",
+        // Remove borders and outlines
+        renderLineHighlight: "none",
+        renderWhitespace: "none",
         // Autocomplete options
         quickSuggestions: {
           other: true,
@@ -273,7 +276,7 @@ export function MiniMonacoSQL({
       )}
       style={{
         height: "24px",
-        width: "150px"
+        width: "160px"
       }}
       onClick={() => {
         // Ensure editor gets focus when container is clicked
@@ -285,9 +288,9 @@ export function MiniMonacoSQL({
       {/* Monaco editor container */}
       <div
         ref={hostRef}
-        className="absolute inset-0"
+        className="absolute inset-0 [&_.monaco-editor]:!border-none [&_.monaco-editor_.monaco-editor-background]:!border-none [&_.monaco-editor_.inputarea]:!border-none [&_.monaco-editor_.inputarea]:!outline-none [&_.monaco-editor_.view-overlays]:!border-none [&_.monaco-editor_.margin]:!border-none"
         style={{
-          height: "30px"
+          height: "24px"
         }}
       />
     </div>
