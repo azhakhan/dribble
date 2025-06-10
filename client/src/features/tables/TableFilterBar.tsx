@@ -4,12 +4,11 @@ import { ChevronLeft, ChevronRight, X } from "lucide-react";
 import { useAppStore } from "@/shared/store/useAppStore";
 
 interface TableFilterBarProps {
-  title: string;
   data: object[] | null;
   isLoading: boolean;
 }
 
-export const TableFilterBar = ({ title, data, isLoading }: TableFilterBarProps) => {
+export const TableFilterBar = ({ data, isLoading }: TableFilterBarProps) => {
   const {
     activeTabId,
     getTabFilterState,
@@ -29,11 +28,6 @@ export const TableFilterBar = ({ title, data, isLoading }: TableFilterBarProps) 
   const hasNextPage = dataLength === pageSize; // If we got 501 records, there might be more
   const hasPrevPage = currentOffset > 0;
   const currentPage = Math.floor(currentOffset / displaySize) + 1;
-
-  // Display record count info
-  const startRecord = currentOffset + 1;
-  const endRecord = Math.min(currentOffset + displaySize, currentOffset + dataLength);
-  const displayingCount = Math.min(dataLength, displaySize);
 
   // Check if any filters are active
   const hasActiveFilters = whereInput.trim() || orderByInput.trim();
@@ -107,27 +101,6 @@ export const TableFilterBar = ({ title, data, isLoading }: TableFilterBarProps) 
 
   return (
     <div className="flex-shrink-0 p-2 border-b space-y-2">
-      {/* Title and record count */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <span className="font-semibold text-sm">{title}</span>
-          {hasActiveFilters && (
-            <span className="text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full">
-              Filtered
-            </span>
-          )}
-        </div>
-        <div className="text-xs text-muted-foreground">
-          {isLoading
-            ? "Loading..."
-            : dataLength > 0
-              ? `Showing ${displayingCount} of ${startRecord}-${endRecord}${
-                  hasNextPage ? "+" : ""
-                } records`
-              : "No records"}
-        </div>
-      </div>
-
       {/* Filter inputs and pagination */}
       <div className="flex items-center gap-2 text-xs">
         {/* Where clause input */}

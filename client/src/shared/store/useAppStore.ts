@@ -1672,7 +1672,7 @@ export const useAppStore = create<AppState>()(
           // Load the latest version to get the SQL
           const latestVersion = await currentState.loadLatestQueryVersion(ephemeralQuery.id);
 
-          const sql = latestVersion?.sql || `SELECT * FROM ${schema}.${table} LIMIT 101`;
+          const sql = latestVersion?.sql || `SELECT * FROM ${schema}.${table}`;
 
           // Create a new tab for this ephemeral query
           // Auto-execution will handle running the query automatically
@@ -1693,7 +1693,7 @@ export const useAppStore = create<AppState>()(
         } catch (error) {
           console.error("Failed to handle table double-click:", error);
           // Fallback to simple query - auto-execution will handle running
-          const query = `SELECT * FROM ${tableName} LIMIT 101`;
+          const query = `SELECT * FROM ${tableName}`;
           await currentState.openQueryTab({
             queryId: null,
             sourceId,

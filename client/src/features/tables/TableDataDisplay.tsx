@@ -19,15 +19,12 @@ export const TableDataDisplay = ({
   const displayData = queryResults;
   const isLoading = isQueryRunning;
 
-  // Determine the title to show
-  const title = tableData ? tableData.tableName : queryResults ? "Query Results" : "";
-
   return (
     <div className="h-full flex flex-col">
       {tableData || queryResults ? (
         <>
           {/* Filter bar with title */}
-          <TableFilterBar title={title} data={displayData as object[]} isLoading={isLoading} />
+          <TableFilterBar data={displayData as object[]} isLoading={isLoading} />
 
           {/* Scrollable content */}
           <div className="flex-1 min-h-0">

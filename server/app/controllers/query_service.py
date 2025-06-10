@@ -99,10 +99,10 @@ class QueryService:
         if len(parts) >= 3:
             schema = parts[-2]
             table = parts[-1]
-            sql = f"SELECT * FROM {schema}.{table} LIMIT 101"
+            sql = f"SELECT * FROM {schema}.{table}"
         else:
             # Fallback if format is unexpected
-            sql = f"SELECT * FROM {rest} LIMIT 101"
+            sql = f"SELECT * FROM {rest}"
 
         version_request = CreateQueryVersionRequest(
             sql=sql, save_trigger="manual", query_id=query.id, created_by=user_id
