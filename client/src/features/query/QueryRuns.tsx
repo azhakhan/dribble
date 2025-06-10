@@ -78,7 +78,7 @@ const columns: ColumnDef<QueryRun>[] = [
       const run = row.original;
       const message = run.error_message || run.result_message || "-";
 
-      return <div className={`whitespace-normal break-words`}>{message}</div>;
+      return <div className={`whitespace-normal text-md`}>{message}</div>;
     }
   },
   {
@@ -212,19 +212,19 @@ export function QueryRuns({ queryId, onBack }: QueryRunsProps) {
           </Table>
 
           {/* Pagination */}
-          <div className="flex items-center justify-between space-x-2 py-4">
-            <div className="text-sm text-muted-foreground">
+          <div className="flex items-center justify-between space-x-2 py-4 px-2">
+            <div className="text-xs text-muted-foreground text-xs">
               {table.getFilteredSelectedRowModel().rows.length} of{" "}
               {table.getFilteredRowModel().rows.length} row(s) selected.
             </div>
             <div className="flex items-center space-x-2">
-              <p className="text-sm font-medium">Rows per page</p>
+              <p className="text-xs font-medium">Rows per page</p>
               <select
                 value={table.getState().pagination.pageSize}
                 onChange={(e) => {
                   table.setPageSize(Number(e.target.value));
                 }}
-                className="h-8 w-[70px] rounded border border-input bg-background px-3 py-1 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                className="h-6 w-[70px] border-none px-3 py-1 text-xs"
               >
                 {[10, 20, 25, 30, 50].map((pageSize) => (
                   <option key={pageSize} value={pageSize}>
@@ -236,20 +236,22 @@ export function QueryRuns({ queryId, onBack }: QueryRunsProps) {
             <div className="flex items-center space-x-2">
               <Button
                 variant="outline"
-                size="sm"
+                size="xs"
                 onClick={() => table.previousPage()}
                 disabled={!table.getCanPreviousPage()}
+                className="text-xs"
               >
                 Previous
               </Button>
-              <div className="flex items-center justify-center text-sm font-medium">
+              <div className="flex items-center justify-center text-xs font-medium">
                 Page {table.getState().pagination.pageIndex + 1} of {table.getPageCount()}
               </div>
               <Button
                 variant="outline"
-                size="sm"
+                size="xs"
                 onClick={() => table.nextPage()}
                 disabled={!table.getCanNextPage()}
+                className="text-xs"
               >
                 Next
               </Button>
