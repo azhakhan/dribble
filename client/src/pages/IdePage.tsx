@@ -24,17 +24,13 @@ export function IdePage() {
     sourceSchemaErrors,
     setSourceSchemaError,
     setSourceStatus,
-    openQueryTab,
     activeTabId,
     openTabs,
-    setActiveTab,
     setSources,
     setConnectedSources,
-    loadQueryInTab,
-    executeQuery,
-    getOrCreateEphemeralQuery,
-    loadLatestQueryVersion,
-    initializeQueryTabsRuntimeStates
+    initializeQueryTabsRuntimeStates,
+    openQueryFromTree,
+    openTableFromTree
   } = useAppStore();
 
   // Initialize runtime states for query tabs on app load
@@ -122,112 +118,12 @@ export function IdePage() {
     [setSelectedSource]
   );
 
-  // Handle table double-click - create or switch to existing ephemeral query tab
+  // Handle table double-click - create ephemeral query and execute
   const handleTableDoubleClick = useCallback(
     async (sourceId: string, tableName: string) => {
-      try {
-        // Extract schema and table from tableName (format: "schema.table")
-        const parts = tableName.split(".");
-        const schema = parts.length > 1 ? parts[0] : "public";
-        const table = parts.length > 1 ? parts[1] : parts[0];
-
-        // Get or create ephemeral query
-        const ephemeralQuery = await getOrCreateEphemeralQuery(sourceId, schema, table);
-
-        // Check if this ephemeral query is already open in a tab
-        const existingTab = openTabs.find((tab) => tab.queryId === ephemeralQuery.id);
-
-        if (existingTab) {
-          // Switch to existing tab and execute query
-          setActiveTab(existingTab.id);
-
-          // Make sure the tab has the correct content loaded
-          if (!existingTab.editorContent) {
-            const latestVersion = await loadLatestQueryVersion(ephemeralQuery.id);
-            const sql = latestVersion?.sql || `SELECT * FROM ${schema}.${table} LIMIT 101`;
-
-            // Update tab content before executing
-            const { openTabs: currentTabs, updateTabContent } = useAppStore.getState();
-            const currentTab = currentTabs.find((tab) => tab.id === existingTab.id);
-            if (currentTab) {
-              updateTabContent(existingTab.id, {
-                editorContent: sql,
-                lastSavedContent: sql,
-                originalContent: sql
-              });
-            }
-          }
-
-          await executeQuery(existingTab.id);
-          return;
-        }
-
-        // Get the latest version to get the SQL
-        const latestVersion = await loadLatestQueryVersion(ephemeralQuery.id);
-        const sql = latestVersion?.sql || `SELECT * FROM ${schema}.${table} LIMIT 101`;
-
-        // Create a new tab for this ephemeral query
-        openQueryTab({
-          queryId: ephemeralQuery.id,
-          sourceId,
-          title: `${schema}.${table}`,
-          isDirty: false,
-          editorContent: sql,
-          queryResults: null,
-          queryRunning: false, // Don't set to running yet
-          selectedTableData: { sourceId, tableName, query: sql },
-          isLoadingQuery: false,
-          isLoadingVersions: false,
-          lastSavedContent: sql,
-          originalContent: sql
-        });
-
-        // Execute the query immediately after tab creation
-        // Use requestAnimationFrame to ensure tab is fully created in the UI
-        requestAnimationFrame(async () => {
-          try {
-            const state = useAppStore.getState();
-            const newTab = state.openTabs.find((tab) => tab.queryId === ephemeralQuery.id);
-
-            if (newTab) {
-              // Set the tab as active before executing
-              setActiveTab(newTab.id);
-
-              // Execute the query
-              await executeQuery(newTab.id);
-            }
-          } catch (error) {
-            console.error("Failed to execute ephemeral query:", error);
-          }
-        });
-      } catch (error) {
-        console.error("Failed to handle table double-click:", error);
-        // Fallback to old behavior
-        const query = `SELECT * FROM ${tableName} LIMIT 101`;
-        openQueryTab({
-          queryId: null,
-          sourceId,
-          title: tableName,
-          isDirty: false,
-          editorContent: query,
-          queryResults: null,
-          queryRunning: true,
-          selectedTableData: { sourceId, tableName, query },
-          isLoadingQuery: false,
-          isLoadingVersions: false,
-          lastSavedContent: "",
-          originalContent: ""
-        });
-      }
+      await openTableFromTree(sourceId, tableName);
     },
-    [
-      getOrCreateEphemeralQuery,
-      loadLatestQueryVersion,
-      openTabs,
-      setActiveTab,
-      executeQuery,
-      openQueryTab
-    ]
+    [openTableFromTree]
   );
 
   // Handle query selection from QueryTree - just select, don't open
@@ -245,44 +141,10 @@ export function IdePage() {
       // Set as selected
       setSelectedQueryId(query.id);
 
-      // Check if query is already open in a tab
-      const existingTab = openTabs.find((tab) => tab.queryId === query.id);
-
-      if (existingTab) {
-        // Switch to existing tab and execute
-        setActiveTab(existingTab.id);
-        await executeQuery(existingTab.id);
-      } else {
-        // Open new tab for this query
-        openQueryTab({
-          queryId: query.id,
-          sourceId: query.source_id,
-          title: query.name || `Query ${query.id.slice(0, 8)}`,
-          isDirty: false,
-          editorContent: "", // Will be loaded by loadQueryInTab
-          queryResults: null,
-          queryRunning: false,
-          selectedTableData: null,
-          isLoadingQuery: true,
-          isLoadingVersions: true,
-          lastSavedContent: "",
-          originalContent: ""
-        });
-
-        // Get the newly created tab ID from the store
-        const state = useAppStore.getState();
-        const newTab = state.openTabs[state.openTabs.length - 1]; // Latest tab
-
-        if (newTab) {
-          // Load query data into the tab
-          await loadQueryInTab(newTab.id, query.id);
-
-          // Execute the query after loading
-          await executeQuery(newTab.id);
-        }
-      }
+      // Use unified helper
+      await openQueryFromTree(query);
     },
-    [setSelectedQueryId, openTabs, setActiveTab, executeQuery, openQueryTab, loadQueryInTab]
+    [setSelectedQueryId, openQueryFromTree]
   );
 
   return (

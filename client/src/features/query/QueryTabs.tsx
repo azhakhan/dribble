@@ -50,23 +50,27 @@ function QueryTabsComponent() {
   const { openQueryTab, closeQueryTab, setActiveTab } = useAppStore();
 
   // Handle creating a new query tab
-  const handleNewTab = useCallback(() => {
+  const handleNewTab = useCallback(async () => {
     if (!selectedSource) return;
 
-    openQueryTab({
-      queryId: null,
-      sourceId: selectedSource.id,
-      title: "Untitled Query",
-      isDirty: false,
-      editorContent: "",
-      queryResults: null,
-      queryRunning: false,
-      selectedTableData: null,
-      isLoadingQuery: false,
-      isLoadingVersions: false,
-      lastSavedContent: "",
-      originalContent: ""
-    });
+    try {
+      await openQueryTab({
+        queryId: null,
+        sourceId: selectedSource.id,
+        title: "Untitled Query",
+        isDirty: false,
+        editorContent: "",
+        queryResults: null,
+        queryRunning: false,
+        selectedTableData: null,
+        isLoadingQuery: false,
+        isLoadingVersions: false,
+        lastSavedContent: "",
+        originalContent: ""
+      });
+    } catch (error) {
+      console.error("Failed to open new query tab:", error);
+    }
   }, [selectedSource, openQueryTab]);
 
   // Handle closing a tab
