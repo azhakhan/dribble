@@ -2,7 +2,7 @@ import type { Source } from "@/shared/lib/api";
 
 export interface FileNode {
   name: string;
-  type: "file" | "folder" | "source" | "schema" | "table" | "column";
+  type: "file" | "folder" | "source" | "schema" | "table" | "view" | "column";
   id?: string;
   sourceId?: string;
   dbtype?: string;
@@ -113,7 +113,7 @@ export const schemaToFileTreeNodes = (
         const view = schema.views[viewName];
         const viewNode: FileNode = {
           name: viewName,
-          type: "table", // Reusing the table type for views
+          type: "view", // Use proper view type
           id: `${sourceId}_${schemaName}_${viewName}`,
           sourceId: sourceId,
           children: []

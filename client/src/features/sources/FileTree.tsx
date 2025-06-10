@@ -40,14 +40,14 @@ import type { ConnectedSource } from "@/shared/lib/api";
 interface FileTreeProps {
   data: FileNode[];
   onSourceSelect?: (source: { id: string; name: string; dbtype: string }) => void;
-  onTableDoubleClick?: (sourceId: string, tableName: string) => void;
+  onTableDoubleClick?: (sourceId: string, tableName: string, nodeType: "table" | "view") => void;
 }
 
 interface FileTreeItemProps {
   node: FileNode;
   level?: number;
   onSourceSelect?: (source: { id: string; name: string; dbtype: string }) => void;
-  onTableDoubleClick?: (sourceId: string, tableName: string) => void;
+  onTableDoubleClick?: (sourceId: string, tableName: string, nodeType: "table" | "view") => void;
   connectedSourceIds: Set<string>;
   parentContext?: { sourceId?: string; schemaName?: string };
 }
@@ -64,9 +64,9 @@ const generateNodeId = (
   if (node.type === "schema" && node.sourceId) {
     return `schema-${node.sourceId}-${node.name}`;
   }
-  if (node.type === "table" && node.sourceId && node.id) {
-    // For actual tables/views, use their full ID
-    return `table-${node.id}`;
+  if ((node.type === "table" || node.type === "view") && node.sourceId && node.id) {
+    // For actual tables/views, use their full ID with type prefix
+    return `${node.type}-${node.id}`;
   }
   if (node.type === "folder" && node.sourceId) {
     // Handle organizational folders like "Tables" and "Views"
@@ -120,6 +120,7 @@ const FileTreeItem = ({
   const isSource = node.type === "source";
   const isSchema = node.type === "schema";
   const isTable = node.type === "table";
+  const isView = node.type === "view";
   const isColumn = node.type === "column";
 
   // React Query hooks
@@ -182,7 +183,7 @@ const FileTreeItem = ({
     }
 
     // Check if this is an actual table/view (has id) vs organizational folder (no id)
-    const isActualTable = isTable && node.id;
+    const isActualTable = (isTable || isView) && node.id;
 
     if (isActualTable) {
       // For actual tables/views, only select them on single click (no other actions)
@@ -190,7 +191,7 @@ const FileTreeItem = ({
     }
 
     // For sources, schemas, folders, and organizational table/view groupings: expand/collapse on single click
-    if ((isSource && isConnected) || isSchema || isFolder || (isTable && !node.id)) {
+    if ((isSource && isConnected) || isSchema || isFolder || ((isTable || isView) && !node.id)) {
       if (hasChildren) {
         setNodeExpanded(nodeId, !isOpen);
       }
@@ -222,7 +223,7 @@ const FileTreeItem = ({
     }
 
     // Check if this is an actual table/view (has id) vs organizational folder (no id)
-    const isActualTable = isTable && node.id;
+    const isActualTable = (isTable || isView) && node.id;
 
     if (isSource) {
       // If source is not connected, connect to it first
@@ -232,7 +233,7 @@ const FileTreeItem = ({
         // If source is already connected, toggle children
         setNodeExpanded(nodeId, !isOpen);
       }
-    } else if (isSchema || isFolder || (isTable && !node.id)) {
+    } else if (isSchema || isFolder || ((isTable || isView) && !node.id)) {
       // For schemas, folders, and organizational table/view groupings: toggle children visibility
       if (hasChildren) {
         setNodeExpanded(nodeId, !isOpen);
@@ -241,7 +242,8 @@ const FileTreeItem = ({
       // For actual tables/views: only open + run ephemeral query (don't expand children)
       if (onTableDoubleClick && node.sourceId) {
         // Open and run ephemeral query on double click
-        onTableDoubleClick(node.sourceId, node.name);
+        const nodeType = node.type === "view" ? "view" : "table";
+        onTableDoubleClick(node.sourceId, node.name, nodeType);
       }
     }
   };
@@ -284,8 +286,8 @@ const FileTreeItem = ({
       }
     } else if (isSchema) {
       return <Database className="h-4 w-4" strokeWidth={1} />;
-    } else if (isTable) {
-      // Both tables and views are "table" type
+    } else if (isTable || isView) {
+      // Tables and views use table icon
       return <Table className="h-4 w-4" strokeWidth={1} />;
     } else if (isColumn) {
       // If it's a column, use the column type icon instead of the generic Columns icon

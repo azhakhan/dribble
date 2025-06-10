@@ -127,8 +127,8 @@ export function IdePage() {
 
   // Handle table double-click - create ephemeral query and execute
   const handleTableDoubleClick = useCallback(
-    async (sourceId: string, tableName: string) => {
-      await openTableFromTree(sourceId, tableName);
+    async (sourceId: string, tableName: string, nodeType: "table" | "view") => {
+      await openTableFromTree(sourceId, tableName, nodeType);
     },
     [openTableFromTree]
   );

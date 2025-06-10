@@ -181,7 +181,12 @@ interface QueryState {
   updateQueryName: (queryId: string, newName: string) => Promise<void>;
 
   // Ephemeral query management
-  getOrCreateEphemeralQuery: (sourceId: string, schema: string, table: string) => Promise<Query>;
+  getOrCreateEphemeralQuery: (
+    sourceId: string,
+    schema: string,
+    table: string,
+    nodeType: "table" | "view"
+  ) => Promise<Query>;
   convertEphemeralToRegular: (queryId: string, name: string) => Promise<Query>;
 
   // Auto-execution helper
@@ -189,7 +194,11 @@ interface QueryState {
 
   // Unified query/table opening helpers
   openQueryFromTree: (query: Query) => Promise<void>;
-  openTableFromTree: (sourceId: string, tableName: string) => Promise<void>;
+  openTableFromTree: (
+    sourceId: string,
+    tableName: string,
+    nodeType: "table" | "view"
+  ) => Promise<void>;
 }
 
 // FileTree state
@@ -1340,9 +1349,9 @@ export const useAppStore = create<AppState>()(
         }
       },
 
-      getOrCreateEphemeralQuery: async (sourceId, schema, table) => {
+      getOrCreateEphemeralQuery: async (sourceId, schema, table, nodeType) => {
         try {
-          const query = await getOrCreateEphemeralQuery(sourceId, schema, table);
+          const query = await getOrCreateEphemeralQuery(sourceId, schema, table, nodeType);
 
           console.log("Created/retrieved ephemeral query:", query);
 
@@ -1610,7 +1619,11 @@ export const useAppStore = create<AppState>()(
       },
 
       // Unified helper to open table from tree (table double-click)
-      openTableFromTree: async (sourceId: string, tableName: string) => {
+      openTableFromTree: async (
+        sourceId: string,
+        tableName: string,
+        nodeType: "table" | "view"
+      ) => {
         const currentState = get();
 
         try {
@@ -1619,11 +1632,12 @@ export const useAppStore = create<AppState>()(
           const schema = parts.length > 1 ? parts[0] : "public";
           const table = parts.length > 1 ? parts[1] : parts[0];
 
-          // Get or create ephemeral query for this table
+          // Get or create ephemeral query for this table/view
           const ephemeralQuery = await currentState.getOrCreateEphemeralQuery(
             sourceId,
             schema,
-            table
+            table,
+            nodeType
           );
 
           // Load the latest version to get the SQL

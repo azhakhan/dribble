@@ -6,12 +6,26 @@ The **Ephemeral Queries** feature enables one-off, non-persistent queries used f
 
 ## Key Concepts
 
+### Preview Key Format
+
+The `preview_key` format has been updated to distinguish between tables and views:
+
+- **New Format**: `table-source_id.schema.table_name` or `view-source_id.schema.view_name`
+- **Legacy Format**: `source_id.schema.table` (still supported for backward compatibility)
+- **Purpose**: Prevents conflicts when table and view names are identical
+- **Examples**:
+  - Table: `table-abc123.public.users`
+  - View: `view-abc123.public.users`
+
+## Key Concepts
+
 ### Ephemeral Query
 
-- **Purpose**: Temporary queries for table previews
-- **Lifecycle**: Created on table double-click, converted to regular query when user edits and runs
+- **Purpose**: Temporary queries for table and view previews
+- **Lifecycle**: Created on table/view double-click, converted to regular query when user edits and runs
 - **Visibility**: Hidden from QueryTree UI but stored in backend for functionality
-- **Identification**: Uses `preview_key` in format `source_id.schema.table`
+- **Identification**: Uses `preview_key` in format `table-source_id.schema.table` or `view-source_id.schema.view`
+- **Conflict Resolution**: Table and view names can now coexist without conflicts due to type prefix
 
 ### Regular Query
 
@@ -27,7 +41,7 @@ The **Ephemeral Queries** feature enables one-off, non-persistent queries used f
 ```sql
 -- Added to queries table
 is_ephemeral = Column(Boolean, default=False)
-preview_key = Column(String, nullable=True)  -- Format: "source_id.schema.table"
+preview_key = Column(String, nullable=True)  -- Format: "table-source_id.schema.table" or "view-source_id.schema.view"
 ```
 
 ### Migration
@@ -247,12 +261,12 @@ const handleTableDoubleClick = async (sourceId: string, tableName: string) => {
 
 ### Default Limits
 
-- **Preview Query**: `SELECT * FROM schema.table LIMIT 101`
-- **Name Format**: `"source schema table YYYY-MM-DD"`
+- **Preview Query**: `SELECT * FROM schema.table LIMIT 101` (same for tables and views)
+- **Name Format**: `"source schema table YYYY-MM-DD"` (same for tables and views)
 
 ### Database Constraints
 
-- **preview_key**: Nullable string, no unique constraint (allows multiple users)
+- **preview_key**: Nullable string, no unique constraint (allows multiple users). Format distinguishes tables from views.
 - **is_ephemeral**: Boolean, defaults to `false`
 
 ## Testing Considerations
