@@ -1,15 +1,16 @@
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
 import { useAppStore } from "@/shared/store/useAppStore";
 import { useState, useEffect } from "react";
+import { MiniMonacoSQL } from "@/components/ui/mini-monaco-sql";
 
 interface TableFilterBarProps {
   data: object[] | null;
   isLoading: boolean;
+  columns?: Array<{ name: string; type: string }>;
 }
 
-export const TableFilterBar = ({ data, isLoading }: TableFilterBarProps) => {
+export const TableFilterBar = ({ data, isLoading, columns }: TableFilterBarProps) => {
   const {
     activeTabId,
     getTabFilterState,
@@ -156,24 +157,26 @@ export const TableFilterBar = ({ data, isLoading }: TableFilterBarProps) => {
         {/* Where clause input */}
         <form onSubmit={handleWhereSubmit} className="flex items-center gap-1">
           <span className="text-muted-foreground">WHERE:</span>
-          <Input
+          <MiniMonacoSQL
             value={localWhereInput}
-            onChange={(e) => setLocalWhereInput(e.target.value)}
-            placeholder="condition"
-            className="h-6 text-xs w-32 "
+            onChange={(value: string) => setLocalWhereInput(value)}
+            className="h-6 text-xs w-32"
             disabled={isLoading}
+            mode="where"
+            columns={columns}
           />
         </form>
 
         {/* Order by input */}
         <form onSubmit={handleOrderBySubmit} className="flex items-center gap-1">
           <span className="text-muted-foreground">ORDER BY:</span>
-          <Input
+          <MiniMonacoSQL
             value={localOrderByInput}
-            onChange={(e) => setLocalOrderByInput(e.target.value)}
-            placeholder="column"
+            onChange={(value: string) => setLocalOrderByInput(value)}
             className="h-6 text-xs w-32"
             disabled={isLoading}
+            mode="orderby"
+            columns={columns}
           />
         </form>
 

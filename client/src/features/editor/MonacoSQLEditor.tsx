@@ -140,7 +140,7 @@ export function MonacoSQLEditor({
         suggestOnTriggerCharacters: true,
         acceptSuggestionOnCommitCharacter: true,
         acceptSuggestionOnEnter: "on",
-        wordBasedSuggestions: "off",
+        wordBasedSuggestions: false,
         suggest: {
           showKeywords: true,
           showSnippets: true,
