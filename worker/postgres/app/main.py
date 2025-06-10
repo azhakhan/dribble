@@ -474,7 +474,7 @@ async def run_query_version(request: QueryVersionRequest):
             )
 
             # Call the server to update the query run
-            server_url = os.environ.get("SERVER_URL", "http://localhost:8000")
+            server_url = os.environ.get("SERVER_URL", "http://server:8000")
             try:
                 response = requests.put(
                     f"{server_url}/runs/{request.query_run_id}",
@@ -505,7 +505,7 @@ async def run_query_version(request: QueryVersionRequest):
             )
 
             # Call the server to update the query run with error
-            server_url = os.environ.get("SERVER_URL", "http://localhost:8000")
+            server_url = os.environ.get("SERVER_URL", "http://server:8000")
             try:
                 response = requests.put(
                     f"{server_url}/runs/{request.query_run_id}",

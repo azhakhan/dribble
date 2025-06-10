@@ -8,14 +8,15 @@ import {
   createQuery,
   createQueryVersion,
   updateQuery,
-  executeQuery as apiExecuteQuery,
-  getQueryResults,
+  executeQueryVersionRun,
+  getQueryRunResults,
   getSources,
   getConnectedSources,
   getSourceSchemas,
   getOrCreateEphemeralQuery,
   convertEphemeralToRegular,
-  type ConnectedSource
+  type ConnectedSource,
+  type CreateQueryRunRequest
 } from "@/shared/lib/api";
 import type { FileNode } from "@/shared/lib/fileTreeUtils";
 
@@ -829,15 +830,64 @@ export const useAppStore = create<AppState>()(
         }));
 
         try {
-          // Step 1: Save query version if this tab has an existing query and content has changed
-          // Skip version saving for ephemeral queries that haven't been manually modified
-          const shouldSaveVersion =
-            tab.queryId &&
-            queryToRun.trim() !== tab.lastSavedContent.trim() &&
-            !(currentState.queries[tab.queryId]?.is_ephemeral && !tab.isDirty);
+          // Step 1: Ensure we have a query and get the version ID for what user wants to execute
+          let versionId: string;
 
-          if (shouldSaveVersion && tab.queryId) {
-            await currentState.saveQueryVersion(tab.queryId, queryToRun, "run");
+          if (tab.queryId) {
+            // We have an existing query
+            const currentLatestVersion = await currentState.loadLatestQueryVersion(tab.queryId);
+
+            // Check if what user wants to execute is different from the latest saved version
+            const shouldSaveNewVersion =
+              !currentLatestVersion || queryToRun.trim() !== currentLatestVersion.sql.trim();
+
+            if (shouldSaveNewVersion) {
+              // Save the current editor content as a new version
+              await currentState.saveQueryVersion(tab.queryId, queryToRun, "run");
+
+              // Get the version we just created
+              const newVersion = await currentState.loadLatestQueryVersion(tab.queryId);
+              if (!newVersion) {
+                throw new Error("Failed to create query version");
+              }
+              versionId = newVersion.id;
+
+              // Update the tab's saved content tracking
+              set((prevState) => ({
+                openTabs: prevState.openTabs.map((t) =>
+                  t.id === tabId
+                    ? {
+                        ...t,
+                        lastSavedContent: queryToRun,
+                        isDirty: false // Mark as clean since we just saved
+                      }
+                    : t
+                )
+              }));
+            } else {
+              // Content is the same as latest version, use existing version
+              versionId = currentLatestVersion.id;
+            }
+          } else {
+            // No query exists, create a new one
+            const newQueryId = await currentState.createNewQuery(tab.sourceId);
+
+            // Update the tab to reference the new query
+            set((prevState) => ({
+              openTabs: prevState.openTabs.map((t) =>
+                t.id === tabId ? { ...t, queryId: newQueryId } : t
+              )
+            }));
+
+            // Save the current editor content as the first version
+            await currentState.saveQueryVersion(newQueryId, queryToRun, "run");
+
+            // Get the version we just created
+            const newVersion = await currentState.loadLatestQueryVersion(newQueryId);
+            if (!newVersion) {
+              throw new Error("Failed to create query version");
+            }
+            versionId = newVersion.id;
 
             // Update the tab's saved content tracking
             set((prevState) => ({
@@ -853,8 +903,15 @@ export const useAppStore = create<AppState>()(
             }));
           }
 
-          // Step 2: Execute query and get a query ID
-          const queryId = await apiExecuteQuery(tab.sourceId, queryToRun);
+          // Step 2: Create a query run and execute
+          const runRequest: CreateQueryRunRequest = {
+            query_version_id: versionId,
+            modifiers: undefined // TODO: Add support for modifiers from UI
+          };
+
+          console.log("Creating query run with request:", runRequest);
+          const runId = await executeQueryVersionRun(runRequest);
+          console.log("Query run created with ID:", runId);
 
           // Step 3: Poll for results until we get a final response
           const pollForResults = async (maxAttempts = 50): Promise<object[]> => {
@@ -864,13 +921,16 @@ export const useAppStore = create<AppState>()(
             }
 
             try {
-              const results = await getQueryResults(queryId);
+              const results = await getQueryRunResults(runId);
+              console.log(`Polling attempt ${51 - maxAttempts}, results:`, results);
 
               // Check if results is an array (query completed successfully)
               if (Array.isArray(results)) {
+                console.log("Query completed successfully with results:", results);
                 return results;
               } else {
                 // If not an array, we need to keep polling (matches old logic)
+                console.log("Still processing, continuing to poll...");
                 await new Promise((resolve) => setTimeout(resolve, 500));
                 return pollForResults(maxAttempts - 1);
               }

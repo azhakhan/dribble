@@ -67,6 +67,26 @@ export const getQueryResults = async (query_id: string) => {
   }
 };
 
+// New function to get query run results
+export const getQueryRunResults = async (run_id: string) => {
+  try {
+    const response = await api.get<object[]>(`/execution/run-results/${run_id}`);
+    return response.data;
+  } catch (error) {
+    if (axios.isAxiosError(error) && error.response?.status === 202) {
+      // Still processing, return a signal that we need to keep polling
+      return null;
+    }
+    throw error;
+  }
+};
+
+// New function to execute query version with run
+export const executeQueryVersionRun = async (request: CreateQueryRunRequest): Promise<string> => {
+  const response = await api.post<{ query_run_id: string }>("/execution/version", request);
+  return response.data.query_run_id;
+};
+
 // Create a new database source
 export interface CreateSourceRequest {
   name: string;
@@ -329,13 +349,30 @@ export interface QueryRun {
   created_at: string;
 }
 
+export interface QueryRunModifiers {
+  filters?: Array<{
+    column: string;
+    operator: string;
+    value: string | number | boolean | Array<string | number | boolean>;
+  }>;
+  order_by?: Array<{
+    column: string;
+    direction: string;
+  }>;
+  limit?: number;
+  offset?: number;
+}
+
 export interface CreateQueryRunRequest {
+  query_version_id: UUID;
+  modifiers?: QueryRunModifiers;
+}
+
+export interface UpdateQueryRunRequest {
   result_message?: string;
   error_message?: string;
   row_count?: number;
   execution_time_ms?: number;
-  query_version_id: UUID;
-  created_by: UUID;
 }
 
 // ==================== QUERY API ====================

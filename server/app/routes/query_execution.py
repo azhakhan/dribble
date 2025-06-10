@@ -27,7 +27,7 @@ async def execute_query_string(request: ExecuteQueryRequest):
 
 
 @router.post("/version")
-async def execute_query_run(
+async def execute_query_version_run(
     request: CreateQueryRunRequest,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
@@ -48,7 +48,7 @@ async def execute_query_run(
     try:
         query_run_request = ExecuteQueryVersionRequest(
             query_run_id=run.id,
-            source_id=version.source_id,
+            source_id=query.source_id,
             sql=version.sql,
             modifiers=request.modifiers,
         )
@@ -65,6 +65,31 @@ async def get_query_results(query_id: UUID, response: Response):
         result = await get_result(query_id)
         if not result:
             raise HTTPException(status_code=404, detail="Query results not found")
+        if result.get("status") == "running":
+            response.status_code = 202
+            return {"status": "running"}
+        if result.get("status") == "error":
+            response.status_code = 500
+            return {"status": "error", "error": result["error"]}
+        if result.get("status") == "success":
+            return result["data"] if result.get("data") else []
+        else:
+            response.status_code = 500
+            return {"status": "error", "error": "Unknown error"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@router.get("/run-results/{run_id}")
+async def get_query_run_results(run_id: UUID, response: Response):
+    """Get query run execution results"""
+    try:
+        # check for results in redis using run_id
+        result = await get_result(run_id)
+        if not result:
+            raise HTTPException(status_code=404, detail="Query run results not found")
         if result.get("status") == "running":
             response.status_code = 202
             return {"status": "running"}
