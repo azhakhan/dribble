@@ -215,7 +215,9 @@ class QueryRunService:
 
         return (
             db.query(QueryRun)
-            .filter_by(query_id=query_id)
+            .join(QueryVersion, QueryRun.query_version_id == QueryVersion.id)
+            .join(Query, QueryVersion.query_id == Query.id)
+            .filter(Query.id == query_id)
             .order_by(QueryRun.created_at.desc())
             .all()
         )

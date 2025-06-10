@@ -12,9 +12,10 @@ import { useState } from "react";
 
 interface EditorProps {
   tabId: string;
+  onQueryExecuted?: () => void;
 }
 
-export function Editor({ tabId }: EditorProps) {
+export function Editor({ tabId, onQueryExecuted }: EditorProps) {
   const editorContainerRef = useRef<HTMLDivElement>(null);
   const [editingName, setEditingName] = useState(false);
   const [tempName, setTempName] = useState("");
@@ -102,6 +103,8 @@ export function Editor({ tabId }: EditorProps) {
         // executeQuery now handles saving the version automatically
         await executeQuery(tabId, queryToRun);
         toast.success("Query executed successfully");
+        // Notify parent component that query was executed successfully
+        onQueryExecuted?.();
       } catch (error) {
         console.error("Failed to execute query:", error);
         toast.error("Failed to execute query");
