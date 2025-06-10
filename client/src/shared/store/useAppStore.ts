@@ -783,39 +783,17 @@ export const useAppStore = create<AppState>()(
         set({ connectedSources: new Set(connectedSourceIds) }),
 
       executeQuery: async (tabId, sql) => {
-        console.log("executeQuery called for tab:", tabId);
         const currentState = get();
         const tab = currentState.openTabs.find((t) => t.id === tabId);
-        if (!tab) {
-          console.error("Tab not found:", tabId);
-          return;
-        }
-
-        console.log("Tab found:", {
-          id: tab.id,
-          queryId: tab.queryId,
-          sourceId: tab.sourceId,
-          title: tab.title,
-          editorContent: tab.editorContent?.substring(0, 100) + "..."
-        });
+        if (!tab) return;
 
         const source = currentState.sources[tab.sourceId];
         if (!source || !currentState.connectedSources.has(tab.sourceId)) {
-          console.error("Source not connected or not found:", {
-            sourceExists: !!source,
-            sourceConnected: currentState.connectedSources.has(tab.sourceId),
-            connectedSources: Array.from(currentState.connectedSources)
-          });
           throw new Error("Source not connected");
         }
 
         const queryToRun = sql || tab.editorContent;
-        if (!queryToRun.trim()) {
-          console.error("No query content to run");
-          return;
-        }
-
-        console.log("Query to run:", queryToRun);
+        if (!queryToRun.trim()) return;
 
         // Check if this is an ephemeral query that has been modified
         if (tab.queryId && currentState.queries[tab.queryId]?.is_ephemeral) {
@@ -932,9 +910,7 @@ export const useAppStore = create<AppState>()(
             modifiers: undefined // TODO: Add support for modifiers from UI
           };
 
-          console.log("Creating query run with request:", runRequest);
           const runId = await executeQueryVersionRun(runRequest);
-          console.log("Query run created with ID:", runId);
 
           // Step 3: Poll for results until we get a final response
           const pollForResults = async (maxAttempts = 50): Promise<object[]> => {
@@ -945,15 +921,12 @@ export const useAppStore = create<AppState>()(
 
             try {
               const results = await getQueryRunResults(runId);
-              console.log(`Polling attempt ${51 - maxAttempts}, results:`, results);
 
               // Check if results is an array (query completed successfully)
               if (Array.isArray(results)) {
-                console.log("Query completed successfully with results:", results);
                 return results;
               } else {
                 // If not an array, we need to keep polling (matches old logic)
-                console.log("Still processing, continuing to poll...");
                 await new Promise((resolve) => setTimeout(resolve, 500));
                 return pollForResults(maxAttempts - 1);
               }

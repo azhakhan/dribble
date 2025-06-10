@@ -127,7 +127,6 @@ export function IdePage() {
 
         // Get or create ephemeral query
         const ephemeralQuery = await getOrCreateEphemeralQuery(sourceId, schema, table);
-        console.log("Ephemeral query for table double-click:", ephemeralQuery);
 
         // Check if this ephemeral query is already open in a tab
         const existingTab = openTabs.find((tab) => tab.queryId === ephemeralQuery.id);
@@ -159,9 +158,7 @@ export function IdePage() {
 
         // Get the latest version to get the SQL
         const latestVersion = await loadLatestQueryVersion(ephemeralQuery.id);
-        console.log("Latest version for ephemeral query:", latestVersion);
         const sql = latestVersion?.sql || `SELECT * FROM ${schema}.${table} LIMIT 101`;
-        console.log("SQL to use:", sql);
 
         // Create a new tab for this ephemeral query
         openQueryTab({
@@ -187,20 +184,11 @@ export function IdePage() {
             const newTab = state.openTabs.find((tab) => tab.queryId === ephemeralQuery.id);
 
             if (newTab) {
-              console.log(
-                "Executing ephemeral query for tab:",
-                newTab.id,
-                "with queryId:",
-                ephemeralQuery.id
-              );
-
               // Set the tab as active before executing
               setActiveTab(newTab.id);
 
               // Execute the query
               await executeQuery(newTab.id);
-            } else {
-              console.error("Could not find tab for ephemeral query:", ephemeralQuery.id);
             }
           } catch (error) {
             console.error("Failed to execute ephemeral query:", error);
