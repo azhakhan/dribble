@@ -92,6 +92,9 @@ interface TreeState {
 
   // Debug action
   debugLogLocalStorage: () => void;
+
+  // Initialize runtime states for query tabs
+  initializeQueryTabsRuntimeStates: () => void;
 }
 
 // Enhanced query tab interface with better state management
@@ -1354,6 +1357,20 @@ export const useAppStore = create<AppState>()(
       debugLogLocalStorage: () => {
         const state = get();
         console.log("Current localStorage state:", state);
+      },
+
+      // Initialize runtime states - called on app start to reset runtime states
+      initializeQueryTabsRuntimeStates: () => {
+        set((state) => ({
+          openTabs: state.openTabs.map((tab) => ({
+            ...tab,
+            // Reset runtime states to defaults on app load
+            queryResults: null,
+            queryRunning: false,
+            isLoadingQuery: false,
+            isLoadingVersions: false
+          }))
+        }));
       }
     }),
     {
@@ -1362,7 +1379,10 @@ export const useAppStore = create<AppState>()(
       partialize: (state) => ({
         panelSizes: state.panelSizes,
         editorContent: state.editorContent,
-        sidebarState: state.sidebarState
+        sidebarState: state.sidebarState,
+        // Query state persistence - persist tabs and active tab ID
+        openTabs: state.openTabs,
+        activeTabId: state.activeTabId
       })
     }
   )

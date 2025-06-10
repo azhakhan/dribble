@@ -33,8 +33,14 @@ export function IdePage() {
     loadQueryInTab,
     executeQuery,
     getOrCreateEphemeralQuery,
-    loadLatestQueryVersion
+    loadLatestQueryVersion,
+    initializeQueryTabsRuntimeStates
   } = useAppStore();
+
+  // Initialize runtime states for query tabs on app load
+  useEffect(() => {
+    initializeQueryTabsRuntimeStates();
+  }, [initializeQueryTabsRuntimeStates]);
 
   // Query for all sources
   const { data: sources, isLoading: sourcesLoading, error: sourcesError } = useStoreSources();

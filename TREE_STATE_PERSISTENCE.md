@@ -111,6 +111,7 @@ const handleClick = () => {
 - **Editor Content**: Current SQL content
 - **Tree States**: All node expansion states
 - **Active Tab**: Sources or Queries tab selection
+- **Query Tab State**: Open query tabs and active query (see [Query State Persistence](./QUERY_STATE_PERSISTENCE.md))
 
 ## Benefits
 
