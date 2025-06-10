@@ -432,8 +432,32 @@ export const deleteQueryVersion = async (versionId: string): Promise<void> => {
 
 // ==================== QUERY RUN API ====================
 
+export interface PaginatedResponse<T> {
+  items: T[];
+  total: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
+  has_next: boolean;
+  has_prev: boolean;
+}
+
 export const getQueryRunsByQueryId = async (queryId: string): Promise<QueryRun[]> => {
-  const response = await api.get<QueryRun[]>(`/runs/query/${queryId}`);
+  // Use the paginated endpoint but return just the items for backward compatibility
+  const response = await api.get<PaginatedResponse<QueryRun>>(
+    `/runs/query/${queryId}?page=1&page_size=100`
+  );
+  return response.data.items;
+};
+
+export const getQueryRunsByQueryIdPaginated = async (
+  queryId: string,
+  page: number = 1,
+  pageSize: number = 25
+): Promise<PaginatedResponse<QueryRun>> => {
+  const response = await api.get<PaginatedResponse<QueryRun>>(
+    `/runs/query/${queryId}?page=${page}&page_size=${pageSize}`
+  );
   return response.data;
 };
 

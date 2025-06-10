@@ -11,6 +11,7 @@ import {
   executeQueryVersionRun,
   getQueryRunResults,
   getQueryRunsByQueryId,
+  getQueryRunsByQueryIdPaginated,
   getSources,
   getConnectedSources,
   getSourceSchemas,
@@ -116,12 +117,23 @@ export interface QueryTab {
   originalContent: string;
 }
 
+// Pagination interface
+interface PaginationInfo {
+  total: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
+  has_next: boolean;
+  has_prev: boolean;
+}
+
 // Centralized query state management
 interface QueryState {
   // Cached data
   queries: Record<string, Query>; // queryId -> Query
   queryVersions: Record<string, QueryVersion[]>; // queryId -> versions
   queryRuns: Record<string, QueryRun[]>; // queryId -> runs
+  queryRunsPagination: Record<string, PaginationInfo>; // queryId -> pagination info
   sources: Record<string, Source>; // sourceId -> Source
   connectedSources: Set<string>; // Set of connected source IDs
   allSources: Source[]; // All available sources
@@ -139,10 +151,17 @@ interface QueryState {
   loadQuery: (queryId: string) => Promise<void>;
   loadQueryVersions: (queryId: string) => Promise<void>;
   loadQueryRuns: (queryId: string, forceRefresh?: boolean) => Promise<void>;
+  loadQueryRunsPaginated: (
+    queryId: string,
+    page: number,
+    pageSize: number,
+    forceRefresh?: boolean
+  ) => Promise<void>;
   loadLatestQueryVersion: (queryId: string) => Promise<QueryVersion | null>;
   setQuery: (queryId: string, query: Query) => void;
   setQueryVersions: (queryId: string, versions: QueryVersion[]) => void;
   setQueryRuns: (queryId: string, runs: QueryRun[]) => void;
+  setQueryRunsPaginated: (queryId: string, runs: QueryRun[], pagination: PaginationInfo) => void;
 
   // Enhanced source management
   loadSources: () => Promise<void>;
@@ -374,6 +393,7 @@ export const useAppStore = create<AppState>()(
       queries: {},
       queryVersions: {},
       queryRuns: {},
+      queryRunsPagination: {},
       sources: {},
       connectedSources: new Set(),
       loadingQueries: new Set(),
@@ -1002,6 +1022,46 @@ export const useAppStore = create<AppState>()(
       setQueryRuns: (queryId, runs) =>
         set((state) => ({
           queryRuns: { ...state.queryRuns, [queryId]: runs }
+        })),
+
+      loadQueryRunsPaginated: async (queryId, page, pageSize, forceRefresh = false) => {
+        const state = get();
+
+        if (!forceRefresh && state.loadingRuns.has(queryId)) return;
+
+        set((state) => ({
+          loadingRuns: new Set(state.loadingRuns).add(queryId)
+        }));
+
+        try {
+          const response = await getQueryRunsByQueryIdPaginated(queryId, page, pageSize);
+          set((state) => ({
+            queryRuns: { ...state.queryRuns, [queryId]: response.items },
+            queryRunsPagination: {
+              ...state.queryRunsPagination,
+              [queryId]: {
+                total: response.total,
+                page: response.page,
+                page_size: response.page_size,
+                total_pages: response.total_pages,
+                has_next: response.has_next,
+                has_prev: response.has_prev
+              }
+            },
+            loadingRuns: new Set([...state.loadingRuns].filter((id) => id !== queryId))
+          }));
+        } catch (error) {
+          console.error(`Failed to load paginated runs for query ${queryId}:`, error);
+          set((state) => ({
+            loadingRuns: new Set([...state.loadingRuns].filter((id) => id !== queryId))
+          }));
+        }
+      },
+
+      setQueryRunsPaginated: (queryId, runs, pagination) =>
+        set((state) => ({
+          queryRuns: { ...state.queryRuns, [queryId]: runs },
+          queryRunsPagination: { ...state.queryRunsPagination, [queryId]: pagination }
         })),
 
       setSources: (sources) =>

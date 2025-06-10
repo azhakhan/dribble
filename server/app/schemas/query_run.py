@@ -1,7 +1,7 @@
 from pydantic import BaseModel
 from uuid import UUID
 from datetime import datetime
-from typing import Optional, List
+from typing import Optional, List, Generic, TypeVar
 from enum import Enum
 
 
@@ -64,6 +64,24 @@ class QueryRunResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+# Pagination schemas
+T = TypeVar("T")
+
+
+class PaginatedResponse(BaseModel, Generic[T]):
+    items: List[T]
+    total: int
+    page: int
+    page_size: int
+    total_pages: int
+    has_next: bool
+    has_prev: bool
+
+
+class QueryRunsPaginatedResponse(PaginatedResponse[QueryRunResponse]):
+    pass
 
 
 # Query response schemas

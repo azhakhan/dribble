@@ -1,16 +1,17 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { type ColumnDef, flexRender, getCoreRowModel, useReactTable } from "@tanstack/react-table";
 import {
-  type ColumnDef,
-  flexRender,
-  getCoreRowModel,
-  getFilteredRowModel,
-  getPaginationRowModel,
-  getSortedRowModel,
-  useReactTable
-} from "@tanstack/react-table";
-import { ArrowLeftIcon, CheckCircle, XCircle, Clock } from "lucide-react";
+  ArrowLeftIcon,
+  CheckCircle,
+  XCircle,
+  Clock,
+  ChevronRight,
+  ChevronLeft,
+  ChevronsRight,
+  ChevronsLeft
+} from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -120,31 +121,33 @@ const columns: ColumnDef<QueryRun>[] = [
 ];
 
 export function QueryRuns({ queryId, onBack }: QueryRunsProps) {
-  const { queryRuns, loadingRuns, loadQueryRuns } = useAppStore();
+  const { queryRuns, queryRunsPagination, loadingRuns, loadQueryRunsPaginated } = useAppStore();
   const [rowSelection, setRowSelection] = useState({});
+  const [pagination, setPagination] = useState({
+    pageIndex: 0,
+    pageSize: 25
+  });
 
   const runs = queryRuns[queryId] || [];
+  const paginationInfo = queryRunsPagination[queryId];
   const isLoading = loadingRuns.has(queryId);
 
+  // Load data when component mounts or pagination changes
   useEffect(() => {
-    loadQueryRuns(queryId);
-  }, [queryId, loadQueryRuns]);
+    loadQueryRunsPaginated(queryId, pagination.pageIndex + 1, pagination.pageSize);
+  }, [queryId, pagination.pageIndex, pagination.pageSize, loadQueryRunsPaginated]);
 
   const table = useReactTable({
     data: runs,
     columns,
     getCoreRowModel: getCoreRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
-    getSortedRowModel: getSortedRowModel(),
-    getFilteredRowModel: getFilteredRowModel(),
+    manualPagination: true, // Enable manual pagination
+    pageCount: paginationInfo?.total_pages ?? 1,
     onRowSelectionChange: setRowSelection,
+    onPaginationChange: setPagination,
     state: {
-      rowSelection
-    },
-    initialState: {
-      pagination: {
-        pageSize: 25
-      }
+      rowSelection,
+      pagination
     }
   });
 
@@ -165,7 +168,7 @@ export function QueryRuns({ queryId, onBack }: QueryRunsProps) {
           Back to Editor
         </Button>
         <span className="text-sm font-medium">
-          Query Runs ({runs.length})
+          Query Runs ({paginationInfo?.total ?? runs.length})
           {isLoading && <span className="text-xs text-muted-foreground ml-2">(Loading...)</span>}
         </span>
       </div>
@@ -213,48 +216,151 @@ export function QueryRuns({ queryId, onBack }: QueryRunsProps) {
 
           {/* Pagination */}
           <div className="flex items-center justify-between space-x-2 py-4 px-2">
-            <div className="text-xs text-muted-foreground text-xs">
-              {table.getFilteredSelectedRowModel().rows.length} of{" "}
-              {table.getFilteredRowModel().rows.length} row(s) selected.
+            <div className="text-xs text-muted-foreground">
+              {paginationInfo ? (
+                <>
+                  Showing {(paginationInfo.page - 1) * paginationInfo.page_size + 1} to{" "}
+                  {Math.min(paginationInfo.page * paginationInfo.page_size, paginationInfo.total)}{" "}
+                  of {paginationInfo.total} entries
+                </>
+              ) : (
+                `Showing ${runs.length} entries`
+              )}
             </div>
-            <div className="flex items-center space-x-2">
-              <p className="text-xs font-medium">Rows per page</p>
-              <select
-                value={table.getState().pagination.pageSize}
-                onChange={(e) => {
-                  table.setPageSize(Number(e.target.value));
-                }}
-                className="h-6 w-[70px] border-none px-3 py-1 text-xs"
-              >
-                {[10, 20, 25, 30, 50].map((pageSize) => (
-                  <option key={pageSize} value={pageSize}>
-                    {pageSize}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="flex items-center space-x-2">
-              <Button
-                variant="outline"
-                size="xs"
-                onClick={() => table.previousPage()}
-                disabled={!table.getCanPreviousPage()}
-                className="text-xs"
-              >
-                Previous
-              </Button>
-              <div className="flex items-center justify-center text-xs font-medium">
-                Page {table.getState().pagination.pageIndex + 1} of {table.getPageCount()}
+
+            <div className="flex items-center space-x-6">
+              {/* Rows per page selector */}
+              <div className="flex items-center space-x-2">
+                <p className="text-xs font-medium">Rows per page</p>
+                <select
+                  value={table.getState().pagination.pageSize}
+                  onChange={(e) => {
+                    table.setPageSize(Number(e.target.value));
+                  }}
+                  className="h-7 w-[70px] rounded-md border border-input bg-background px-3 py-1 text-xs ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {[10, 20, 25, 30, 50, 100].map((pageSize) => (
+                    <option key={pageSize} value={pageSize}>
+                      {pageSize}
+                    </option>
+                  ))}
+                </select>
               </div>
-              <Button
-                variant="outline"
-                size="xs"
-                onClick={() => table.nextPage()}
-                disabled={!table.getCanNextPage()}
-                className="text-xs"
-              >
-                Next
-              </Button>
+
+              {/* Page navigation */}
+              <div className="flex items-center space-x-2">
+                <Button
+                  variant="ghost"
+                  size="xs"
+                  onClick={() => table.setPageIndex(0)}
+                  disabled={!table.getCanPreviousPage()}
+                  className="text-xs cursor-pointer"
+                >
+                  <ChevronsLeft size={14} />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="xs"
+                  onClick={() => table.previousPage()}
+                  disabled={!table.getCanPreviousPage()}
+                  className="text-xs cursor-pointer"
+                >
+                  <ChevronLeft size={14} />
+                </Button>
+
+                {/* Page numbers */}
+                <div className="flex items-center space-x-1">
+                  {(() => {
+                    const currentPage = table.getState().pagination.pageIndex + 1;
+                    const totalPages = table.getPageCount();
+                    const pages = [];
+
+                    // Show first page
+                    if (currentPage > 3) {
+                      pages.push(
+                        <Button
+                          key={1}
+                          variant={1 === currentPage ? "default" : "ghost"}
+                          size="xs"
+                          onClick={() => table.setPageIndex(0)}
+                          className="h-6 w-6 p-0 text-xs"
+                        >
+                          1
+                        </Button>
+                      );
+                      if (currentPage > 4) {
+                        pages.push(
+                          <span key="ellipsis1" className="text-xs">
+                            ...
+                          </span>
+                        );
+                      }
+                    }
+
+                    // Show pages around current page
+                    for (
+                      let i = Math.max(1, currentPage - 2);
+                      i <= Math.min(totalPages, currentPage + 2);
+                      i++
+                    ) {
+                      pages.push(
+                        <Button
+                          key={i}
+                          variant={i === currentPage ? "default" : "ghost"}
+                          size="xs"
+                          onClick={() => table.setPageIndex(i - 1)}
+                          className="h-6 w-6 p-0 text-xs cursor-pointer"
+                        >
+                          {i}
+                        </Button>
+                      );
+                    }
+
+                    // Show last page
+                    if (currentPage < totalPages - 2) {
+                      if (currentPage < totalPages - 3) {
+                        pages.push(
+                          <span key="ellipsis2" className="text-xs">
+                            ...
+                          </span>
+                        );
+                      }
+                      pages.push(
+                        <Button
+                          key={totalPages}
+                          variant={totalPages === currentPage ? "default" : "ghost"}
+                          size="xs"
+                          onClick={() => table.setPageIndex(totalPages - 1)}
+                          className="h-6 w-6 p-0 text-xs font-thin cursor-pointer"
+                        >
+                          {totalPages}
+                        </Button>
+                      );
+                    }
+
+                    return pages;
+                  })()}
+                </div>
+
+                <Button
+                  variant="ghost"
+                  size="xs"
+                  onClick={() => table.nextPage()}
+                  disabled={!table.getCanNextPage()}
+                  className="text-xs cursor-pointer"
+                >
+                  <ChevronRight size={14} />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="xs"
+                  onClick={() => table.setPageIndex(table.getPageCount() - 1)}
+                  disabled={!table.getCanNextPage()}
+                  className="text-xs cursor-pointer"
+                >
+                  <ChevronsRight size={14} />
+                </Button>
+              </div>
             </div>
           </div>
         </div>

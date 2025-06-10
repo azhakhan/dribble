@@ -223,6 +223,30 @@ class QueryRunService:
         )
 
     @staticmethod
+    def get_runs_by_query_id_paginated(
+        db: Session, query_id: UUID, page: int = 1, page_size: int = 25
+    ) -> tuple[List[QueryRun], int]:
+        """Get paginated runs for a specific query"""
+        get_or_404(db, Query, query_id, "Query not found")
+
+        # Get total count
+        total_query = (
+            db.query(QueryRun)
+            .join(QueryVersion, QueryRun.query_version_id == QueryVersion.id)
+            .join(Query, QueryVersion.query_id == Query.id)
+            .filter(Query.id == query_id)
+        )
+        total = total_query.count()
+
+        # Get paginated results
+        offset = (page - 1) * page_size
+        runs = (
+            total_query.order_by(QueryRun.created_at.desc()).offset(offset).limit(page_size).all()
+        )
+
+        return runs, total
+
+    @staticmethod
     def get_runs_by_version_id(db: Session, version_id: UUID) -> List[QueryRun]:
         """Get all runs for a specific query version"""
         get_or_404(db, QueryVersion, version_id, "Query version not found")

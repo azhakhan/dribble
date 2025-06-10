@@ -85,7 +85,7 @@ function QueryComponent({ tabId }: QueryProps) {
 
   // Get the latest run for status display
   const latestRun = useMemo(() => {
-    if (runs.length === 0) return null;
+    if (!runs || !Array.isArray(runs) || runs.length === 0) return null;
     return runs.reduce((latest, current) =>
       new Date(current.created_at) > new Date(latest.created_at) ? current : latest
     );
@@ -216,7 +216,7 @@ function QueryComponent({ tabId }: QueryProps) {
                       disabled={!currentTab.queryId}
                       className="h-7 px-2 text-xs gap-1"
                     >
-                      All Runs ({runs.length})
+                      All Runs ({runs?.length ?? 0})
                       <ExternalLinkIcon size={12} />
                     </Button>
                   </div>
