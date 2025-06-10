@@ -338,21 +338,22 @@ async def run_query_version(request: QueryVersionRequest):
     if sql.endswith(";"):
         sql = sql[:-1]
 
+    sql_to_run = f"WITH temp_query AS ({sql}) SELECT * FROM temp_query"
+
     if request.modifiers:
         if request.modifiers.where:
-            sql += f" WHERE {request.modifiers.where}"
+            sql_to_run += f" WHERE {request.modifiers.where}"
         if request.modifiers.order_by:
-            sql += f" ORDER BY {request.modifiers.order_by}"
+            sql_to_run += f" ORDER BY {request.modifiers.order_by}"
         if request.modifiers.limit:
-            sql += f" LIMIT {request.modifiers.limit}"
+            sql_to_run += f" LIMIT {request.modifiers.limit}"
         if request.modifiers.offset:
-            sql += f" OFFSET {request.modifiers.offset}"
+            sql_to_run += f" OFFSET {request.modifiers.offset}"
 
     # add semicolon if it doesn't exist
-    if not sql.endswith(";"):
-        sql += ";"
+    sql_to_run += ";"
 
-    logger.info(f"Composed SQL query: {sql}")
+    logger.info(f"Composed SQL query: {sql_to_run}")
 
     try:
         logger.info(f"Setting initial status to running for query {request.query_run_id}")
@@ -368,7 +369,7 @@ async def run_query_version(request: QueryVersionRequest):
         start_time = time.time()
         try:
             # Execute the composed SQL with modifiers
-            result = execute_query(sql)
+            result = execute_query(sql_to_run)
             execution_time_ms = int((time.time() - start_time) * 1000)
 
             # Generate appropriate result message based on query type

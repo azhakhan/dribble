@@ -127,6 +127,15 @@ interface PaginationInfo {
   has_prev: boolean;
 }
 
+// Table filter interface
+interface TableFilterState {
+  currentOffset: number;
+  whereInput: string;
+  orderByInput: string;
+  pageSize: number;
+  displaySize: number;
+}
+
 // Centralized query state management
 interface QueryState {
   // Cached data
@@ -232,6 +241,9 @@ interface AppState extends FileTreeState, SourceChildrenState, QueryState, TreeS
   sourceSchemaMap: Record<string, Record<string, SchemaObject>>;
   selectedTableData: { sourceId: string; tableName: string; query: string } | null;
 
+  // Table filter state - grouped by tab ID
+  tableFilters: Record<string, TableFilterState>;
+
   // Editor-related state
   schemasLoading: boolean;
   schemasError: unknown;
@@ -336,6 +348,14 @@ interface AppState extends FileTreeState, SourceChildrenState, QueryState, TreeS
   setSchemasLoading: (loading: boolean) => void;
   setSchemasError: (error: unknown) => void;
   setConnectedSourceIds: (sourceIds: Set<string>) => void;
+
+  // Table filter actions
+  setTableFilterOffset: (offset: number) => void;
+  setTableFilterWhere: (where: string) => void;
+  setTableFilterOrderBy: (orderBy: string) => void;
+  clearTableFilters: () => void;
+  getTableFilters: () => { limit: number; offset: number; where?: string; order_by?: string };
+  getTabFilterState: (tabId: string) => TableFilterState;
 }
 
 // Create the store with persistence for certain values
@@ -360,6 +380,9 @@ export const useAppStore = create<AppState>()(
       selectedSource: null,
       sourceSchemaMap: {},
       selectedTableData: null,
+
+      // Table filter state - grouped by tab ID
+      tableFilters: {},
 
       // Editor-related state
       schemasLoading: false,
@@ -1203,11 +1226,14 @@ export const useAppStore = create<AppState>()(
           }
 
           // Step 2: Create a query run and execute
+          const tabFilters = currentState.getTableFilters();
           const runRequest: CreateQueryRunRequest = {
             query_version_id: versionId,
             modifiers: {
-              limit: 501,
-              offset: 0
+              limit: tabFilters.limit,
+              offset: tabFilters.offset,
+              where: tabFilters.where,
+              order_by: tabFilters.order_by
             }
           };
 
@@ -1683,6 +1709,109 @@ export const useAppStore = create<AppState>()(
             originalContent: ""
           });
         }
+      },
+
+      // Table filter actions
+      setTableFilterOffset: (offset: number) =>
+        set((state) => {
+          const tabId = state.activeTabId || "default";
+          const currentFilter = state.tableFilters[tabId] || {
+            currentOffset: 0,
+            whereInput: "",
+            orderByInput: "",
+            pageSize: 501,
+            displaySize: 500
+          };
+          return {
+            tableFilters: {
+              ...state.tableFilters,
+              [tabId]: { ...currentFilter, currentOffset: offset }
+            }
+          };
+        }),
+
+      setTableFilterWhere: (where: string) =>
+        set((state) => {
+          const tabId = state.activeTabId || "default";
+          const currentFilter = state.tableFilters[tabId] || {
+            currentOffset: 0,
+            whereInput: "",
+            orderByInput: "",
+            pageSize: 501,
+            displaySize: 500
+          };
+          return {
+            tableFilters: {
+              ...state.tableFilters,
+              [tabId]: { ...currentFilter, whereInput: where, currentOffset: 0 }
+            }
+          };
+        }),
+
+      setTableFilterOrderBy: (orderBy: string) =>
+        set((state) => {
+          const tabId = state.activeTabId || "default";
+          const currentFilter = state.tableFilters[tabId] || {
+            currentOffset: 0,
+            whereInput: "",
+            orderByInput: "",
+            pageSize: 501,
+            displaySize: 500
+          };
+          return {
+            tableFilters: {
+              ...state.tableFilters,
+              [tabId]: { ...currentFilter, orderByInput: orderBy, currentOffset: 0 }
+            }
+          };
+        }),
+
+      clearTableFilters: () =>
+        set((state) => {
+          const tabId = state.activeTabId || "default";
+          return {
+            tableFilters: {
+              ...state.tableFilters,
+              [tabId]: {
+                currentOffset: 0,
+                whereInput: "",
+                orderByInput: "",
+                pageSize: 501,
+                displaySize: 500
+              }
+            }
+          };
+        }),
+
+      getTableFilters: () => {
+        const state = get();
+        const tabId = state.activeTabId || "default";
+        const filter = state.tableFilters[tabId] || {
+          currentOffset: 0,
+          whereInput: "",
+          orderByInput: "",
+          pageSize: 501,
+          displaySize: 500
+        };
+        return {
+          limit: filter.pageSize,
+          offset: filter.currentOffset,
+          where: filter.whereInput.trim() || undefined,
+          order_by: filter.orderByInput.trim() || undefined
+        };
+      },
+
+      getTabFilterState: (tabId: string) => {
+        const state = get();
+        return (
+          state.tableFilters[tabId] || {
+            currentOffset: 0,
+            whereInput: "",
+            orderByInput: "",
+            pageSize: 501,
+            displaySize: 500
+          }
+        );
       }
     }),
     {
