@@ -10,6 +10,7 @@ import {
   updateQuery,
   executeQueryVersionRun,
   getQueryRunResults,
+  getQueryRunsByQueryId,
   getSources,
   getConnectedSources,
   getSourceSchemas,
@@ -120,6 +121,7 @@ interface QueryState {
   // Cached data
   queries: Record<string, Query>; // queryId -> Query
   queryVersions: Record<string, QueryVersion[]>; // queryId -> versions
+  queryRuns: Record<string, QueryRun[]>; // queryId -> runs
   sources: Record<string, Source>; // sourceId -> Source
   connectedSources: Set<string>; // Set of connected source IDs
   allSources: Source[]; // All available sources
@@ -128,6 +130,7 @@ interface QueryState {
   // Loading states
   loadingQueries: Set<string>; // Set of query IDs being loaded
   loadingVersions: Set<string>; // Set of query IDs whose versions are being loaded
+  loadingRuns: Set<string>; // Set of query IDs whose runs are being loaded
   loadingSources: boolean; // Loading all sources
   loadingConnectedSources: boolean; // Loading connected sources
   loadingSchemas: Set<string>; // Set of source IDs whose schemas are being loaded
@@ -135,9 +138,11 @@ interface QueryState {
   // Actions for centralized query management
   loadQuery: (queryId: string) => Promise<void>;
   loadQueryVersions: (queryId: string) => Promise<void>;
+  loadQueryRuns: (queryId: string, forceRefresh?: boolean) => Promise<void>;
   loadLatestQueryVersion: (queryId: string) => Promise<QueryVersion | null>;
   setQuery: (queryId: string, query: Query) => void;
   setQueryVersions: (queryId: string, versions: QueryVersion[]) => void;
+  setQueryRuns: (queryId: string, runs: QueryRun[]) => void;
 
   // Enhanced source management
   loadSources: () => Promise<void>;
@@ -368,10 +373,12 @@ export const useAppStore = create<AppState>()(
       // Centralized query state
       queries: {},
       queryVersions: {},
+      queryRuns: {},
       sources: {},
       connectedSources: new Set(),
       loadingQueries: new Set(),
       loadingVersions: new Set(),
+      loadingRuns: new Set(),
       allSources: [],
       connectedSourcesData: [],
       loadingSources: false,
@@ -970,6 +977,33 @@ export const useAppStore = create<AppState>()(
           queryVersions: { ...state.queryVersions, [queryId]: versions }
         })),
 
+      loadQueryRuns: async (queryId, forceRefresh = false) => {
+        const state = get();
+        if (!forceRefresh && (state.queryRuns[queryId] || state.loadingRuns.has(queryId))) return;
+
+        set((state) => ({
+          loadingRuns: new Set(state.loadingRuns).add(queryId)
+        }));
+
+        try {
+          const runs = await getQueryRunsByQueryId(queryId);
+          set((state) => ({
+            queryRuns: { ...state.queryRuns, [queryId]: runs },
+            loadingRuns: new Set([...state.loadingRuns].filter((id) => id !== queryId))
+          }));
+        } catch (error) {
+          console.error(`Failed to load runs for query ${queryId}:`, error);
+          set((state) => ({
+            loadingRuns: new Set([...state.loadingRuns].filter((id) => id !== queryId))
+          }));
+        }
+      },
+
+      setQueryRuns: (queryId, runs) =>
+        set((state) => ({
+          queryRuns: { ...state.queryRuns, [queryId]: runs }
+        })),
+
       setSources: (sources) =>
         set(() => ({
           sources: sources.reduce((acc, source) => ({ ...acc, [source.id]: source }), {})
@@ -1157,6 +1191,17 @@ export const useAppStore = create<AppState>()(
                 : t
             )
           }));
+
+          // Reload runs to get the latest run data after successful execution
+          // Add a small delay to ensure the run is fully persisted
+          await new Promise((resolve) => setTimeout(resolve, 200));
+
+          const finalState = get();
+          const finalTab = finalState.openTabs.find((t) => t.id === tabId);
+          if (finalTab?.queryId) {
+            // Force refresh to get the latest runs including the one just created
+            await finalState.loadQueryRuns(finalTab.queryId, true);
+          }
         } catch (error) {
           console.error("Query execution failed:", error);
           set(() => ({

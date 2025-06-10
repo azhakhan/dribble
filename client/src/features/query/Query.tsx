@@ -1,4 +1,4 @@
-import { memo, useState, useEffect, useMemo, useCallback } from "react";
+import { memo, useState, useEffect, useMemo } from "react";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 import { useAppStore } from "@/shared/store/useAppStore";
 import { TableDataDisplay } from "@/features/tables/TableDataDisplay";
@@ -13,12 +13,7 @@ import {
   SelectValue
 } from "@/components/ui/select";
 import { ExternalLinkIcon } from "lucide-react";
-import {
-  getQueryRunsByQueryId,
-  getQueryVersions,
-  type QueryRun,
-  type QueryVersion
-} from "@/shared/lib/api";
+import { type QueryVersion } from "@/shared/lib/api";
 
 interface QueryProps {
   tabId: string;
@@ -26,61 +21,46 @@ interface QueryProps {
 
 function QueryComponent({ tabId }: QueryProps) {
   const [showRuns, setShowRuns] = useState(false);
-  const [runs, setRuns] = useState<QueryRun[]>([]);
-  const [loadingRuns, setLoadingRuns] = useState(false);
   const [selectedVersionId, setSelectedVersionId] = useState<string | null>(null);
-  const [versions, setVersions] = useState<QueryVersion[]>([]);
-  const [loadingVersions, setLoadingVersions] = useState(false);
 
-  // Use store selectors to get only the data we need for this specific tab
-  const { openTabs, updateTabContent } = useAppStore();
+  // Use store selectors to get data for this specific tab
+  const {
+    openTabs,
+    updateTabContent,
+    queryVersions,
+    queryRuns,
+    loadingVersions,
+    loadingRuns,
+    loadQueryVersions,
+    loadQueryRuns
+  } = useAppStore();
 
   const currentTab = openTabs.find((tab) => tab.id === tabId);
 
-  // Load versions directly from API
-  const loadVersions = useCallback(async () => {
-    if (!currentTab?.queryId) return;
-
-    setLoadingVersions(true);
-    try {
-      const queryVersions = await getQueryVersions(currentTab.queryId);
-      setVersions(queryVersions);
-    } catch (error) {
-      console.error("Failed to load versions:", error);
-    } finally {
-      setLoadingVersions(false);
-    }
-  }, [currentTab?.queryId]);
-
-  // Load runs function
-  const loadRuns = useCallback(async () => {
-    if (!currentTab?.queryId) return;
-
-    setLoadingRuns(true);
-    try {
-      const queryRuns = await getQueryRunsByQueryId(currentTab.queryId);
-      setRuns(queryRuns);
-    } catch (error) {
-      console.error("Failed to load runs:", error);
-    } finally {
-      setLoadingRuns(false);
-    }
-  }, [currentTab?.queryId]);
+  // Get versions and runs for this query from the store
+  const versions = useMemo(
+    () => (currentTab?.queryId ? queryVersions[currentTab.queryId] || [] : []),
+    [currentTab?.queryId, queryVersions]
+  );
+  const runs = useMemo(
+    () => (currentTab?.queryId ? queryRuns[currentTab.queryId] || [] : []),
+    [currentTab?.queryId, queryRuns]
+  );
+  const isLoadingVersions = currentTab?.queryId ? loadingVersions.has(currentTab.queryId) : false;
+  const isLoadingRuns = currentTab?.queryId ? loadingRuns.has(currentTab.queryId) : false;
 
   // Load versions and runs when query changes
   useEffect(() => {
     if (currentTab?.queryId) {
       // Reset state when query changes
-      setVersions([]);
-      setRuns([]);
       setSelectedVersionId(null);
       setShowRuns(false);
 
-      // Load fresh data
-      loadVersions();
-      loadRuns();
+      // Load fresh data from store (with caching)
+      loadQueryVersions(currentTab.queryId);
+      loadQueryRuns(currentTab.queryId);
     }
-  }, [currentTab?.queryId, loadVersions, loadRuns]);
+  }, [currentTab?.queryId, loadQueryVersions, loadQueryRuns]);
 
   // Set default selected version to latest when versions load
   useEffect(() => {
@@ -124,9 +104,6 @@ function QueryComponent({ tabId }: QueryProps) {
 
   // Handle showing runs
   const handleShowRuns = () => {
-    if (!showRuns && !loadingRuns) {
-      loadRuns();
-    }
     setShowRuns(!showRuns);
   };
 
@@ -168,8 +145,11 @@ function QueryComponent({ tabId }: QueryProps) {
                   tabId={tabId}
                   onQueryExecuted={() => {
                     // Reload versions and runs after successful execution
-                    loadVersions();
-                    loadRuns();
+                    // The store handles this automatically now, but we can trigger manual refresh if needed
+                    if (currentTab?.queryId) {
+                      loadQueryVersions(currentTab.queryId);
+                      loadQueryRuns(currentTab.queryId, true); // Force refresh
+                    }
                   }}
                 />
               )}
@@ -187,11 +167,11 @@ function QueryComponent({ tabId }: QueryProps) {
                     <Select
                       value={selectedVersionId || ""}
                       onValueChange={handleVersionChange}
-                      disabled={versions.length === 0 || loadingVersions}
+                      disabled={versions.length === 0 || isLoadingVersions}
                     >
                       <SelectTrigger className="w-48 h-7 text-xs">
                         <SelectValue
-                          placeholder={loadingVersions ? "Loading..." : "Select version"}
+                          placeholder={isLoadingVersions ? "Loading..." : "Select version"}
                         />
                       </SelectTrigger>
                       <SelectContent>
@@ -220,6 +200,8 @@ function QueryComponent({ tabId }: QueryProps) {
                           </span>
                         )}
                       </div>
+                    ) : isLoadingRuns ? (
+                      <span className="text-xs text-muted-foreground">Loading runs...</span>
                     ) : (
                       <span className="text-xs text-muted-foreground">No runs yet</span>
                     )}
@@ -231,10 +213,10 @@ function QueryComponent({ tabId }: QueryProps) {
                       variant="ghost"
                       size="sm"
                       onClick={handleShowRuns}
-                      disabled={loadingRuns || !currentTab.queryId}
+                      disabled={!currentTab.queryId}
                       className="h-7 px-2 text-xs gap-1"
                     >
-                      All Runs
+                      All Runs ({runs.length})
                       <ExternalLinkIcon size={12} />
                     </Button>
                   </div>

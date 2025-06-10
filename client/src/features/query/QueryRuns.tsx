@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { getQueryRunsByQueryId, type QueryRun } from "@/shared/lib/api";
+import { useEffect } from "react";
+import { useAppStore } from "@/shared/store/useAppStore";
 import { Button } from "@/components/ui/button";
 import { ArrowLeftIcon } from "lucide-react";
 
@@ -9,26 +9,18 @@ interface QueryRunsProps {
 }
 
 export function QueryRuns({ queryId, onBack }: QueryRunsProps) {
-  const [runs, setRuns] = useState<QueryRun[]>([]);
-  const [loading, setLoading] = useState(true);
+  // Use store selectors to get runs data
+  const { queryRuns, loadingRuns, loadQueryRuns } = useAppStore();
+
+  const runs = queryRuns[queryId] || [];
+  const isLoading = loadingRuns.has(queryId);
 
   useEffect(() => {
-    const loadRuns = async () => {
-      setLoading(true);
-      try {
-        const queryRuns = await getQueryRunsByQueryId(queryId);
-        setRuns(queryRuns);
-      } catch (error) {
-        console.error("Failed to load runs:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
+    // Load runs from store (with caching)
+    loadQueryRuns(queryId);
+  }, [queryId, loadQueryRuns]);
 
-    loadRuns();
-  }, [queryId]);
-
-  if (loading) {
+  if (isLoading && runs.length === 0) {
     return (
       <div className="h-full flex items-center justify-center text-muted-foreground">
         Loading runs...
@@ -44,7 +36,10 @@ export function QueryRuns({ queryId, onBack }: QueryRunsProps) {
           <ArrowLeftIcon size={14} />
           Back to Editor
         </Button>
-        <span className="text-sm font-medium">Query Runs ({runs.length})</span>
+        <span className="text-sm font-medium">
+          Query Runs ({runs.length})
+          {isLoading && <span className="text-xs text-muted-foreground ml-2">(Loading...)</span>}
+        </span>
       </div>
 
       {/* Runs Table */}
