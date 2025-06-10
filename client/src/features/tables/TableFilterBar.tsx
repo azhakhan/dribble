@@ -110,7 +110,7 @@ export const TableFilterBar = ({ data, isLoading }: TableFilterBarProps) => {
             value={whereInput}
             onChange={(e) => setTableFilterWhere(e.target.value)}
             placeholder="condition"
-            className="h-6 text-xs w-32"
+            className="h-6 text-xs w-32 "
             disabled={isLoading}
           />
         </form>
