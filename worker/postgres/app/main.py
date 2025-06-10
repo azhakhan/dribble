@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 import os
 from contextlib import asynccontextmanager
 from sqlalchemy import create_engine, text
@@ -15,8 +15,7 @@ import sys
 import decimal
 import uuid
 import time
-from typing import Optional, List
-from enum import Enum
+from typing import Optional
 import requests
 
 # Configure logging
@@ -150,60 +149,6 @@ async def run_query(request: QueryRequest):
 
     asyncio.create_task(execute_sql_query())
     return {"query_id": request.query_id, "status": "started"}
-
-
-class QueryRunOperator(str, Enum):
-    eq = "eq"
-    ne = "ne"
-    gt = "gt"
-    gte = "gte"
-    lt = "lt"
-    lte = "lte"
-    in_ = "in"
-    not_in = "not_in"
-    like = "like"
-    not_like = "not_like"
-    is_null = "is_null"
-    is_not_null = "is_not_null"
-
-
-class QueryRunFilter(BaseModel):
-    column: str
-    operator: QueryRunOperator
-    value: str | int | float | bool | list[str] | list[int] | list[float] | list[bool]
-
-
-class QueryRunOrderBy(BaseModel):
-    column: str
-    direction: str
-
-
-class QueryRunModifiers(BaseModel):
-    filters: Optional[List[QueryRunFilter]] = None
-    order_by: Optional[List[QueryRunOrderBy]] = None
-    limit: Optional[int] = None
-    offset: Optional[int] = None
-
-
-class QueryVersionRequest(BaseModel):
-    query_run_id: str
-    sql: str
-    modifiers: Optional[QueryRunModifiers] = None
-
-
-class UpdateQueryRunRequest(BaseModel):
-    result_message: Optional[str] = None
-    error_message: Optional[str] = None
-    row_count: Optional[int] = None
-    execution_time_ms: Optional[int] = None
-
-
-class QueryExecutionResult(BaseModel):
-    data: list[dict]
-    execution_time_ms: int
-    row_count: int
-    result_message: str
-    is_select_query: bool
 
 
 def detect_query_type(query: str) -> str:
@@ -352,6 +297,34 @@ def execute_query(query: str):
         raise Exception(f"Error executing query: {e}") from e
 
 
+class QueryRunModifiers(BaseModel):
+    limit: int = Field(501, ge=10, le=1001, description="Limit the number of rows returned")
+    offset: int = Field(0, ge=0, description="Offset the number of rows returned")
+    where: Optional[str] = None
+    order_by: Optional[str] = None
+
+
+class QueryVersionRequest(BaseModel):
+    query_run_id: str
+    sql: str
+    modifiers: Optional[QueryRunModifiers] = None
+
+
+class UpdateQueryRunRequest(BaseModel):
+    result_message: Optional[str] = None
+    error_message: Optional[str] = None
+    row_count: Optional[int] = None
+    execution_time_ms: Optional[int] = None
+
+
+class QueryExecutionResult(BaseModel):
+    data: list[dict]
+    execution_time_ms: int
+    row_count: int
+    result_message: str
+    is_select_query: bool
+
+
 @app.post("/execute/version")
 async def run_query_version(request: QueryVersionRequest):
     logger.info(f"Starting version query execution for ID: {request.query_run_id}")
@@ -359,75 +332,12 @@ async def run_query_version(request: QueryVersionRequest):
     # compose sql with modifiers
     sql = request.sql
     if request.modifiers:
-        if request.modifiers.filters:
-            # Build WHERE clause with proper SQL formatting and parameter binding
-            where_conditions = []
-            for filter in request.modifiers.filters:
-
-                def format_value(value):
-                    """Format value for SQL based on its type"""
-                    if isinstance(value, str):
-                        # Escape single quotes in strings
-                        escaped_value = value.replace("'", "''")
-                        return f"'{escaped_value}'"
-                    elif isinstance(value, (int, float)):
-                        return str(value)
-                    elif isinstance(value, bool):
-                        return "TRUE" if value else "FALSE"
-                    else:
-                        return f"'{str(value)}'"
-
-                if filter.operator == QueryRunOperator.eq:
-                    where_conditions.append(f"{filter.column} = {format_value(filter.value)}")
-                elif filter.operator == QueryRunOperator.ne:
-                    where_conditions.append(f"{filter.column} != {format_value(filter.value)}")
-                elif filter.operator == QueryRunOperator.gt:
-                    where_conditions.append(f"{filter.column} > {format_value(filter.value)}")
-                elif filter.operator == QueryRunOperator.gte:
-                    where_conditions.append(f"{filter.column} >= {format_value(filter.value)}")
-                elif filter.operator == QueryRunOperator.lt:
-                    where_conditions.append(f"{filter.column} < {format_value(filter.value)}")
-                elif filter.operator == QueryRunOperator.lte:
-                    where_conditions.append(f"{filter.column} <= {format_value(filter.value)}")
-                elif filter.operator == QueryRunOperator.in_:
-                    if isinstance(filter.value, list):
-                        values = ", ".join([format_value(v) for v in filter.value])
-                        where_conditions.append(f"{filter.column} IN ({values})")
-                    else:
-                        where_conditions.append(
-                            f"{filter.column} IN ({format_value(filter.value)})"
-                        )
-                elif filter.operator == QueryRunOperator.not_in:
-                    if isinstance(filter.value, list):
-                        values = ", ".join([format_value(v) for v in filter.value])
-                        where_conditions.append(f"{filter.column} NOT IN ({values})")
-                    else:
-                        where_conditions.append(
-                            f"{filter.column} NOT IN ({format_value(filter.value)})"
-                        )
-                elif filter.operator == QueryRunOperator.like:
-                    where_conditions.append(f"{filter.column} LIKE {format_value(filter.value)}")
-                elif filter.operator == QueryRunOperator.not_like:
-                    where_conditions.append(
-                        f"{filter.column} NOT LIKE {format_value(filter.value)}"
-                    )
-                elif filter.operator == QueryRunOperator.is_null:
-                    where_conditions.append(f"{filter.column} IS NULL")
-                elif filter.operator == QueryRunOperator.is_not_null:
-                    where_conditions.append(f"{filter.column} IS NOT NULL")
-
-            if where_conditions:
-                sql += " WHERE " + " AND ".join(where_conditions)
-
+        if request.modifiers.where:
+            sql += f" WHERE {request.modifiers.where}"
         if request.modifiers.order_by:
-            order_clauses = [
-                f"{order_by.column} {order_by.direction}" for order_by in request.modifiers.order_by
-            ]
-            sql += " ORDER BY " + ", ".join(order_clauses)
-
+            sql += f" ORDER BY {request.modifiers.order_by}"
         if request.modifiers.limit:
             sql += f" LIMIT {request.modifiers.limit}"
-
         if request.modifiers.offset:
             sql += f" OFFSET {request.modifiers.offset}"
 

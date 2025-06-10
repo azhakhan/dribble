@@ -1,41 +1,14 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from uuid import UUID
 from datetime import datetime
 from typing import Optional, List, Generic, TypeVar
-from enum import Enum
-
-
-class QueryRunOperator(str, Enum):
-    eq = "eq"
-    ne = "ne"
-    gt = "gt"
-    gte = "gte"
-    lt = "lt"
-    lte = "lte"
-    in_ = "in"
-    not_in = "not_in"
-    like = "like"
-    not_like = "not_like"
-    is_null = "is_null"
-    is_not_null = "is_not_null"
-
-
-class QueryRunFilter(BaseModel):
-    column: str
-    operator: QueryRunOperator
-    value: str | int | float | bool | list[str] | list[int] | list[float] | list[bool]
-
-
-class QueryRunOrderBy(BaseModel):
-    column: str
-    direction: str
 
 
 class QueryRunModifiers(BaseModel):
-    filters: Optional[List[QueryRunFilter]] = None
-    order_by: Optional[List[QueryRunOrderBy]] = None
-    limit: Optional[int] = None
-    offset: Optional[int] = None
+    limit: int = Field(501, ge=10, le=1001, description="Limit the number of rows returned")
+    offset: int = Field(0, ge=0, description="Offset the number of rows returned")
+    where: Optional[str] = None
+    order_by: Optional[str] = None
 
 
 # QueryRun schemas
