@@ -151,12 +151,14 @@ const QueryTreeSource = ({
   onQueryDoubleClick,
   selectedQueryId
 }: QueryTreeSourceProps) => {
-  const [isOpen, setIsOpen] = useState(false);
+  // Use centralized tree state for query source expansion
+  const { isQuerySourceExpanded, setQuerySourceExpanded } = useAppStore();
+  const isOpen = isQuerySourceExpanded(source.id);
 
   const handleClick = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    setIsOpen(!isOpen);
+    setQuerySourceExpanded(source.id, !isOpen);
   };
 
   const handleCreateQuery = (e: React.MouseEvent) => {
@@ -292,6 +294,8 @@ export const QueryTree = ({
       });
     }
   }, [queriesData, queries, setQuery]);
+
+  // Note: Removed automatic cleanup during initialization to prevent interference with persistence
 
   // Create sources map from store only
   const sourceMap = useMemo(() => {

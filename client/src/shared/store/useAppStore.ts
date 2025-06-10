@@ -65,6 +65,35 @@ export interface SchemaObject {
 // Type for the schema map
 export type SourceSchemaMap = Record<string, Record<string, SchemaObject>>;
 
+// Tree state persistence interfaces (for future use)
+// interface TreeNodeState {
+//   id: string;
+//   isExpanded: boolean;
+//   nodeType: "source" | "schema" | "table" | "column" | "folder";
+//   sourceId?: string; // For nested nodes to know which source they belong to
+// }
+
+interface SidebarState {
+  activeTab: "sources" | "queries";
+  expandedNodes: Record<string, boolean>; // nodeId -> isExpanded
+  expandedQuerySources: Record<string, boolean>; // sourceId -> isExpanded in query tree
+}
+
+interface TreeState {
+  sidebarState: SidebarState;
+
+  // Actions for tree state management
+  setSidebarActiveTab: (tab: "sources" | "queries") => void;
+  setNodeExpanded: (nodeId: string, isExpanded: boolean) => void;
+  setQuerySourceExpanded: (sourceId: string, isExpanded: boolean) => void;
+  collapseDisconnectedSources: (connectedSourceIds: string[]) => void;
+  isNodeExpanded: (nodeId: string) => boolean;
+  isQuerySourceExpanded: (sourceId: string) => boolean;
+
+  // Debug action
+  debugLogLocalStorage: () => void;
+}
+
 // Enhanced query tab interface with better state management
 export interface QueryTab {
   id: string;
@@ -151,7 +180,7 @@ interface SourceChildrenState {
 }
 
 // App state
-interface AppState extends FileTreeState, SourceChildrenState, QueryState {
+interface AppState extends FileTreeState, SourceChildrenState, QueryState, TreeState {
   // Panel sizes
   panelSizes: number[];
 
@@ -277,6 +306,13 @@ export const useAppStore = create<AppState>()(
       selectedNodeId: undefined,
       loadingSourceIds: new Set(),
 
+      // Tree state with default values
+      sidebarState: {
+        activeTab: "sources",
+        expandedNodes: {},
+        expandedQuerySources: {}
+      },
+
       // Source and schema state
       selectedSource: null,
       sourceSchemaMap: {},
@@ -331,6 +367,62 @@ export const useAppStore = create<AppState>()(
       loadingSources: false,
       loadingConnectedSources: false,
       loadingSchemas: new Set(),
+
+      // Tree state actions
+      setSidebarActiveTab: (tab) =>
+        set((state) => ({
+          sidebarState: { ...state.sidebarState, activeTab: tab }
+        })),
+
+      setNodeExpanded: (nodeId, isExpanded) =>
+        set((state) => ({
+          sidebarState: {
+            ...state.sidebarState,
+            expandedNodes: {
+              ...state.sidebarState.expandedNodes,
+              [nodeId]: isExpanded
+            }
+          }
+        })),
+
+      setQuerySourceExpanded: (sourceId, isExpanded) =>
+        set((state) => ({
+          sidebarState: {
+            ...state.sidebarState,
+            expandedQuerySources: {
+              ...state.sidebarState.expandedQuerySources,
+              [sourceId]: isExpanded
+            }
+          }
+        })),
+
+      collapseDisconnectedSources: (connectedSourceIds) =>
+        set((state) => {
+          // Only clean up query source expansion states (simpler and safer)
+          const connectedSet = new Set(connectedSourceIds);
+
+          const newExpandedQuerySources = Object.entries(state.sidebarState.expandedQuerySources)
+            .filter(([sourceId]) => connectedSet.has(sourceId))
+            .reduce((acc, [sourceId, isExpanded]) => ({ ...acc, [sourceId]: isExpanded }), {});
+
+          return {
+            sidebarState: {
+              ...state.sidebarState,
+              expandedQuerySources: newExpandedQuerySources
+              // Keep expandedNodes unchanged - let manual disconnects handle cleanup
+            }
+          };
+        }),
+
+      isNodeExpanded: (nodeId) => {
+        const state = get();
+        return state.sidebarState.expandedNodes[nodeId] || false;
+      },
+
+      isQuerySourceExpanded: (sourceId) => {
+        const state = get();
+        return state.sidebarState.expandedQuerySources[sourceId] || false;
+      },
 
       // Panel actions
       setPanelSizes: (sizes) => set({ panelSizes: sizes }),
@@ -390,15 +482,12 @@ export const useAppStore = create<AppState>()(
 
       // Source children actions
       setSourceGeneratedChildren: (sourceId, children) =>
-        set((state) => {
-          console.log(`🌳 Setting generated children for source ${sourceId}:`, children);
-          return {
-            sourceGeneratedChildren: {
-              ...state.sourceGeneratedChildren,
-              [sourceId]: children
-            }
-          };
-        }),
+        set((state) => ({
+          sourceGeneratedChildren: {
+            ...state.sourceGeneratedChildren,
+            [sourceId]: children
+          }
+        })),
 
       // Editor actions
       setEditorContent: (content) => set({ editorContent: content }),
@@ -480,11 +569,75 @@ export const useAppStore = create<AppState>()(
             }
           });
 
+          // Clean up tree expansion states for disconnected sources
+          const newExpandedNodes = { ...state.sidebarState.expandedNodes };
+          Object.keys(newExpandedNodes).forEach((nodeId) => {
+            // Remove expansion state for source nodes that are no longer connected
+            if (nodeId.startsWith("source-")) {
+              const sourceId = nodeId.replace("source-", "");
+              if (!connectedSet.has(sourceId)) {
+                delete newExpandedNodes[nodeId];
+              }
+            }
+            // Remove schema nodes for disconnected sources
+            else if (nodeId.startsWith("schema-")) {
+              const parts = nodeId.split("-");
+              if (parts.length >= 2) {
+                const sourceId = parts[1];
+                if (!connectedSet.has(sourceId)) {
+                  delete newExpandedNodes[nodeId];
+                }
+              }
+            }
+            // Remove organizational folder nodes (tables-folder-, views-folder-)
+            else if (nodeId.includes("-folder-")) {
+              const parts = nodeId.split("-folder-");
+              if (parts.length >= 2) {
+                const sourceIdPart = parts[1].split("-")[0];
+                if (!connectedSet.has(sourceIdPart)) {
+                  delete newExpandedNodes[nodeId];
+                }
+              }
+            }
+            // Remove table/view nodes for disconnected sources
+            else if (nodeId.startsWith("table-")) {
+              // Table node IDs are like: table-${sourceId}_${schemaName}_${tableName}
+              const tableIdPart = nodeId.replace("table-", "");
+              const sourceId = tableIdPart.split("_")[0];
+              if (!connectedSet.has(sourceId)) {
+                delete newExpandedNodes[nodeId];
+              }
+            }
+            // Remove column nodes for disconnected sources
+            else if (nodeId.startsWith("column-")) {
+              const parts = nodeId.split("-");
+              if (parts.length >= 2) {
+                const sourceId = parts[1];
+                if (!connectedSet.has(sourceId)) {
+                  delete newExpandedNodes[nodeId];
+                }
+              }
+            }
+          });
+
+          // Clean up query source expansion states
+          const newExpandedQuerySources = { ...state.sidebarState.expandedQuerySources };
+          Object.keys(newExpandedQuerySources).forEach((sourceId) => {
+            if (!connectedSet.has(sourceId)) {
+              delete newExpandedQuerySources[sourceId];
+            }
+          });
+
           return {
             sourceSchemaMap: newSourceSchemaMap,
             sourceGeneratedChildren: newSourceGeneratedChildren,
             sourceSchemaErrors: newSourceSchemaErrors,
-            sourceStatuses: newSourceStatuses
+            sourceStatuses: newSourceStatuses,
+            sidebarState: {
+              ...state.sidebarState,
+              expandedNodes: newExpandedNodes,
+              expandedQuerySources: newExpandedQuerySources
+            }
           };
         }),
 
@@ -1141,12 +1294,10 @@ export const useAppStore = create<AppState>()(
         const currentState = get();
 
         if (currentState.sourceSchemaMap[sourceId]) {
-          console.log("✅ Schema already exists for source:", sourceId);
           return;
         }
 
         if (currentState.loadingSchemas.has(sourceId)) {
-          console.log("⏳ Schema already loading for source:", sourceId);
           return;
         }
 
@@ -1188,32 +1339,21 @@ export const useAppStore = create<AppState>()(
 
       loadConnectedSourcesSchemas: async (connectedSources: ConnectedSource[]) => {
         if (!connectedSources || connectedSources.length === 0) {
-          console.log("⚠️ No connected sources provided to loadConnectedSourcesSchemas");
           return;
         }
 
-        const currentState = get();
-
-        // Clean up data for disconnected sources
-        const connectedSourceIds = connectedSources.map((s) => s.id);
-        currentState.cleanupDisconnectedSources(connectedSourceIds);
-
         // Load schemas for all connected sources in parallel
-        const results = await Promise.allSettled(
+        await Promise.allSettled(
           connectedSources.map(async (source) => {
-            return await currentState.loadSourceSchema(source.id);
+            return await get().loadSourceSchema(source.id);
           })
         );
+      },
 
-        // Log results
-        results.forEach((result, index) => {
-          const sourceId = connectedSources[index].id;
-          if (result.status === "fulfilled") {
-            console.log("✅ Schema loaded successfully for:", sourceId);
-          } else {
-            console.error("❌ Schema loading failed for:", sourceId, result.reason);
-          }
-        });
+      // Debug action
+      debugLogLocalStorage: () => {
+        const state = get();
+        console.log("Current localStorage state:", state);
       }
     }),
     {
@@ -1221,7 +1361,8 @@ export const useAppStore = create<AppState>()(
       // Only persist certain values
       partialize: (state) => ({
         panelSizes: state.panelSizes,
-        editorContent: state.editorContent
+        editorContent: state.editorContent,
+        sidebarState: state.sidebarState
       })
     }
   )

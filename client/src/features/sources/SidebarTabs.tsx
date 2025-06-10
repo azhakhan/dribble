@@ -1,7 +1,7 @@
-import { useState } from "react";
 import { Database, FileText } from "lucide-react";
 import { SourcesPanel } from "./SourcesPanel";
 import { QueryTree } from "./QueryTree";
+import { useAppStore } from "@/shared/store/useAppStore";
 import type { FileNode } from "@/shared/lib/fileTreeUtils";
 import type { Query } from "@/shared/lib/api";
 
@@ -16,8 +16,6 @@ interface SidebarTabsProps {
   selectedQueryId?: string;
 }
 
-type TabType = "sources" | "queries";
-
 export const SidebarTabs = ({
   sources,
   sourcesLoading,
@@ -28,38 +26,49 @@ export const SidebarTabs = ({
   onQueryDoubleClick,
   selectedQueryId
 }: SidebarTabsProps) => {
-  const [activeTab, setActiveTab] = useState<TabType>("sources");
+  // Use centralized tree state instead of local state
+  const activeTab = useAppStore((state) => state.sidebarState.activeTab);
+  const setSidebarActiveTab = useAppStore((state) => state.setSidebarActiveTab);
 
   const renderTabContent = () => {
-    if (activeTab === "sources") {
-      if (sourcesLoading) {
-        return <div className="p-4 text-sm text-muted-foreground">Loading sources...</div>;
-      }
-
-      if (sourcesError) {
-        return <div className="p-4 text-sm text-red-500">Error loading sources</div>;
-      }
-
-      return (
-        <SourcesPanel
-          data={sources}
-          onSourceSelect={onSourceSelect}
-          onTableDoubleClick={onTableDoubleClick}
-        />
-      );
+    switch (activeTab) {
+      case "sources":
+        if (sourcesLoading) {
+          return <div className="p-4 text-sm text-muted-foreground">Loading sources...</div>;
+        }
+        if (sourcesError) {
+          return <div className="p-4 text-sm text-red-500">Error loading sources</div>;
+        }
+        return (
+          <SourcesPanel
+            data={sources}
+            onSourceSelect={onSourceSelect}
+            onTableDoubleClick={onTableDoubleClick}
+          />
+        );
+      case "queries":
+        return (
+          <QueryTree
+            onQuerySelect={onQuerySelect}
+            onQueryDoubleClick={onQueryDoubleClick}
+            selectedQueryId={selectedQueryId}
+          />
+        );
+      default:
+        if (sourcesLoading) {
+          return <div className="p-4 text-sm text-muted-foreground">Loading sources...</div>;
+        }
+        if (sourcesError) {
+          return <div className="p-4 text-sm text-red-500">Error loading sources</div>;
+        }
+        return (
+          <SourcesPanel
+            data={sources}
+            onSourceSelect={onSourceSelect}
+            onTableDoubleClick={onTableDoubleClick}
+          />
+        );
     }
-
-    if (activeTab === "queries") {
-      return (
-        <QueryTree
-          onQuerySelect={onQuerySelect}
-          onQueryDoubleClick={onQueryDoubleClick}
-          selectedQueryId={selectedQueryId}
-        />
-      );
-    }
-
-    return null;
   };
 
   return (
@@ -73,7 +82,7 @@ export const SidebarTabs = ({
                 ? "border-primary text-primary bg-accent/30"
                 : "border-transparent text-muted-foreground hover:text-foreground"
             }`}
-            onClick={() => setActiveTab("sources")}
+            onClick={() => setSidebarActiveTab("sources")}
           >
             <Database className="h-4 w-4" strokeWidth={1.5} />
             Sources
@@ -84,7 +93,7 @@ export const SidebarTabs = ({
                 ? "border-primary text-primary bg-accent/30"
                 : "border-transparent text-muted-foreground hover:text-foreground"
             }`}
-            onClick={() => setActiveTab("queries")}
+            onClick={() => setSidebarActiveTab("queries")}
           >
             <FileText className="h-4 w-4" strokeWidth={1.5} />
             Queries

@@ -17,11 +17,6 @@ class UpdateQueryRequest(BaseModel):
     is_ephemeral: Optional[bool] = None
 
 
-class ExecuteQueryRequest(BaseModel):
-    query: str
-    source_id: UUID
-
-
 class ExecuteVersionRequest(BaseModel):
     query_version_id: UUID
     modifiers: Optional[QueryRunModifiers] = None
