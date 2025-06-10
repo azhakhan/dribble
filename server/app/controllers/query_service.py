@@ -7,6 +7,7 @@ from app.schemas.query import (
     CreateEphemeralQueryRequest,
     ConvertEphemeralQueryRequest,
 )
+from app.schemas.query_run import QueryRunModifiers, UpdateQueryRunRequest
 from uuid import UUID
 from typing import List, Dict
 from itertools import groupby
@@ -179,6 +180,34 @@ class QueryVersionService:
 
 
 class QueryRunService:
+    @staticmethod
+    def create_run(
+        db: Session, query_version_id: UUID, modifiers: QueryRunModifiers, user_id: UUID
+    ) -> QueryRun:
+        """Create a new query run"""
+        run = QueryRun(
+            query_version_id=query_version_id,
+            modifiers=modifiers,
+            created_by=user_id,
+        )
+        return safe_create(db, run)
+
+    @staticmethod
+    def update_run(db: Session, run_id: UUID, request: UpdateQueryRunRequest) -> QueryRun:
+        """Update a query run"""
+        query_run = get_or_404(db, QueryRun, run_id, "Query run not found")
+
+        if request.result_message is not None:
+            query_run.result_message = request.result_message
+        if request.error_message is not None:
+            query_run.error_message = request.error_message
+        if request.row_count is not None:
+            query_run.row_count = request.row_count
+        if request.execution_time_ms is not None:
+            query_run.execution_time_ms = request.execution_time_ms
+
+        return safe_update(db, query_run)
+
     @staticmethod
     def get_runs_by_query_id(db: Session, query_id: UUID) -> List[QueryRun]:
         """Get all runs for a specific query"""
