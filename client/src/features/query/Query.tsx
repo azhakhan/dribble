@@ -12,7 +12,6 @@ import {
   SelectTrigger,
   SelectValue
 } from "@/components/ui/select";
-import { ExternalLinkIcon } from "lucide-react";
 import { type QueryVersion } from "@/shared/lib/api";
 
 interface QueryProps {
@@ -32,10 +31,12 @@ function QueryComponent({ tabId }: QueryProps) {
     loadingVersions,
     loadingRuns,
     loadQueryVersions,
-    loadQueryRuns
+    loadQueryRuns,
+    sources
   } = useAppStore();
 
   const currentTab = openTabs.find((tab) => tab.id === tabId);
+  const currentSource = currentTab?.sourceId ? sources[currentTab.sourceId] : null;
 
   // Get versions and runs for this query from the store
   const versions = useMemo(
@@ -134,7 +135,12 @@ function QueryComponent({ tabId }: QueryProps) {
             <div className="flex-1 min-h-0">
               {showRuns ? (
                 currentTab.queryId ? (
-                  <QueryRuns queryId={currentTab.queryId} onBack={() => setShowRuns(false)} />
+                  <QueryRuns
+                    queryId={currentTab.queryId}
+                    onBack={() => setShowRuns(false)}
+                    sourceName={currentSource?.name || "No source selected"}
+                    queryName={currentTab.title}
+                  />
                 ) : (
                   <div className="h-full flex items-center justify-center text-muted-foreground">
                     No query selected
@@ -164,12 +170,13 @@ function QueryComponent({ tabId }: QueryProps) {
                     <span className="text-xs text-muted-foreground whitespace-nowrap">
                       Version:
                     </span>
+
                     <Select
                       value={selectedVersionId || ""}
                       onValueChange={handleVersionChange}
                       disabled={versions.length === 0 || isLoadingVersions}
                     >
-                      <SelectTrigger className="w-48 h-7 text-xs">
+                      <SelectTrigger className="w-48 h-6 text-xs border-none bg-transparent">
                         <SelectValue
                           placeholder={isLoadingVersions ? "Loading..." : "Select version"}
                         />
@@ -214,10 +221,9 @@ function QueryComponent({ tabId }: QueryProps) {
                       size="sm"
                       onClick={handleShowRuns}
                       disabled={!currentTab.queryId}
-                      className="h-7 px-2 text-xs gap-1"
+                      className="h-7 px-2 text-xs gap-1 underline cursor-pointer"
                     >
                       All Runs ({runs?.length ?? 0})
-                      <ExternalLinkIcon size={12} />
                     </Button>
                   </div>
                 </div>

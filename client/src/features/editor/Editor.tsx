@@ -173,14 +173,13 @@ export function Editor({ tabId, onQueryExecuted }: EditorProps) {
     <div ref={editorContainerRef} className="h-full flex flex-col">
       {/* Fixed header with run button only */}
       <div className="flex-shrink-0 flex justify-between items-center gap-2 p-2 border-b">
-        {/* Query metadata on the left */}
-        <div className="flex items-center gap-2 min-w-0">
+        <div className="flex items-center gap-2 min-w-0 px-2">
           <div className="flex items-center gap-1">
             <Database
-              className={`h-4 w-4 ${isSourceConnected ? "text-green-600" : "text-red-500"}`}
+              className={`h-4 w-4 mr-1 ${isSourceConnected ? "text-green-600" : "text-red-500"}`}
               strokeWidth={1.5}
             />
-            <span className="truncate font-medium text-xs text-muted-foreground">
+            <span className="truncate font-medium text-sm text-muted-foreground">
               {tabSource?.name || "No source selected"}
             </span>
             {!isSourceConnected && tabSource && (
@@ -188,11 +187,11 @@ export function Editor({ tabId, onQueryExecuted }: EditorProps) {
             )}
           </div>
           <span className="text-xs text-muted-foreground">/</span>
-          <span className="truncate font-semibold text-xs relative group" style={{ minWidth: 0 }}>
+          <span className="truncate text-sm relative group" style={{ minWidth: 0 }}>
             {editingName ? (
               <span className="flex items-center gap-1">
                 <Input
-                  className="h-6 px-2 py-0 text-xs w-32"
+                  className="h-6 px-2 py-0 text-sm w-32"
                   value={tempName}
                   autoFocus
                   onChange={(e) => setTempName(e.target.value)}
@@ -237,12 +236,12 @@ export function Editor({ tabId, onQueryExecuted }: EditorProps) {
         </div>
 
         {/* Action buttons on the right */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 h-8">
           <Button
             onClick={handleCreateQuery}
             disabled={!isEditorReady || currentTab.queryRunning}
             className="gap-1 text-xs cursor-pointer"
-            size="sm"
+            size="xs"
           >
             Create Query
           </Button>
@@ -250,7 +249,7 @@ export function Editor({ tabId, onQueryExecuted }: EditorProps) {
             onClick={() => handleRunQuery()}
             disabled={!canRunQueries || currentTab.queryRunning}
             className="gap-1 text-xs cursor-pointer"
-            size="sm"
+            size="xs"
             title={!isSourceConnected ? "Source is not connected" : ""}
           >
             <PlayIcon size={16} />

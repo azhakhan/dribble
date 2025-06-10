@@ -28,6 +28,8 @@ import { type QueryRun } from "@/shared/lib/api";
 interface QueryRunsProps {
   queryId: string;
   onBack: () => void;
+  sourceName: string;
+  queryName: string;
 }
 
 // Status badge component
@@ -120,7 +122,7 @@ const columns: ColumnDef<QueryRun>[] = [
   }
 ];
 
-export function QueryRuns({ queryId, onBack }: QueryRunsProps) {
+export function QueryRuns({ queryId, onBack, sourceName, queryName }: QueryRunsProps) {
   const { queryRuns, queryRunsPagination, loadingRuns, loadQueryRunsPaginated } = useAppStore();
   const [rowSelection, setRowSelection] = useState({});
   const [pagination, setPagination] = useState({
@@ -162,15 +164,30 @@ export function QueryRuns({ queryId, onBack }: QueryRunsProps) {
   return (
     <div className="h-full flex flex-col">
       {/* Header */}
-      <div className="flex-shrink-0 flex items-center gap-2 p-3 border-b">
-        <Button variant="ghost" size="sm" onClick={onBack} className="gap-1 text-xs">
-          <ArrowLeftIcon size={14} />
-          Back to Editor
-        </Button>
-        <span className="text-sm font-medium">
-          Query Runs ({paginationInfo?.total ?? runs.length})
-          {isLoading && <span className="text-xs text-muted-foreground ml-2">(Loading...)</span>}
-        </span>
+      <div className="flex-shrink-0 flex items-center justify-between gap-2 p-2 border-b">
+        <div className="flex items-center gap-4">
+          <Button variant="ghost" size="sm" onClick={onBack} className="gap-1 text-xs">
+            <ArrowLeftIcon size={14} />
+            Back to Editor
+          </Button>
+
+          <div className="flex items-center gap-1">
+            <span className="truncate text-sm text-muted-foreground">
+              {sourceName || "No source selected"}
+            </span>
+            <span className="text-xs text-muted-foreground">/</span>
+            <span className="truncate text-sm relative group" style={{ minWidth: 0 }}>
+              {queryName || "Untitled query"}
+            </span>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <span className="text-xs">
+            Query Runs ({paginationInfo?.total ?? runs.length})
+            {isLoading && <span className="text-xs text-muted-foreground ml-2">(Loading...)</span>}
+          </span>
+        </div>
       </div>
 
       {/* Data Table */}
