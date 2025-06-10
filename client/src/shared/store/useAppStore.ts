@@ -8,14 +8,17 @@ import {
   createQuery,
   createQueryVersion,
   updateQuery,
-  executeQuery as apiExecuteQuery,
-  getQueryResults,
+  executeQueryVersionRun,
+  getQueryRunResults,
+  getQueryRunsByQueryId,
+  getQueryRunsByQueryIdPaginated,
   getSources,
   getConnectedSources,
   getSourceSchemas,
   getOrCreateEphemeralQuery,
   convertEphemeralToRegular,
-  type ConnectedSource
+  type ConnectedSource,
+  type CreateQueryRunRequest
 } from "@/shared/lib/api";
 import type { FileNode } from "@/shared/lib/fileTreeUtils";
 
@@ -64,6 +67,38 @@ export interface SchemaObject {
 // Type for the schema map
 export type SourceSchemaMap = Record<string, Record<string, SchemaObject>>;
 
+// Tree state persistence interfaces (for future use)
+// interface TreeNodeState {
+//   id: string;
+//   isExpanded: boolean;
+//   nodeType: "source" | "schema" | "table" | "column" | "folder";
+//   sourceId?: string; // For nested nodes to know which source they belong to
+// }
+
+interface SidebarState {
+  activeTab: "sources" | "queries";
+  expandedNodes: Record<string, boolean>; // nodeId -> isExpanded
+  expandedQuerySources: Record<string, boolean>; // sourceId -> isExpanded in query tree
+}
+
+interface TreeState {
+  sidebarState: SidebarState;
+
+  // Actions for tree state management
+  setSidebarActiveTab: (tab: "sources" | "queries") => void;
+  setNodeExpanded: (nodeId: string, isExpanded: boolean) => void;
+  setQuerySourceExpanded: (sourceId: string, isExpanded: boolean) => void;
+  collapseDisconnectedSources: (connectedSourceIds: string[]) => void;
+  isNodeExpanded: (nodeId: string) => boolean;
+  isQuerySourceExpanded: (sourceId: string) => boolean;
+
+  // Debug action
+  debugLogLocalStorage: () => void;
+
+  // Initialize runtime states for query tabs
+  initializeQueryTabsRuntimeStates: () => Promise<void>;
+}
+
 // Enhanced query tab interface with better state management
 export interface QueryTab {
   id: string;
@@ -82,11 +117,23 @@ export interface QueryTab {
   originalContent: string;
 }
 
+// Pagination interface
+interface PaginationInfo {
+  total: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
+  has_next: boolean;
+  has_prev: boolean;
+}
+
 // Centralized query state management
 interface QueryState {
   // Cached data
   queries: Record<string, Query>; // queryId -> Query
   queryVersions: Record<string, QueryVersion[]>; // queryId -> versions
+  queryRuns: Record<string, QueryRun[]>; // queryId -> runs
+  queryRunsPagination: Record<string, PaginationInfo>; // queryId -> pagination info
   sources: Record<string, Source>; // sourceId -> Source
   connectedSources: Set<string>; // Set of connected source IDs
   allSources: Source[]; // All available sources
@@ -95,6 +142,7 @@ interface QueryState {
   // Loading states
   loadingQueries: Set<string>; // Set of query IDs being loaded
   loadingVersions: Set<string>; // Set of query IDs whose versions are being loaded
+  loadingRuns: Set<string>; // Set of query IDs whose runs are being loaded
   loadingSources: boolean; // Loading all sources
   loadingConnectedSources: boolean; // Loading connected sources
   loadingSchemas: Set<string>; // Set of source IDs whose schemas are being loaded
@@ -102,9 +150,18 @@ interface QueryState {
   // Actions for centralized query management
   loadQuery: (queryId: string) => Promise<void>;
   loadQueryVersions: (queryId: string) => Promise<void>;
+  loadQueryRuns: (queryId: string, forceRefresh?: boolean) => Promise<void>;
+  loadQueryRunsPaginated: (
+    queryId: string,
+    page: number,
+    pageSize: number,
+    forceRefresh?: boolean
+  ) => Promise<void>;
   loadLatestQueryVersion: (queryId: string) => Promise<QueryVersion | null>;
   setQuery: (queryId: string, query: Query) => void;
   setQueryVersions: (queryId: string, versions: QueryVersion[]) => void;
+  setQueryRuns: (queryId: string, runs: QueryRun[]) => void;
+  setQueryRunsPaginated: (queryId: string, runs: QueryRun[], pagination: PaginationInfo) => void;
 
   // Enhanced source management
   loadSources: () => Promise<void>;
@@ -126,6 +183,13 @@ interface QueryState {
   // Ephemeral query management
   getOrCreateEphemeralQuery: (sourceId: string, schema: string, table: string) => Promise<Query>;
   convertEphemeralToRegular: (queryId: string, name: string) => Promise<Query>;
+
+  // Auto-execution helper
+  shouldAutoExecuteQuery: (tab: QueryTab) => boolean;
+
+  // Unified query/table opening helpers
+  openQueryFromTree: (query: Query) => Promise<void>;
+  openTableFromTree: (sourceId: string, tableName: string) => Promise<void>;
 }
 
 // FileTree state
@@ -150,7 +214,7 @@ interface SourceChildrenState {
 }
 
 // App state
-interface AppState extends FileTreeState, SourceChildrenState, QueryState {
+interface AppState extends FileTreeState, SourceChildrenState, QueryState, TreeState {
   // Panel sizes
   panelSizes: number[];
 
@@ -211,7 +275,7 @@ interface AppState extends FileTreeState, SourceChildrenState, QueryState {
   removeSourceStatus: (sourceId: string) => void;
 
   // Enhanced query tabs actions
-  openQueryTab: (tab: Omit<QueryTab, "id">) => void;
+  openQueryTab: (tab: Omit<QueryTab, "id">) => Promise<void>;
   closeQueryTab: (tabId: string) => void;
   setActiveTab: (tabId: string | null) => void;
   updateTabContent: (tabId: string, content: Partial<QueryTab>) => void;
@@ -276,6 +340,13 @@ export const useAppStore = create<AppState>()(
       selectedNodeId: undefined,
       loadingSourceIds: new Set(),
 
+      // Tree state with default values
+      sidebarState: {
+        activeTab: "sources",
+        expandedNodes: {},
+        expandedQuerySources: {}
+      },
+
       // Source and schema state
       selectedSource: null,
       sourceSchemaMap: {},
@@ -321,15 +392,74 @@ export const useAppStore = create<AppState>()(
       // Centralized query state
       queries: {},
       queryVersions: {},
+      queryRuns: {},
+      queryRunsPagination: {},
       sources: {},
       connectedSources: new Set(),
       loadingQueries: new Set(),
       loadingVersions: new Set(),
+      loadingRuns: new Set(),
       allSources: [],
       connectedSourcesData: [],
       loadingSources: false,
       loadingConnectedSources: false,
       loadingSchemas: new Set(),
+
+      // Tree state actions
+      setSidebarActiveTab: (tab) =>
+        set((state) => ({
+          sidebarState: { ...state.sidebarState, activeTab: tab }
+        })),
+
+      setNodeExpanded: (nodeId, isExpanded) =>
+        set((state) => ({
+          sidebarState: {
+            ...state.sidebarState,
+            expandedNodes: {
+              ...state.sidebarState.expandedNodes,
+              [nodeId]: isExpanded
+            }
+          }
+        })),
+
+      setQuerySourceExpanded: (sourceId, isExpanded) =>
+        set((state) => ({
+          sidebarState: {
+            ...state.sidebarState,
+            expandedQuerySources: {
+              ...state.sidebarState.expandedQuerySources,
+              [sourceId]: isExpanded
+            }
+          }
+        })),
+
+      collapseDisconnectedSources: (connectedSourceIds) =>
+        set((state) => {
+          // Only clean up query source expansion states (simpler and safer)
+          const connectedSet = new Set(connectedSourceIds);
+
+          const newExpandedQuerySources = Object.entries(state.sidebarState.expandedQuerySources)
+            .filter(([sourceId]) => connectedSet.has(sourceId))
+            .reduce((acc, [sourceId, isExpanded]) => ({ ...acc, [sourceId]: isExpanded }), {});
+
+          return {
+            sidebarState: {
+              ...state.sidebarState,
+              expandedQuerySources: newExpandedQuerySources
+              // Keep expandedNodes unchanged - let manual disconnects handle cleanup
+            }
+          };
+        }),
+
+      isNodeExpanded: (nodeId) => {
+        const state = get();
+        return state.sidebarState.expandedNodes[nodeId] || false;
+      },
+
+      isQuerySourceExpanded: (sourceId) => {
+        const state = get();
+        return state.sidebarState.expandedQuerySources[sourceId] || false;
+      },
 
       // Panel actions
       setPanelSizes: (sizes) => set({ panelSizes: sizes }),
@@ -389,15 +519,12 @@ export const useAppStore = create<AppState>()(
 
       // Source children actions
       setSourceGeneratedChildren: (sourceId, children) =>
-        set((state) => {
-          console.log(`🌳 Setting generated children for source ${sourceId}:`, children);
-          return {
-            sourceGeneratedChildren: {
-              ...state.sourceGeneratedChildren,
-              [sourceId]: children
-            }
-          };
-        }),
+        set((state) => ({
+          sourceGeneratedChildren: {
+            ...state.sourceGeneratedChildren,
+            [sourceId]: children
+          }
+        })),
 
       // Editor actions
       setEditorContent: (content) => set({ editorContent: content }),
@@ -479,11 +606,75 @@ export const useAppStore = create<AppState>()(
             }
           });
 
+          // Clean up tree expansion states for disconnected sources
+          const newExpandedNodes = { ...state.sidebarState.expandedNodes };
+          Object.keys(newExpandedNodes).forEach((nodeId) => {
+            // Remove expansion state for source nodes that are no longer connected
+            if (nodeId.startsWith("source-")) {
+              const sourceId = nodeId.replace("source-", "");
+              if (!connectedSet.has(sourceId)) {
+                delete newExpandedNodes[nodeId];
+              }
+            }
+            // Remove schema nodes for disconnected sources
+            else if (nodeId.startsWith("schema-")) {
+              const parts = nodeId.split("-");
+              if (parts.length >= 2) {
+                const sourceId = parts[1];
+                if (!connectedSet.has(sourceId)) {
+                  delete newExpandedNodes[nodeId];
+                }
+              }
+            }
+            // Remove organizational folder nodes (tables-folder-, views-folder-)
+            else if (nodeId.includes("-folder-")) {
+              const parts = nodeId.split("-folder-");
+              if (parts.length >= 2) {
+                const sourceIdPart = parts[1].split("-")[0];
+                if (!connectedSet.has(sourceIdPart)) {
+                  delete newExpandedNodes[nodeId];
+                }
+              }
+            }
+            // Remove table/view nodes for disconnected sources
+            else if (nodeId.startsWith("table-")) {
+              // Table node IDs are like: table-${sourceId}_${schemaName}_${tableName}
+              const tableIdPart = nodeId.replace("table-", "");
+              const sourceId = tableIdPart.split("_")[0];
+              if (!connectedSet.has(sourceId)) {
+                delete newExpandedNodes[nodeId];
+              }
+            }
+            // Remove column nodes for disconnected sources
+            else if (nodeId.startsWith("column-")) {
+              const parts = nodeId.split("-");
+              if (parts.length >= 2) {
+                const sourceId = parts[1];
+                if (!connectedSet.has(sourceId)) {
+                  delete newExpandedNodes[nodeId];
+                }
+              }
+            }
+          });
+
+          // Clean up query source expansion states
+          const newExpandedQuerySources = { ...state.sidebarState.expandedQuerySources };
+          Object.keys(newExpandedQuerySources).forEach((sourceId) => {
+            if (!connectedSet.has(sourceId)) {
+              delete newExpandedQuerySources[sourceId];
+            }
+          });
+
           return {
             sourceSchemaMap: newSourceSchemaMap,
             sourceGeneratedChildren: newSourceGeneratedChildren,
             sourceSchemaErrors: newSourceSchemaErrors,
-            sourceStatuses: newSourceStatuses
+            sourceStatuses: newSourceStatuses,
+            sidebarState: {
+              ...state.sidebarState,
+              expandedNodes: newExpandedNodes,
+              expandedQuerySources: newExpandedQuerySources
+            }
           };
         }),
 
@@ -520,22 +711,33 @@ export const useAppStore = create<AppState>()(
         }),
 
       // Query tabs actions
-      openQueryTab: (tab) =>
-        set((state) => {
-          const newTabId = crypto.randomUUID();
-          const newTab: QueryTab = {
-            ...tab,
-            id: newTabId,
-            isLoadingQuery: false,
-            isLoadingVersions: false,
-            lastSavedContent: "",
-            originalContent: ""
-          };
-          return {
-            openTabs: [...state.openTabs, newTab],
-            activeTabId: newTabId
-          };
-        }),
+      openQueryTab: async (tab) => {
+        const newTabId = crypto.randomUUID();
+        const newTab: QueryTab = {
+          ...tab,
+          id: newTabId,
+          isLoadingQuery: false,
+          isLoadingVersions: false,
+          lastSavedContent: "",
+          originalContent: ""
+        };
+
+        set((state) => ({
+          openTabs: [...state.openTabs, newTab],
+          activeTabId: newTabId
+        }));
+
+        // Auto-execute if conditions are met for the new tab
+        const currentState = get();
+        if (currentState.shouldAutoExecuteQuery(newTab)) {
+          console.log("Auto-executing query on new tab:", newTabId);
+          try {
+            await currentState.executeQuery(newTabId);
+          } catch (error) {
+            console.error("Failed to auto-execute query on new tab:", error);
+          }
+        }
+      },
       closeQueryTab: (tabId) =>
         set((state) => {
           const newOpenTabs = state.openTabs.filter((tab) => tab.id !== tabId);
@@ -587,6 +789,14 @@ export const useAppStore = create<AppState>()(
               // Update global editorContent for backward compatibility
               editorContent: latestVersion?.sql || activeTab.editorContent
             }));
+
+            // Auto-execute if conditions are met
+            const updatedState = get();
+            const updatedTab = updatedState.openTabs.find((tab) => tab.id === tabId);
+            if (updatedTab && currentState.shouldAutoExecuteQuery(updatedTab)) {
+              console.log("Auto-executing query on tab switch:", tabId);
+              await currentState.executeQuery(tabId);
+            }
           } catch (error) {
             console.error("Failed to load latest query version when switching tabs:", error);
             // Still set the source even if loading fails
@@ -602,6 +812,12 @@ export const useAppStore = create<AppState>()(
             editorContent: activeTab.editorContent,
             selectedSource: currentState.sources[activeTab.sourceId] || prevState.selectedSource
           }));
+
+          // Auto-execute if conditions are met for tabs without queryId
+          if (currentState.shouldAutoExecuteQuery(activeTab)) {
+            console.log("Auto-executing query on tab switch (no queryId):", tabId);
+            await currentState.executeQuery(tabId);
+          }
         }
       },
       updateTabContent: (tabId, content) =>
@@ -679,6 +895,14 @@ export const useAppStore = create<AppState>()(
             editorContent:
               prevState.activeTabId === tabId ? latestVersion?.sql || "" : prevState.editorContent
           }));
+
+          // Auto-execute if conditions are met
+          const updatedState = get();
+          const updatedTab = updatedState.openTabs.find((t) => t.id === tabId);
+          if (updatedTab && updatedState.shouldAutoExecuteQuery(updatedTab)) {
+            console.log("Auto-executing query after loading in tab:", tabId);
+            await updatedState.executeQuery(tabId);
+          }
         } catch (error) {
           console.error("Failed to load query:", error);
           // Reset loading state on error
@@ -773,6 +997,73 @@ export const useAppStore = create<AppState>()(
           queryVersions: { ...state.queryVersions, [queryId]: versions }
         })),
 
+      loadQueryRuns: async (queryId, forceRefresh = false) => {
+        const state = get();
+        if (!forceRefresh && (state.queryRuns[queryId] || state.loadingRuns.has(queryId))) return;
+
+        set((state) => ({
+          loadingRuns: new Set(state.loadingRuns).add(queryId)
+        }));
+
+        try {
+          const runs = await getQueryRunsByQueryId(queryId);
+          set((state) => ({
+            queryRuns: { ...state.queryRuns, [queryId]: runs },
+            loadingRuns: new Set([...state.loadingRuns].filter((id) => id !== queryId))
+          }));
+        } catch (error) {
+          console.error(`Failed to load runs for query ${queryId}:`, error);
+          set((state) => ({
+            loadingRuns: new Set([...state.loadingRuns].filter((id) => id !== queryId))
+          }));
+        }
+      },
+
+      setQueryRuns: (queryId, runs) =>
+        set((state) => ({
+          queryRuns: { ...state.queryRuns, [queryId]: runs }
+        })),
+
+      loadQueryRunsPaginated: async (queryId, page, pageSize, forceRefresh = false) => {
+        const state = get();
+
+        if (!forceRefresh && state.loadingRuns.has(queryId)) return;
+
+        set((state) => ({
+          loadingRuns: new Set(state.loadingRuns).add(queryId)
+        }));
+
+        try {
+          const response = await getQueryRunsByQueryIdPaginated(queryId, page, pageSize);
+          set((state) => ({
+            queryRuns: { ...state.queryRuns, [queryId]: response.items },
+            queryRunsPagination: {
+              ...state.queryRunsPagination,
+              [queryId]: {
+                total: response.total,
+                page: response.page,
+                page_size: response.page_size,
+                total_pages: response.total_pages,
+                has_next: response.has_next,
+                has_prev: response.has_prev
+              }
+            },
+            loadingRuns: new Set([...state.loadingRuns].filter((id) => id !== queryId))
+          }));
+        } catch (error) {
+          console.error(`Failed to load paginated runs for query ${queryId}:`, error);
+          set((state) => ({
+            loadingRuns: new Set([...state.loadingRuns].filter((id) => id !== queryId))
+          }));
+        }
+      },
+
+      setQueryRunsPaginated: (queryId, runs, pagination) =>
+        set((state) => ({
+          queryRuns: { ...state.queryRuns, [queryId]: runs },
+          queryRunsPagination: { ...state.queryRunsPagination, [queryId]: pagination }
+        })),
+
       setSources: (sources) =>
         set(() => ({
           sources: sources.reduce((acc, source) => ({ ...acc, [source.id]: source }), {})
@@ -829,15 +1120,64 @@ export const useAppStore = create<AppState>()(
         }));
 
         try {
-          // Step 1: Save query version if this tab has an existing query and content has changed
-          // Skip version saving for ephemeral queries that haven't been manually modified
-          const shouldSaveVersion =
-            tab.queryId &&
-            queryToRun.trim() !== tab.lastSavedContent.trim() &&
-            !(currentState.queries[tab.queryId]?.is_ephemeral && !tab.isDirty);
+          // Step 1: Ensure we have a query and get the version ID for what user wants to execute
+          let versionId: string;
 
-          if (shouldSaveVersion && tab.queryId) {
-            await currentState.saveQueryVersion(tab.queryId, queryToRun, "run");
+          if (tab.queryId) {
+            // We have an existing query
+            const currentLatestVersion = await currentState.loadLatestQueryVersion(tab.queryId);
+
+            // Check if what user wants to execute is different from the latest saved version
+            const shouldSaveNewVersion =
+              !currentLatestVersion || queryToRun.trim() !== currentLatestVersion.sql.trim();
+
+            if (shouldSaveNewVersion) {
+              // Save the current editor content as a new version
+              await currentState.saveQueryVersion(tab.queryId, queryToRun, "run");
+
+              // Get the version we just created
+              const newVersion = await currentState.loadLatestQueryVersion(tab.queryId);
+              if (!newVersion) {
+                throw new Error("Failed to create query version");
+              }
+              versionId = newVersion.id;
+
+              // Update the tab's saved content tracking
+              set((prevState) => ({
+                openTabs: prevState.openTabs.map((t) =>
+                  t.id === tabId
+                    ? {
+                        ...t,
+                        lastSavedContent: queryToRun,
+                        isDirty: false // Mark as clean since we just saved
+                      }
+                    : t
+                )
+              }));
+            } else {
+              // Content is the same as latest version, use existing version
+              versionId = currentLatestVersion.id;
+            }
+          } else {
+            // No query exists, create a new one
+            const newQueryId = await currentState.createNewQuery(tab.sourceId);
+
+            // Update the tab to reference the new query
+            set((prevState) => ({
+              openTabs: prevState.openTabs.map((t) =>
+                t.id === tabId ? { ...t, queryId: newQueryId } : t
+              )
+            }));
+
+            // Save the current editor content as the first version
+            await currentState.saveQueryVersion(newQueryId, queryToRun, "run");
+
+            // Get the version we just created
+            const newVersion = await currentState.loadLatestQueryVersion(newQueryId);
+            if (!newVersion) {
+              throw new Error("Failed to create query version");
+            }
+            versionId = newVersion.id;
 
             // Update the tab's saved content tracking
             set((prevState) => ({
@@ -853,8 +1193,13 @@ export const useAppStore = create<AppState>()(
             }));
           }
 
-          // Step 2: Execute query and get a query ID
-          const queryId = await apiExecuteQuery(tab.sourceId, queryToRun);
+          // Step 2: Create a query run and execute
+          const runRequest: CreateQueryRunRequest = {
+            query_version_id: versionId,
+            modifiers: undefined // TODO: Add support for modifiers from UI
+          };
+
+          const runId = await executeQueryVersionRun(runRequest);
 
           // Step 3: Poll for results until we get a final response
           const pollForResults = async (maxAttempts = 50): Promise<object[]> => {
@@ -864,7 +1209,7 @@ export const useAppStore = create<AppState>()(
             }
 
             try {
-              const results = await getQueryResults(queryId);
+              const results = await getQueryRunResults(runId);
 
               // Check if results is an array (query completed successfully)
               if (Array.isArray(results)) {
@@ -906,6 +1251,17 @@ export const useAppStore = create<AppState>()(
                 : t
             )
           }));
+
+          // Reload runs to get the latest run data after successful execution
+          // Add a small delay to ensure the run is fully persisted
+          await new Promise((resolve) => setTimeout(resolve, 200));
+
+          const finalState = get();
+          const finalTab = finalState.openTabs.find((t) => t.id === tabId);
+          if (finalTab?.queryId) {
+            // Force refresh to get the latest runs including the one just created
+            await finalState.loadQueryRuns(finalTab.queryId, true);
+          }
         } catch (error) {
           console.error("Query execution failed:", error);
           set(() => ({
@@ -1085,12 +1441,10 @@ export const useAppStore = create<AppState>()(
         const currentState = get();
 
         if (currentState.sourceSchemaMap[sourceId]) {
-          console.log("✅ Schema already exists for source:", sourceId);
           return;
         }
 
         if (currentState.loadingSchemas.has(sourceId)) {
-          console.log("⏳ Schema already loading for source:", sourceId);
           return;
         }
 
@@ -1132,32 +1486,186 @@ export const useAppStore = create<AppState>()(
 
       loadConnectedSourcesSchemas: async (connectedSources: ConnectedSource[]) => {
         if (!connectedSources || connectedSources.length === 0) {
-          console.log("⚠️ No connected sources provided to loadConnectedSourcesSchemas");
           return;
         }
 
-        const currentState = get();
-
-        // Clean up data for disconnected sources
-        const connectedSourceIds = connectedSources.map((s) => s.id);
-        currentState.cleanupDisconnectedSources(connectedSourceIds);
-
         // Load schemas for all connected sources in parallel
-        const results = await Promise.allSettled(
+        await Promise.allSettled(
           connectedSources.map(async (source) => {
-            return await currentState.loadSourceSchema(source.id);
+            return await get().loadSourceSchema(source.id);
           })
         );
+      },
 
-        // Log results
-        results.forEach((result, index) => {
-          const sourceId = connectedSources[index].id;
-          if (result.status === "fulfilled") {
-            console.log("✅ Schema loaded successfully for:", sourceId);
-          } else {
-            console.error("❌ Schema loading failed for:", sourceId, result.reason);
+      // Debug action
+      debugLogLocalStorage: () => {
+        const state = get();
+        console.log("Current localStorage state:", state);
+      },
+
+      // Initialize runtime states - called on app start to reset runtime states
+      initializeQueryTabsRuntimeStates: async () => {
+        set((state) => ({
+          openTabs: state.openTabs.map((tab) => ({
+            ...tab,
+            // Reset runtime states to defaults on app load
+            queryResults: null,
+            queryRunning: false,
+            isLoadingQuery: false,
+            isLoadingVersions: false
+          }))
+        }));
+
+        // After resetting runtime states, check if active tab should auto-execute
+        // We need to wait a bit for connected sources to be loaded
+        setTimeout(async () => {
+          const currentState = get();
+          if (currentState.activeTabId) {
+            const activeTab = currentState.openTabs.find(
+              (tab) => tab.id === currentState.activeTabId
+            );
+            if (activeTab && currentState.shouldAutoExecuteQuery(activeTab)) {
+              console.log("Auto-executing active tab on page reload:", currentState.activeTabId);
+              try {
+                await currentState.executeQuery(currentState.activeTabId!);
+              } catch (error) {
+                console.error("Failed to auto-execute query on page reload:", error);
+              }
+            }
           }
-        });
+        }, 500); // Wait 500ms for connected sources to load
+      },
+
+      // Helper function to determine if a query should auto-execute
+      shouldAutoExecuteQuery: (tab: QueryTab) => {
+        // Don't auto-execute if query is already running
+        if (tab.queryRunning) return false;
+
+        // Don't auto-execute if there are already results
+        if (tab.queryResults && tab.queryResults.length > 0) return false;
+
+        // Don't auto-execute if no SQL content
+        const sql = tab.editorContent?.trim();
+        if (!sql) return false;
+
+        // Check if the source is connected
+        const currentState = get();
+        if (!currentState.connectedSources.has(tab.sourceId)) {
+          // During page load, connected sources might not be loaded yet
+          // If we have connected sources data, check that instead
+          if (currentState.connectedSourcesData.length > 0) {
+            const isConnected = currentState.connectedSourcesData.some(
+              (source) => source.id === tab.sourceId
+            );
+            if (!isConnected) return false;
+          } else {
+            // No connected sources data yet, don't auto-execute
+            return false;
+          }
+        }
+
+        // Check if it's a SELECT query (case-insensitive, allowing for comments and whitespace)
+        const cleanSql = sql.replace(/^\/\*[\s\S]*?\*\/|^--.*$/gm, "").trim();
+        const isSelectQuery = /^\s*select\s+/i.test(cleanSql);
+
+        return isSelectQuery;
+      },
+
+      // Unified helper to open query from tree (query double-click)
+      openQueryFromTree: async (query: Query) => {
+        const currentState = get();
+
+        // Check if query is already open in a tab
+        const existingTab = currentState.openTabs.find((tab) => tab.queryId === query.id);
+
+        if (existingTab) {
+          // Switch to existing tab - auto-execution will handle running if needed
+          await currentState.setActiveTab(existingTab.id);
+        } else {
+          // Open new tab for this query - auto-execution will handle running automatically
+          await currentState.openQueryTab({
+            queryId: query.id,
+            sourceId: query.source_id,
+            title: query.name || `Query ${query.id.slice(0, 8)}`,
+            isDirty: false,
+            editorContent: "", // Will be loaded by loadQueryInTab
+            queryResults: null,
+            queryRunning: false,
+            selectedTableData: null,
+            isLoadingQuery: true,
+            isLoadingVersions: true,
+            lastSavedContent: "",
+            originalContent: ""
+          });
+
+          // Get the newly created tab ID from the store
+          const updatedState = get();
+          const newTab = updatedState.openTabs[updatedState.openTabs.length - 1]; // Latest tab
+
+          if (newTab) {
+            // Load query data into the tab - auto-execution will handle running
+            await currentState.loadQueryInTab(newTab.id, query.id);
+          }
+        }
+      },
+
+      // Unified helper to open table from tree (table double-click)
+      openTableFromTree: async (sourceId: string, tableName: string) => {
+        const currentState = get();
+
+        try {
+          // Parse table name to get schema and table
+          const parts = tableName.split(".");
+          const schema = parts.length > 1 ? parts[0] : "public";
+          const table = parts.length > 1 ? parts[1] : parts[0];
+
+          // Get or create ephemeral query for this table
+          const ephemeralQuery = await currentState.getOrCreateEphemeralQuery(
+            sourceId,
+            schema,
+            table
+          );
+
+          // Load the latest version to get the SQL
+          const latestVersion = await currentState.loadLatestQueryVersion(ephemeralQuery.id);
+
+          const sql = latestVersion?.sql || `SELECT * FROM ${schema}.${table} LIMIT 101`;
+
+          // Create a new tab for this ephemeral query
+          // Auto-execution will handle running the query automatically
+          await currentState.openQueryTab({
+            queryId: ephemeralQuery.id,
+            sourceId,
+            title: `${schema}.${table}`,
+            isDirty: false,
+            editorContent: sql,
+            queryResults: null,
+            queryRunning: false,
+            selectedTableData: { sourceId, tableName, query: sql },
+            isLoadingQuery: false,
+            isLoadingVersions: false,
+            lastSavedContent: sql,
+            originalContent: sql
+          });
+        } catch (error) {
+          console.error("Failed to handle table double-click:", error);
+          // Fallback to simple query - auto-execution will handle running
+          const query = `SELECT * FROM ${tableName} LIMIT 101`;
+          await currentState.openQueryTab({
+            queryId: null,
+            sourceId,
+            title: tableName,
+            isDirty: false,
+            editorContent: query,
+            queryResults: null,
+            queryRunning: false,
+            selectedTableData: { sourceId, tableName, query },
+            isLoadingQuery: false,
+            isLoadingVersions: false,
+            lastSavedContent: "",
+            originalContent: ""
+          });
+        }
       }
     }),
     {
@@ -1165,7 +1673,11 @@ export const useAppStore = create<AppState>()(
       // Only persist certain values
       partialize: (state) => ({
         panelSizes: state.panelSizes,
-        editorContent: state.editorContent
+        editorContent: state.editorContent,
+        sidebarState: state.sidebarState,
+        // Query state persistence - persist tabs and active tab ID
+        openTabs: state.openTabs,
+        activeTabId: state.activeTabId
       })
     }
   )

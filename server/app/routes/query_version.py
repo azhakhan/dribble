@@ -1,8 +1,5 @@
 from fastapi import APIRouter, Depends
-from app.schemas.query import (
-    CreateQueryVersionRequest,
-    QueryVersionResponse,
-)
+from app.schemas.query_version import QueryVersionResponse, CreateQueryVersionRequest
 from app.core.db import get_db
 from app.controllers.query_service import QueryVersionService
 from sqlalchemy.orm import Session

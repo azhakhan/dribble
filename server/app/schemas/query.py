@@ -3,6 +3,7 @@ from uuid import UUID
 from datetime import datetime
 from typing import Optional
 from enum import Enum
+from app.schemas.query_run import QueryRunModifiers
 
 
 class CreateQueryRequest(BaseModel):
@@ -16,9 +17,9 @@ class UpdateQueryRequest(BaseModel):
     is_ephemeral: Optional[bool] = None
 
 
-class ExecuteQueryRequest(BaseModel):
-    query: str
-    source_id: UUID
+class ExecuteVersionRequest(BaseModel):
+    query_version_id: UUID
+    modifiers: Optional[QueryRunModifiers] = None
 
 
 class QueryTriggerEnum(str, Enum):
@@ -26,50 +27,6 @@ class QueryTriggerEnum(str, Enum):
     run = "run"
     ai = "ai"
     on_exit = "on_exit"
-
-
-# QueryVersion schemas
-class CreateQueryVersionRequest(BaseModel):
-    sql: str
-    save_trigger: QueryTriggerEnum
-    query_id: UUID
-    created_by: UUID
-
-
-class QueryVersionResponse(BaseModel):
-    id: UUID
-    sql: str
-    save_trigger: QueryTriggerEnum
-    query_id: UUID
-    created_by: UUID
-    created_at: datetime
-
-    class Config:
-        from_attributes = True
-
-
-# QueryRun schemas
-class CreateQueryRunRequest(BaseModel):
-    result_message: Optional[str] = None
-    error_message: Optional[str] = None
-    row_count: Optional[int] = None
-    execution_time_ms: Optional[int] = None
-    query_version_id: UUID
-    created_by: UUID
-
-
-class QueryRunResponse(BaseModel):
-    id: UUID
-    result_message: Optional[str]
-    error_message: Optional[str]
-    row_count: Optional[int]
-    execution_time_ms: Optional[int]
-    query_version_id: UUID
-    created_by: UUID
-    created_at: datetime
-
-    class Config:
-        from_attributes = True
 
 
 # Query response schemas

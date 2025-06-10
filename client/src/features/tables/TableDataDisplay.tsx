@@ -1,5 +1,4 @@
 import { EditableTable } from "@/features/tables/EditableTable";
-import { useQueryQuery } from "@/shared/hooks/useQueryQuery";
 
 interface TableDataDisplayProps {
   tableData: {
@@ -15,17 +14,9 @@ export const TableDataDisplay = ({
   queryResults,
   isQueryRunning = false
 }: TableDataDisplayProps) => {
-  // Fetch table data when a table is selected (and no query results are available)
-  // Only use the hook if we don't have direct query results
-  const { data: tableQueryResults, isLoading: isTableLoading } = useQueryQuery(
-    tableData?.sourceId || "",
-    tableData && !queryResults ? `SELECT * FROM ${tableData.tableName} LIMIT 101` : "",
-    { enabled: !!tableData && !queryResults && !isQueryRunning }
-  );
-
   // Determine what data to display and loading state
-  const displayData = queryResults || tableQueryResults;
-  const isLoading = isQueryRunning || isTableLoading;
+  const displayData = queryResults;
+  const isLoading = isQueryRunning;
 
   // Determine the title to show
   const title = tableData ? tableData.tableName : queryResults ? "Query Results" : "";

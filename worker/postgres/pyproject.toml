@@ -10,4 +10,5 @@ dependencies = [
     "psycopg>=3.2.9",
     "redis>=6.1.0",
     "sqlalchemy>=2.0.41",
+    "requests>=2.32.3",
 ]

@@ -46,17 +46,16 @@ export const getSourceStatus = async (sourceId: string): Promise<SourceStatus> =
   return response.data.status;
 };
 
-export const executeQuery = async (source_id: string, query: string) => {
-  const response = await api.post<{ query_id: string }>("/execution/", {
-    source_id,
-    query
-  });
-  return response.data.query_id;
+// New function to execute query version with run
+export const executeQueryVersionRun = async (request: CreateQueryRunRequest): Promise<string> => {
+  const response = await api.post<{ query_run_id: string }>("/execution/version", request);
+  return response.data.query_run_id;
 };
 
-export const getQueryResults = async (query_id: string) => {
+// New function to get query run results
+export const getQueryRunResults = async (run_id: string) => {
   try {
-    const response = await api.get<object[]>(`/execution/results/${query_id}`);
+    const response = await api.get<object[]>(`/execution/run-results/${run_id}`);
     return response.data;
   } catch (error) {
     if (axios.isAxiosError(error) && error.response?.status === 202) {
@@ -329,13 +328,30 @@ export interface QueryRun {
   created_at: string;
 }
 
+export interface QueryRunModifiers {
+  filters?: Array<{
+    column: string;
+    operator: string;
+    value: string | number | boolean | Array<string | number | boolean>;
+  }>;
+  order_by?: Array<{
+    column: string;
+    direction: string;
+  }>;
+  limit?: number;
+  offset?: number;
+}
+
 export interface CreateQueryRunRequest {
+  query_version_id: UUID;
+  modifiers?: QueryRunModifiers;
+}
+
+export interface UpdateQueryRunRequest {
   result_message?: string;
   error_message?: string;
   row_count?: number;
   execution_time_ms?: number;
-  query_version_id: UUID;
-  created_by: UUID;
 }
 
 // ==================== QUERY API ====================
@@ -416,8 +432,32 @@ export const deleteQueryVersion = async (versionId: string): Promise<void> => {
 
 // ==================== QUERY RUN API ====================
 
+export interface PaginatedResponse<T> {
+  items: T[];
+  total: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
+  has_next: boolean;
+  has_prev: boolean;
+}
+
 export const getQueryRunsByQueryId = async (queryId: string): Promise<QueryRun[]> => {
-  const response = await api.get<QueryRun[]>(`/runs/query/${queryId}`);
+  // Use the paginated endpoint but return just the items for backward compatibility
+  const response = await api.get<PaginatedResponse<QueryRun>>(
+    `/runs/query/${queryId}?page=1&page_size=100`
+  );
+  return response.data.items;
+};
+
+export const getQueryRunsByQueryIdPaginated = async (
+  queryId: string,
+  page: number = 1,
+  pageSize: number = 25
+): Promise<PaginatedResponse<QueryRun>> => {
+  const response = await api.get<PaginatedResponse<QueryRun>>(
+    `/runs/query/${queryId}?page=${page}&page_size=${pageSize}`
+  );
   return response.data;
 };
 

@@ -7,10 +7,11 @@ from app.schemas.query import (
     CreateEphemeralQueryRequest,
     ConvertEphemeralQueryRequest,
 )
+from app.schemas.query_run import QueryRunModifiers, UpdateQueryRunRequest
 from uuid import UUID
 from typing import List, Dict
 from itertools import groupby
-from app.schemas.query import CreateQueryVersionRequest
+from app.schemas.query_version import CreateQueryVersionRequest
 
 
 class QueryService:
@@ -180,16 +181,70 @@ class QueryVersionService:
 
 class QueryRunService:
     @staticmethod
+    def create_run(
+        db: Session, query_version_id: UUID, modifiers: QueryRunModifiers, user_id: UUID
+    ) -> QueryRun:
+        """Create a new query run"""
+        run = QueryRun(
+            query_version_id=query_version_id,
+            modifiers=modifiers,
+            created_by=user_id,
+        )
+        return safe_create(db, run)
+
+    @staticmethod
+    def update_run(db: Session, run_id: UUID, request: UpdateQueryRunRequest) -> QueryRun:
+        """Update a query run"""
+        query_run = get_or_404(db, QueryRun, run_id, "Query run not found")
+
+        if request.result_message is not None:
+            query_run.result_message = request.result_message
+        if request.error_message is not None:
+            query_run.error_message = request.error_message
+        if request.row_count is not None:
+            query_run.row_count = request.row_count
+        if request.execution_time_ms is not None:
+            query_run.execution_time_ms = request.execution_time_ms
+
+        return safe_update(db, query_run)
+
+    @staticmethod
     def get_runs_by_query_id(db: Session, query_id: UUID) -> List[QueryRun]:
         """Get all runs for a specific query"""
         get_or_404(db, Query, query_id, "Query not found")
 
         return (
             db.query(QueryRun)
-            .filter_by(query_id=query_id)
+            .join(QueryVersion, QueryRun.query_version_id == QueryVersion.id)
+            .join(Query, QueryVersion.query_id == Query.id)
+            .filter(Query.id == query_id)
             .order_by(QueryRun.created_at.desc())
             .all()
         )
+
+    @staticmethod
+    def get_runs_by_query_id_paginated(
+        db: Session, query_id: UUID, page: int = 1, page_size: int = 25
+    ) -> tuple[List[QueryRun], int]:
+        """Get paginated runs for a specific query"""
+        get_or_404(db, Query, query_id, "Query not found")
+
+        # Get total count
+        total_query = (
+            db.query(QueryRun)
+            .join(QueryVersion, QueryRun.query_version_id == QueryVersion.id)
+            .join(Query, QueryVersion.query_id == Query.id)
+            .filter(Query.id == query_id)
+        )
+        total = total_query.count()
+
+        # Get paginated results
+        offset = (page - 1) * page_size
+        runs = (
+            total_query.order_by(QueryRun.created_at.desc()).offset(offset).limit(page_size).all()
+        )
+
+        return runs, total
 
     @staticmethod
     def get_runs_by_version_id(db: Session, version_id: UUID) -> List[QueryRun]:

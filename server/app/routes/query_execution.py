@@ -1,29 +1,60 @@
 from fastapi import APIRouter, HTTPException, Response
-from app.schemas.query import ExecuteQueryRequest
-from app.controllers.query import execute_in_worker
+from app.controllers.query import execute_in_worker_version
 from uuid import UUID
 from app.core._redis import get_result
+from app.schemas.query_run import CreateQueryRunRequest
+from app.controllers.query_service import QueryRunService, QueryVersionService
+from app.schemas.query_execute import ExecuteQueryVersionRequest
+from app.core.db import get_db
+from app.dependencies import get_current_user
+from app.models import User, Source, Query
+from sqlalchemy.orm import Session
+from fastapi import Depends
+from app.core.db_utils import get_or_404
+
 
 router = APIRouter(prefix="/execution", tags=["query-execution"])
 
 
-@router.post("/")
-async def execute_query_string(request: ExecuteQueryRequest):
-    """Execute a query string directly"""
+@router.post("/version")
+async def execute_query_version_run(
+    request: CreateQueryRunRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    # get version
+    version = QueryVersionService.get_version_by_id(db, request.query_version_id)
+
+    # check if version is a select query
+    query = get_or_404(db, Query, version.query_id, "Query not found")
+
+    # check if source exists
+    get_or_404(db, Source, query.source_id, "Source not found")
+
+    # create a run
+    run = QueryRunService.create_run(db, request.query_version_id, request.modifiers, user.id)
+
+    """Execute a query run"""
     try:
-        return execute_in_worker(request.source_id, request.query)
+        query_run_request = ExecuteQueryVersionRequest(
+            query_run_id=run.id,
+            source_id=query.source_id,
+            sql=version.sql,
+            modifiers=request.modifiers,
+        )
+        return execute_in_worker_version(query_run_request)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
-@router.get("/results/{query_id}")
-async def get_query_results(query_id: UUID, response: Response):
-    """Get query execution results"""
+@router.get("/run-results/{run_id}")
+async def get_query_run_results(run_id: UUID, response: Response):
+    """Get query run execution results"""
     try:
-        # check for results in redis
-        result = await get_result(query_id)
+        # check for results in redis using run_id
+        result = await get_result(run_id)
         if not result:
-            raise HTTPException(status_code=404, detail="Query results not found")
+            raise HTTPException(status_code=404, detail="Query run results not found")
         if result.get("status") == "running":
             response.status_code = 202
             return {"status": "running"}

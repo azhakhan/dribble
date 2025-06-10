@@ -49,14 +49,49 @@ interface FileTreeItemProps {
   onSourceSelect?: (source: { id: string; name: string; dbtype: string }) => void;
   onTableDoubleClick?: (sourceId: string, tableName: string) => void;
   connectedSourceIds: Set<string>;
+  parentContext?: { sourceId?: string; schemaName?: string };
 }
+
+// Helper function to generate a unique node ID for tree state management
+const generateNodeId = (
+  node: FileNode,
+  level: number = 0,
+  parentContext?: { sourceId?: string; schemaName?: string }
+): string => {
+  if (node.type === "source" && node.id) {
+    return `source-${node.id}`;
+  }
+  if (node.type === "schema" && node.sourceId) {
+    return `schema-${node.sourceId}-${node.name}`;
+  }
+  if (node.type === "table" && node.sourceId && node.id) {
+    // For actual tables/views, use their full ID
+    return `table-${node.id}`;
+  }
+  if (node.type === "folder" && node.sourceId) {
+    // Handle organizational folders like "Tables" and "Views"
+    if (parentContext?.sourceId && parentContext?.schemaName) {
+      return `${node.name.toLowerCase()}-folder-${parentContext.sourceId}-${
+        parentContext.schemaName
+      }`;
+    }
+    // Fallback for regular folders
+    return `folder-${node.sourceId}-${node.name}`;
+  }
+  if (node.type === "column" && parentContext) {
+    return `column-${parentContext.sourceId}-${parentContext.schemaName}-${node.name}`;
+  }
+  // Fallback for other types
+  return `${node.type}-${level}-${node.name}`;
+};
 
 const FileTreeItem = ({
   node,
   level = 0,
   onSourceSelect,
   onTableDoubleClick,
-  connectedSourceIds
+  connectedSourceIds,
+  parentContext
 }: FileTreeItemProps) => {
   // Get state and actions from Zustand store
   const {
@@ -65,10 +100,17 @@ const FileTreeItem = ({
     loadingSourceIds,
     sourceSchemaErrors: sourceErrors,
     sourceStatuses,
-    sourceGeneratedChildren
+    sourceGeneratedChildren,
+    isNodeExpanded,
+    setNodeExpanded
   } = useAppStore();
 
-  const [isOpen, setIsOpen] = useState(false);
+  // Generate unique node ID for this item
+  const nodeId = generateNodeId(node, level, parentContext);
+
+  // Get expansion state from centralized store
+  const isOpen = isNodeExpanded(nodeId);
+
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [renameDialogOpen, setRenameDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -88,23 +130,14 @@ const FileTreeItem = ({
   const isConnected = isSource && node.id && connectedSourceIds.has(node.id);
   const { data: sourceStatus } = useSourceStatusQuery(isConnected ? node.id : undefined);
 
-  // Debug connection state for sources
+  // Auto-collapse source when it gets disconnected (but not during initial load)
   useEffect(() => {
-    if (isSource && node.id) {
-      console.log(`🔗 Source ${node.name} (${node.id}) connection state:`, {
-        isConnected,
-        sourceStatus,
-        connectedSourceIds: Array.from(connectedSourceIds)
-      });
+    if (isSource && !isConnected && isOpen && connectedSourceIds.size > 0) {
+      setNodeExpanded(nodeId, false);
     }
-  }, [isSource, node.id, node.name, isConnected, sourceStatus, connectedSourceIds]);
+  }, [isSource, isConnected, isOpen, nodeId, setNodeExpanded, connectedSourceIds.size]);
 
-  // Auto-collapse source when it gets disconnected
-  useEffect(() => {
-    if (isSource && !isConnected && isOpen) {
-      setIsOpen(false);
-    }
-  }, [isSource, isConnected, isOpen]);
+  // Note: Removed automatic cleanup during initialization to prevent interference with persistence
 
   // Get generated children from app store if available
   const generatedChildren = isSource && node.id ? sourceGeneratedChildren[node.id] : undefined;
@@ -138,12 +171,32 @@ const FileTreeItem = ({
   const handleItemClick = (e: React.MouseEvent) => {
     e.stopPropagation();
 
-    // Set this node as selected
+    // Set this node as selected for all items
     if (node.id) {
       setSelectedNodeId(node.id);
     }
 
-    // For all database objects, just select them
+    if (isColumn) {
+      // For columns, just select them (no expansion or other actions)
+      return;
+    }
+
+    // Check if this is an actual table/view (has id) vs organizational folder (no id)
+    const isActualTable = isTable && node.id;
+
+    if (isActualTable) {
+      // For actual tables/views, only select them on single click (no other actions)
+      return;
+    }
+
+    // For sources, schemas, folders, and organizational table/view groupings: expand/collapse on single click
+    if ((isSource && isConnected) || isSchema || isFolder || (isTable && !node.id)) {
+      if (hasChildren) {
+        setNodeExpanded(nodeId, !isOpen);
+      }
+    }
+
+    // For sources, also call onSourceSelect
     if (isSource && onSourceSelect && node.id) {
       onSourceSelect({
         id: node.id,
@@ -156,27 +209,38 @@ const FileTreeItem = ({
   // Handle chevron click to toggle children visibility
   const handleChevronClick = (e: React.MouseEvent) => {
     e.stopPropagation();
-    setIsOpen(!isOpen);
+    setNodeExpanded(nodeId, !isOpen);
   };
 
   // Handle double-click behavior
   const handleDoubleClick = (e: React.MouseEvent) => {
     e.stopPropagation();
 
+    if (isColumn) {
+      // For columns, just select them (no other actions)
+      return;
+    }
+
+    // Check if this is an actual table/view (has id) vs organizational folder (no id)
+    const isActualTable = isTable && node.id;
+
     if (isSource) {
       // If source is not connected, connect to it first
       if (!isConnected && node.id) {
         handleConnectClick(e);
       } else if (hasChildren) {
-        // If source is already connected, open its children
-        setIsOpen(!isOpen);
+        // If source is already connected, toggle children
+        setNodeExpanded(nodeId, !isOpen);
       }
-    } else if ((isSchema || isFolder) && hasChildren) {
-      // For schemas and folders, show children on double-click
-      setIsOpen(!isOpen);
-    } else if (isTable && onTableDoubleClick && node.id) {
-      // For tables and views, query them (both are "table" type)
-      if (node.sourceId) {
+    } else if (isSchema || isFolder || (isTable && !node.id)) {
+      // For schemas, folders, and organizational table/view groupings: toggle children visibility
+      if (hasChildren) {
+        setNodeExpanded(nodeId, !isOpen);
+      }
+    } else if (isActualTable) {
+      // For actual tables/views: only open + run ephemeral query (don't expand children)
+      if (onTableDoubleClick && node.sourceId) {
+        // Open and run ephemeral query on double click
         onTableDoubleClick(node.sourceId, node.name);
       }
     }
@@ -371,16 +435,33 @@ const FileTreeItem = ({
       {/* Children */}
       {isOpen && hasChildren && (
         <div>
-          {effectiveChildren.map((childNode: FileNode, index: number) => (
-            <FileTreeItem
-              key={`${childNode.id || childNode.name}-${index}`}
-              node={childNode}
-              level={level + 1}
-              onSourceSelect={onSourceSelect}
-              onTableDoubleClick={onTableDoubleClick}
-              connectedSourceIds={connectedSourceIds}
-            />
-          ))}
+          {effectiveChildren.map((childNode: FileNode, index: number) => {
+            // Determine parent context for child nodes
+            let childParentContext = parentContext;
+
+            if (isSource && node.id) {
+              // Source -> Schema: pass sourceId
+              childParentContext = { sourceId: node.id };
+            } else if (isSchema && node.sourceId) {
+              // Schema -> Tables/Views folder: pass sourceId and schemaName
+              childParentContext = { sourceId: node.sourceId, schemaName: node.name };
+            } else if (isFolder && node.sourceId && parentContext?.schemaName) {
+              // Tables/Views folder -> actual tables/views: keep existing context
+              childParentContext = parentContext;
+            }
+
+            return (
+              <FileTreeItem
+                key={`${childNode.id || childNode.name}-${index}`}
+                node={childNode}
+                level={level + 1}
+                onSourceSelect={onSourceSelect}
+                onTableDoubleClick={onTableDoubleClick}
+                connectedSourceIds={connectedSourceIds}
+                parentContext={childParentContext}
+              />
+            );
+          })}
         </div>
       )}
 
@@ -404,18 +485,11 @@ export const FileTree = ({ data, onSourceSelect, onTableDoubleClick }: FileTreeP
   // Create a set of connected source IDs for easy lookup
   const connectedSourceIds = useMemo(() => {
     if (!connectedSourcesData) return new Set<string>();
-    const ids = new Set(connectedSourcesData.map((source: ConnectedSource) => source.id));
-    console.log("🔗 Connected source IDs in FileTree:", Array.from(ids));
-    return ids;
+    return new Set(connectedSourcesData.map((source: ConnectedSource) => source.id));
   }, [connectedSourcesData]);
 
   // Fetch schemas for all connected sources and update AppState
   useStoreConnectedSourcesSchemas(connectedSourcesData);
-
-  // Debug connected sources changes
-  useEffect(() => {
-    console.log("🔗 Connected sources data changed in FileTree:", connectedSourcesData);
-  }, [connectedSourcesData]);
 
   return (
     <div className="h-full flex flex-col">
@@ -428,6 +502,7 @@ export const FileTree = ({ data, onSourceSelect, onTableDoubleClick }: FileTreeP
             onSourceSelect={onSourceSelect}
             onTableDoubleClick={onTableDoubleClick}
             connectedSourceIds={connectedSourceIds}
+            parentContext={undefined} // Root level has no parent context
           />
         ))}
       </div>
