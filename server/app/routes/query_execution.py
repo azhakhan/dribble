@@ -1,8 +1,18 @@
 from fastapi import APIRouter, HTTPException, Response
 from app.schemas.query import ExecuteQueryRequest
-from app.controllers.query import execute_in_worker
+from app.controllers.query import execute_in_worker, execute_in_worker_version
 from uuid import UUID
 from app.core._redis import get_result
+from app.schemas.query_run import CreateQueryRunRequest
+from app.controllers.query_service import QueryRunService, QueryVersionService
+from app.schemas.query_execute import ExecuteQueryVersionRequest
+from app.core.db import get_db
+from app.dependencies import get_current_user
+from app.models import User, Source, Query
+from sqlalchemy.orm import Session
+from fastapi import Depends
+from app.core.db_utils import get_or_404
+
 
 router = APIRouter(prefix="/execution", tags=["query-execution"])
 
@@ -12,6 +22,37 @@ async def execute_query_string(request: ExecuteQueryRequest):
     """Execute a query string directly"""
     try:
         return execute_in_worker(request.source_id, request.query)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@router.post("/version")
+async def execute_query_run(
+    request: CreateQueryRunRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    # get version
+    version = QueryVersionService.get_version_by_id(db, request.query_version_id)
+
+    # check if version is a select query
+    query = get_or_404(db, Query, version.query_id, "Query not found")
+
+    # check if source exists
+    get_or_404(db, Source, query.source_id, "Source not found")
+
+    # create a run
+    run = QueryRunService.create_run(db, request.query_version_id, request.modifiers, user.id)
+
+    """Execute a query run"""
+    try:
+        query_run_request = ExecuteQueryVersionRequest(
+            query_run_id=run.id,
+            source_id=version.source_id,
+            sql=version.sql,
+            modifiers=request.modifiers,
+        )
+        return execute_in_worker_version(query_run_request)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
 

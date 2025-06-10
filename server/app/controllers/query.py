@@ -2,6 +2,7 @@ from uuid import UUID
 import requests
 import logging
 from app.core._redis import get_result
+from app.schemas.query_execute import ExecuteQueryVersionRequest
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -12,6 +13,20 @@ def execute_in_worker(source_id: UUID, query: str):
     response = requests.post(
         f"http://{container_name}:8000/execute/",
         json={"query": query, "query_id": str(source_id)},
+        timeout=5,
+    )
+    return response.json()
+
+
+def execute_in_worker_version(request: ExecuteQueryVersionRequest):
+    container_name = f"dribble-worker-postgres-{request.source_id}"
+    response = requests.post(
+        f"http://{container_name}:8000/execute/version",
+        json={
+            "query_run_id": str(request.query_run_id),
+            "sql": request.sql,
+            "modifiers": request.modifiers.model_dump_json() if request.modifiers else None,
+        },
         timeout=5,
     )
     return response.json()
