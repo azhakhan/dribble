@@ -35,7 +35,14 @@ export function IdePage() {
 
   // Initialize runtime states for query tabs on app load
   useEffect(() => {
-    initializeQueryTabsRuntimeStates();
+    const initialize = async () => {
+      try {
+        await initializeQueryTabsRuntimeStates();
+      } catch (error) {
+        console.error("Failed to initialize query tabs runtime states:", error);
+      }
+    };
+    initialize();
   }, [initializeQueryTabsRuntimeStates]);
 
   // Query for all sources

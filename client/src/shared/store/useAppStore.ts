@@ -94,7 +94,7 @@ interface TreeState {
   debugLogLocalStorage: () => void;
 
   // Initialize runtime states for query tabs
-  initializeQueryTabsRuntimeStates: () => void;
+  initializeQueryTabsRuntimeStates: () => Promise<void>;
 }
 
 // Enhanced query tab interface with better state management
@@ -1399,7 +1399,7 @@ export const useAppStore = create<AppState>()(
       },
 
       // Initialize runtime states - called on app start to reset runtime states
-      initializeQueryTabsRuntimeStates: () => {
+      initializeQueryTabsRuntimeStates: async () => {
         set((state) => ({
           openTabs: state.openTabs.map((tab) => ({
             ...tab,
@@ -1410,6 +1410,25 @@ export const useAppStore = create<AppState>()(
             isLoadingVersions: false
           }))
         }));
+
+        // After resetting runtime states, check if active tab should auto-execute
+        // We need to wait a bit for connected sources to be loaded
+        setTimeout(async () => {
+          const currentState = get();
+          if (currentState.activeTabId) {
+            const activeTab = currentState.openTabs.find(
+              (tab) => tab.id === currentState.activeTabId
+            );
+            if (activeTab && currentState.shouldAutoExecuteQuery(activeTab)) {
+              console.log("Auto-executing active tab on page reload:", currentState.activeTabId);
+              try {
+                await currentState.executeQuery(currentState.activeTabId!);
+              } catch (error) {
+                console.error("Failed to auto-execute query on page reload:", error);
+              }
+            }
+          }
+        }, 500); // Wait 500ms for connected sources to load
       },
 
       // Helper function to determine if a query should auto-execute
@@ -1426,7 +1445,19 @@ export const useAppStore = create<AppState>()(
 
         // Check if the source is connected
         const currentState = get();
-        if (!currentState.connectedSources.has(tab.sourceId)) return false;
+        if (!currentState.connectedSources.has(tab.sourceId)) {
+          // During page load, connected sources might not be loaded yet
+          // If we have connected sources data, check that instead
+          if (currentState.connectedSourcesData.length > 0) {
+            const isConnected = currentState.connectedSourcesData.some(
+              (source) => source.id === tab.sourceId
+            );
+            if (!isConnected) return false;
+          } else {
+            // No connected sources data yet, don't auto-execute
+            return false;
+          }
+        }
 
         // Check if it's a SELECT query (case-insensitive, allowing for comments and whitespace)
         const cleanSql = sql.replace(/^\/\*[\s\S]*?\*\/|^--.*$/gm, "").trim();

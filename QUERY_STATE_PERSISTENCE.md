@@ -48,7 +48,8 @@ interface AppState {
 2. **Zustand automatically persists** → Essential tab data saved to localStorage
 3. **Page reload** → Zustand restores tab state from localStorage
 4. **Runtime reset** → `initializeQueryTabsRuntimeStates()` resets loading/result states
-5. **Tabs render** → Previous query tabs are restored with their content
+5. **Auto-execution check** → If active tab contains a SELECT query with no results, auto-execute
+6. **Tabs render** → Previous query tabs are restored with their content and data
 
 ## Key Features
 
@@ -131,15 +132,32 @@ const handleNewQuery = () => {
 
 ## Runtime State Initialization
 
-On app startup, call `initializeQueryTabsRuntimeStates()` to ensure all runtime states are properly reset:
+On app startup, call `initializeQueryTabsRuntimeStates()` to ensure all runtime states are properly reset and check for auto-execution:
 
 ```typescript
 // In your app initialization
 useEffect(() => {
-  const { initializeQueryTabsRuntimeStates } = useAppStore.getState();
-  initializeQueryTabsRuntimeStates();
+  const initialize = async () => {
+    try {
+      const { initializeQueryTabsRuntimeStates } = useAppStore.getState();
+      await initializeQueryTabsRuntimeStates();
+    } catch (error) {
+      console.error("Failed to initialize query tabs runtime states:", error);
+    }
+  };
+  initialize();
 }, []);
 ```
+
+### Auto-execution on Page Reload
+
+The initialization process includes smart auto-execution logic:
+
+- **Checks active tab**: If there's an active tab on page reload
+- **Validates content**: Ensures the tab contains a SELECT query
+- **Verifies connection**: Confirms the source is connected
+- **Checks results**: Only auto-executes if no results are present
+- **Delayed execution**: Waits for connected sources to load before execution
 
 ## Benefits
 
