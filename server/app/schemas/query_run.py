@@ -26,7 +26,7 @@ class UpdateQueryRunRequest(BaseModel):
 
 class QueryRunResponse(BaseModel):
     id: UUID
-    modifiers: Optional[dict] = None
+    modifiers: Optional[QueryRunModifiers] = None
     result_message: Optional[str]
     error_message: Optional[str]
     row_count: Optional[int]

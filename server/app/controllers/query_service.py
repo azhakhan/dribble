@@ -190,7 +190,7 @@ class QueryRunService:
         """Create a new query run"""
         run = QueryRun(
             query_version_id=query_version_id,
-            modifiers=modifiers,
+            modifiers=modifiers.model_dump_json() if modifiers else None,
             created_by=user_id,
         )
         return safe_create(db, run)

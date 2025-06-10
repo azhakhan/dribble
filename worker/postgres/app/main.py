@@ -329,8 +329,15 @@ class QueryExecutionResult(BaseModel):
 async def run_query_version(request: QueryVersionRequest):
     logger.info(f"Starting version query execution for ID: {request.query_run_id}")
 
+    # TODO: replace with with clause
     # compose sql with modifiers
     sql = request.sql
+    # remove leading and trailing whitespace
+    sql = sql.strip()
+    # remove trailing semicolon if it exists
+    if sql.endswith(";"):
+        sql = sql[:-1]
+
     if request.modifiers:
         if request.modifiers.where:
             sql += f" WHERE {request.modifiers.where}"
@@ -340,6 +347,10 @@ async def run_query_version(request: QueryVersionRequest):
             sql += f" LIMIT {request.modifiers.limit}"
         if request.modifiers.offset:
             sql += f" OFFSET {request.modifiers.offset}"
+
+    # add semicolon if it doesn't exist
+    if not sql.endswith(";"):
+        sql += ";"
 
     logger.info(f"Composed SQL query: {sql}")
 
