@@ -1,20 +1,7 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 from uuid import UUID
 from datetime import datetime
 from typing import Optional, List, Generic, TypeVar
-
-
-class QueryRunModifiers(BaseModel):
-    limit: int = Field(501, ge=10, le=1001, description="Limit the number of rows returned")
-    offset: int = Field(0, ge=0, description="Offset the number of rows returned")
-    where: Optional[str] = None
-    order_by: Optional[str] = None
-
-
-# QueryRun schemas
-class CreateQueryRunRequest(BaseModel):
-    query_version_id: UUID
-    modifiers: Optional[QueryRunModifiers] = None
 
 
 class UpdateQueryRunRequest(BaseModel):
@@ -26,7 +13,6 @@ class UpdateQueryRunRequest(BaseModel):
 
 class QueryRunResponse(BaseModel):
     id: UUID
-    modifiers: Optional[QueryRunModifiers] = None
     result_message: Optional[str]
     error_message: Optional[str]
     row_count: Optional[int]

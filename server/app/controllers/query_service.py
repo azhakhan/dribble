@@ -7,7 +7,8 @@ from app.schemas.query import (
     CreateEphemeralQueryRequest,
     ConvertEphemeralQueryRequest,
 )
-from app.schemas.query_run import QueryRunModifiers, UpdateQueryRunRequest
+from app.schemas.query_execute import QueryRunModifiers
+from app.schemas.query_run import UpdateQueryRunRequest
 from uuid import UUID
 from typing import List, Dict
 from itertools import groupby
@@ -190,7 +191,7 @@ class QueryRunService:
         """Create a new query run"""
         run = QueryRun(
             query_version_id=query_version_id,
-            modifiers=modifiers.model_dump_json() if modifiers else None,
+            modifiers=modifiers.model_dump() if modifiers else None,
             created_by=user_id,
         )
         return safe_create(db, run)

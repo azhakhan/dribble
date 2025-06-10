@@ -1205,7 +1205,10 @@ export const useAppStore = create<AppState>()(
           // Step 2: Create a query run and execute
           const runRequest: CreateQueryRunRequest = {
             query_version_id: versionId,
-            modifiers: undefined // TODO: Add support for modifiers from UI
+            modifiers: {
+              limit: 501,
+              offset: 0
+            }
           };
 
           const runId = await executeQueryVersionRun(runRequest);

@@ -3,7 +3,6 @@ from uuid import UUID
 from datetime import datetime
 from typing import Optional
 from enum import Enum
-from app.schemas.query_run import QueryRunModifiers
 
 
 class CreateQueryRequest(BaseModel):
@@ -15,11 +14,6 @@ class CreateQueryRequest(BaseModel):
 class UpdateQueryRequest(BaseModel):
     name: Optional[str] = None
     is_ephemeral: Optional[bool] = None
-
-
-class ExecuteVersionRequest(BaseModel):
-    query_version_id: UUID
-    modifiers: Optional[QueryRunModifiers] = None
 
 
 class QueryTriggerEnum(str, Enum):

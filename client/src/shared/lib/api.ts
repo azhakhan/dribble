@@ -329,17 +329,10 @@ export interface QueryRun {
 }
 
 export interface QueryRunModifiers {
-  filters?: Array<{
-    column: string;
-    operator: string;
-    value: string | number | boolean | Array<string | number | boolean>;
-  }>;
-  order_by?: Array<{
-    column: string;
-    direction: string;
-  }>;
   limit?: number;
   offset?: number;
+  where?: string;
+  order_by?: string;
 }
 
 export interface CreateQueryRunRequest {
