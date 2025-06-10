@@ -783,17 +783,39 @@ export const useAppStore = create<AppState>()(
         set({ connectedSources: new Set(connectedSourceIds) }),
 
       executeQuery: async (tabId, sql) => {
+        console.log("executeQuery called for tab:", tabId);
         const currentState = get();
         const tab = currentState.openTabs.find((t) => t.id === tabId);
-        if (!tab) return;
+        if (!tab) {
+          console.error("Tab not found:", tabId);
+          return;
+        }
+
+        console.log("Tab found:", {
+          id: tab.id,
+          queryId: tab.queryId,
+          sourceId: tab.sourceId,
+          title: tab.title,
+          editorContent: tab.editorContent?.substring(0, 100) + "..."
+        });
 
         const source = currentState.sources[tab.sourceId];
         if (!source || !currentState.connectedSources.has(tab.sourceId)) {
+          console.error("Source not connected or not found:", {
+            sourceExists: !!source,
+            sourceConnected: currentState.connectedSources.has(tab.sourceId),
+            connectedSources: Array.from(currentState.connectedSources)
+          });
           throw new Error("Source not connected");
         }
 
         const queryToRun = sql || tab.editorContent;
-        if (!queryToRun.trim()) return;
+        if (!queryToRun.trim()) {
+          console.error("No query content to run");
+          return;
+        }
+
+        console.log("Query to run:", queryToRun);
 
         // Check if this is an ephemeral query that has been modified
         if (tab.queryId && currentState.queries[tab.queryId]?.is_ephemeral) {
@@ -834,6 +856,7 @@ export const useAppStore = create<AppState>()(
           let versionId: string;
 
           if (tab.queryId) {
+            console.log("Tab has queryId:", tab.queryId);
             // We have an existing query
             const currentLatestVersion = await currentState.loadLatestQueryVersion(tab.queryId);
 

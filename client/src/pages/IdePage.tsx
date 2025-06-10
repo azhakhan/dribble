@@ -135,13 +135,33 @@ export function IdePage() {
         if (existingTab) {
           // Switch to existing tab and execute query
           setActiveTab(existingTab.id);
+
+          // Make sure the tab has the correct content loaded
+          if (!existingTab.editorContent) {
+            const latestVersion = await loadLatestQueryVersion(ephemeralQuery.id);
+            const sql = latestVersion?.sql || `SELECT * FROM ${schema}.${table} LIMIT 101`;
+
+            // Update tab content before executing
+            const { openTabs: currentTabs, updateTabContent } = useAppStore.getState();
+            const currentTab = currentTabs.find((tab) => tab.id === existingTab.id);
+            if (currentTab) {
+              updateTabContent(existingTab.id, {
+                editorContent: sql,
+                lastSavedContent: sql,
+                originalContent: sql
+              });
+            }
+          }
+
           await executeQuery(existingTab.id);
           return;
         }
 
         // Get the latest version to get the SQL
         const latestVersion = await loadLatestQueryVersion(ephemeralQuery.id);
+        console.log("Latest version for ephemeral query:", latestVersion);
         const sql = latestVersion?.sql || `SELECT * FROM ${schema}.${table} LIMIT 101`;
+        console.log("SQL to use:", sql);
 
         // Create a new tab for this ephemeral query
         openQueryTab({
@@ -151,7 +171,7 @@ export function IdePage() {
           isDirty: false,
           editorContent: sql,
           queryResults: null,
-          queryRunning: true,
+          queryRunning: false, // Don't set to running yet
           selectedTableData: { sourceId, tableName, query: sql },
           isLoadingQuery: false,
           isLoadingVersions: false,
@@ -159,14 +179,33 @@ export function IdePage() {
           originalContent: sql
         });
 
-        // Execute the query immediately
-        setTimeout(async () => {
-          const state = useAppStore.getState();
-          const newTab = state.openTabs[state.openTabs.length - 1];
-          if (newTab) {
-            await executeQuery(newTab.id);
+        // Execute the query immediately after tab creation
+        // Use requestAnimationFrame to ensure tab is fully created in the UI
+        requestAnimationFrame(async () => {
+          try {
+            const state = useAppStore.getState();
+            const newTab = state.openTabs.find((tab) => tab.queryId === ephemeralQuery.id);
+
+            if (newTab) {
+              console.log(
+                "Executing ephemeral query for tab:",
+                newTab.id,
+                "with queryId:",
+                ephemeralQuery.id
+              );
+
+              // Set the tab as active before executing
+              setActiveTab(newTab.id);
+
+              // Execute the query
+              await executeQuery(newTab.id);
+            } else {
+              console.error("Could not find tab for ephemeral query:", ephemeralQuery.id);
+            }
+          } catch (error) {
+            console.error("Failed to execute ephemeral query:", error);
           }
-        }, 100);
+        });
       } catch (error) {
         console.error("Failed to handle table double-click:", error);
         // Fallback to old behavior
