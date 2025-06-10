@@ -164,6 +164,20 @@ export const TableFilterBar = ({ data, isLoading, columns }: TableFilterBarProps
             disabled={isLoading}
             mode="where"
             columns={columns}
+            onEnterPress={async () => {
+              // Immediately sync local state to store state
+              if (localWhereInput !== whereInput) {
+                setTableFilterWhere(localWhereInput);
+              }
+              // Execute query with updated filters
+              if (activeTabId) {
+                try {
+                  await executeQuery(activeTabId);
+                } catch (error) {
+                  console.error("Failed to execute query for WHERE filter:", error);
+                }
+              }
+            }}
           />
         </form>
 
@@ -177,6 +191,20 @@ export const TableFilterBar = ({ data, isLoading, columns }: TableFilterBarProps
             disabled={isLoading}
             mode="orderby"
             columns={columns}
+            onEnterPress={async () => {
+              // Immediately sync local state to store state
+              if (localOrderByInput !== orderByInput) {
+                setTableFilterOrderBy(localOrderByInput);
+              }
+              // Execute query with updated filters
+              if (activeTabId) {
+                try {
+                  await executeQuery(activeTabId);
+                } catch (error) {
+                  console.error("Failed to execute query for ORDER BY filter:", error);
+                }
+              }
+            }}
           />
         </form>
 

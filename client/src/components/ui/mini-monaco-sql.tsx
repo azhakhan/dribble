@@ -10,6 +10,7 @@ interface MiniMonacoSQLProps {
   disabled?: boolean;
   mode?: "where" | "orderby";
   columns?: Array<{ name: string; type: string }>;
+  onEnterPress?: () => void;
 }
 
 // Simple cn function for className concatenation
@@ -23,7 +24,8 @@ export function MiniMonacoSQL({
   className,
   disabled = false,
   mode = "where",
-  columns = []
+  columns = [],
+  onEnterPress
 }: MiniMonacoSQLProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | undefined>(undefined);
@@ -209,6 +211,20 @@ export function MiniMonacoSQL({
           showFunctions: true,
           localityBonus: true,
           insertMode: "replace"
+        }
+      });
+
+      // Handle Enter key to execute query instead of new line
+      editorRef.current.onKeyDown((e) => {
+        if (e.keyCode === monaco.KeyCode.Enter && !e.ctrlKey && !e.shiftKey) {
+          e.preventDefault();
+          e.stopPropagation();
+
+          // Execute the query
+          if (onEnterPress) {
+            console.log("Enter pressed, calling onEnterPress");
+            onEnterPress();
+          }
         }
       });
 
