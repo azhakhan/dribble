@@ -120,7 +120,14 @@ class QueryResponse(BaseModel):
 @app.post("/execute/")
 async def run_query(request: QueryRequest):
     logger.info(f"[{datetime.datetime.now()}] Starting query execution for ID: {request.query_id}")
-    await set_result(request.query_id, {"status": "running"})
+
+    try:
+        await set_result(request.query_id, {"status": "running"})
+    except Exception as e:
+        logger.error(
+            f"Failed to set initial status in Redis for query {request.query_id}: {str(e)}"
+        )
+        # Continue anyway, the background task will still try to set results
 
     async def execute_sql_query():
         start_time = time.time()
@@ -347,6 +354,8 @@ def execute_query(query: str):
 
 @app.post("/execute/version")
 async def run_query_version(request: QueryVersionRequest):
+    logger.info(f"Starting version query execution for ID: {request.query_run_id}")
+
     # compose sql with modifiers
     sql = request.sql
     if request.modifiers:
@@ -423,7 +432,16 @@ async def run_query_version(request: QueryVersionRequest):
             sql += f" OFFSET {request.modifiers.offset}"
 
     logger.info(f"Composed SQL query: {sql}")
-    await set_result(request.query_run_id, {"status": "running"})
+
+    try:
+        logger.info(f"Setting initial status to running for query {request.query_run_id}")
+        await set_result(request.query_run_id, {"status": "running"})
+        logger.info(f"Successfully set initial status for query {request.query_run_id}")
+    except Exception as e:
+        logger.error(
+            f"Failed to set initial status in Redis for query {request.query_run_id}: {str(e)}"
+        )
+        # Continue anyway, the background task will still try to set results
 
     async def execute_sql_query():
         start_time = time.time()
@@ -752,6 +770,33 @@ def test_connection_cli():
     except Exception as e:
         print(json.dumps({"status": "error", "message": str(e)}))
         sys.exit(0)
+
+
+@app.get("/health")
+async def health_check():
+    """Health check endpoint to verify database and Redis connectivity"""
+    health_status = {"status": "healthy", "checks": {}}
+
+    # Check database connection
+    try:
+        with get_database_connection(app.state.engine) as conn:
+            conn.execute(text("SELECT 1"))
+        health_status["checks"]["database"] = "healthy"
+    except Exception as e:
+        health_status["checks"]["database"] = f"unhealthy: {str(e)}"
+        health_status["status"] = "unhealthy"
+
+    # Check Redis connection
+    try:
+        from app.helpers import REDIS
+
+        await REDIS.ping()
+        health_status["checks"]["redis"] = "healthy"
+    except Exception as e:
+        health_status["checks"]["redis"] = f"unhealthy: {str(e)}"
+        health_status["status"] = "unhealthy"
+
+    return health_status
 
 
 if __name__ == "__main__":
