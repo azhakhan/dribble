@@ -281,6 +281,7 @@ export const EditableTable = ({
       smoothScrollY
       rowHeight={30}
       onColumnResize={handleColumnResize}
+      rowMarkers="number"
     />
   );
 };

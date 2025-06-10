@@ -3,6 +3,8 @@ import { ChevronLeft, ChevronRight, X } from "lucide-react";
 import { useAppStore } from "@/shared/store/useAppStore";
 import { useState, useEffect } from "react";
 import { MiniMonacoSQL } from "@/components/ui/mini-monaco-sql";
+import { usePagination } from "./hooks/usePagination";
+import { PageSizeSelector } from "./components/PageSizeSelector";
 
 interface TableFilterBarProps {
   data: object[] | null;
@@ -14,7 +16,6 @@ export const TableFilterBar = ({ data, isLoading, columns }: TableFilterBarProps
   const {
     activeTabId,
     getTabFilterState,
-    setTableFilterOffset,
     setTableFilterWhere,
     setTableFilterOrderBy,
     clearTableFilters,
@@ -22,8 +23,14 @@ export const TableFilterBar = ({ data, isLoading, columns }: TableFilterBarProps
   } = useAppStore();
 
   const tabId = activeTabId || "default";
-  const { currentOffset, whereInput, orderByInput, pageSize, displaySize } =
-    getTabFilterState(tabId);
+  const { whereInput, orderByInput } = getTabFilterState(tabId);
+
+  // Use the new pagination hook
+  const {
+    state: paginationState,
+    actions: paginationActions,
+    pageSize: displaySize
+  } = usePagination({ data, isLoading });
 
   // Local state for input fields to improve typing performance
   const [localWhereInput, setLocalWhereInput] = useState(whereInput);
@@ -60,42 +67,8 @@ export const TableFilterBar = ({ data, isLoading, columns }: TableFilterBarProps
     return () => clearTimeout(timer);
   }, [localOrderByInput, orderByInput, setTableFilterOrderBy]);
 
-  // Calculate pagination state
-  const dataLength = data?.length || 0;
-  const hasNextPage = dataLength === pageSize; // If we got 501 records, there might be more
-  const hasPrevPage = currentOffset > 0;
-  const currentPage = Math.floor(currentOffset / displaySize) + 1;
-
   // Check if any filters are active (use store values for this check)
   const hasActiveFilters = whereInput.trim() || orderByInput.trim();
-
-  const handlePrevPage = async () => {
-    const newOffset = Math.max(0, currentOffset - displaySize);
-    setTableFilterOffset(newOffset);
-
-    // Execute query with new pagination
-    if (activeTabId) {
-      try {
-        await executeQuery(activeTabId);
-      } catch (error) {
-        console.error("Failed to execute query for pagination:", error);
-      }
-    }
-  };
-
-  const handleNextPage = async () => {
-    const newOffset = currentOffset + displaySize;
-    setTableFilterOffset(newOffset);
-
-    // Execute query with new pagination
-    if (activeTabId) {
-      try {
-        await executeQuery(activeTabId);
-      } catch (error) {
-        console.error("Failed to execute query for pagination:", error);
-      }
-    }
-  };
 
   const handleWhereSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -225,23 +198,30 @@ export const TableFilterBar = ({ data, isLoading, columns }: TableFilterBarProps
         {/* Pagination controls */}
         <div className="flex items-center gap-1 ml-auto">
           <Button
-            variant="outline"
+            variant="ghost"
             size="sm"
-            onClick={handlePrevPage}
-            disabled={!hasPrevPage || isLoading}
-            className="h-6 w-6 p-0"
+            onClick={paginationActions.handlePrevPage}
+            disabled={!paginationState.hasPrevPage || isLoading}
+            className="h-6 w-6 p-0 cursor-pointer"
           >
             <ChevronLeft className="h-3 w-3" />
           </Button>
 
-          <span className="text-muted-foreground">Page {currentPage}</span>
+          {/* Page size selector showing data range */}
+          <PageSizeSelector
+            currentPageSize={displaySize}
+            onPageSizeChange={paginationActions.handlePageSizeChange}
+            startIndex={paginationState.startIndex}
+            endIndex={paginationState.endIndex}
+            disabled={isLoading}
+          />
 
           <Button
-            variant="outline"
+            variant="ghost"
             size="sm"
-            onClick={handleNextPage}
-            disabled={!hasNextPage || isLoading}
-            className="h-6 w-6 p-0"
+            onClick={paginationActions.handleNextPage}
+            disabled={!paginationState.hasNextPage || isLoading}
+            className="h-6 w-6 p-0 cursor-pointer"
           >
             <ChevronRight className="h-3 w-3" />
           </Button>

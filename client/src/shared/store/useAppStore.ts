@@ -353,6 +353,7 @@ interface AppState extends FileTreeState, SourceChildrenState, QueryState, TreeS
   setTableFilterOffset: (offset: number) => void;
   setTableFilterWhere: (where: string) => void;
   setTableFilterOrderBy: (orderBy: string) => void;
+  setTableFilterPageSize: (displaySize: number) => void;
   clearTableFilters: () => void;
   getTableFilters: () => { limit: number; offset: number; where?: string; order_by?: string };
   getTabFilterState: (tabId: string) => TableFilterState;
@@ -1778,6 +1779,29 @@ export const useAppStore = create<AppState>()(
                 orderByInput: "",
                 pageSize: 501,
                 displaySize: 500
+              }
+            }
+          };
+        }),
+
+      setTableFilterPageSize: (displaySize: number) =>
+        set((state) => {
+          const tabId = state.activeTabId || "default";
+          const currentFilter = state.tableFilters[tabId] || {
+            currentOffset: 0,
+            whereInput: "",
+            orderByInput: "",
+            pageSize: 501,
+            displaySize: 500
+          };
+          return {
+            tableFilters: {
+              ...state.tableFilters,
+              [tabId]: {
+                ...currentFilter,
+                displaySize,
+                pageSize: displaySize + 1, // DataGrip style: fetch one extra to check for next page
+                currentOffset: 0 // Reset to first page when changing page size
               }
             }
           };
