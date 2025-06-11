@@ -390,20 +390,20 @@ export const useTabStore = create<TabState>()(
             }
           } else {
             // No query exists, create a new one
-            const newQueryId = await queryStore.createNewQuery(tab.sourceId);
+            const newQuery = await queryStore.createNewQuery(tab.sourceId);
 
             // Update the tab to reference the new query
             set((prevState) => ({
               openTabs: prevState.openTabs.map((t) =>
-                t.id === tabId ? { ...t, queryId: newQueryId } : t
+                t.id === tabId ? { ...t, queryId: newQuery.id } : t
               )
             }));
 
             // Save the current editor content as the first version
-            await queryStore.saveQueryVersion(newQueryId, queryToRun, "run");
+            await queryStore.saveQueryVersion(newQuery.id, queryToRun, "run");
 
             // Get the version we just created
-            const newVersion = await queryStore.loadLatestQueryVersion(newQueryId);
+            const newVersion = await queryStore.loadLatestQueryVersion(newQuery.id);
             if (!newVersion) {
               throw new Error("Failed to create query version");
             }

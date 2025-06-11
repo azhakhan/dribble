@@ -90,8 +90,8 @@ export function useStoreQueryMutations() {
   const createQuery = useMemo(
     () => ({
       mutateAsync: async (sourceId: string) => {
-        const queryId = await createNewQuery(sourceId);
-        return { id: queryId }; // Return in a format similar to the original API response
+        const newQuery = await createNewQuery(sourceId);
+        return { id: newQuery.id }; // Return in a format similar to the original API response
       }
     }),
     [createNewQuery]

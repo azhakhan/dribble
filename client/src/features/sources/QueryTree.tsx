@@ -153,6 +153,7 @@ const QueryTreeSource = ({
 }: QueryTreeSourceProps) => {
   // Use centralized tree state for query source expansion
   const { isQuerySourceExpanded, setQuerySourceExpanded } = useTreeStore();
+  const { createNewQuery } = useQueryStore();
   const isOpen = isQuerySourceExpanded(source.id);
 
   const handleClick = (e: React.MouseEvent) => {
@@ -161,10 +162,18 @@ const QueryTreeSource = ({
     setQuerySourceExpanded(source.id, !isOpen);
   };
 
-  const handleCreateQuery = (e: React.MouseEvent) => {
+  const handleCreateQuery = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    // TODO: Implement create query functionality
-    console.log("Create query for source:", source.id);
+    try {
+      const newQuery = await createNewQuery(source.id);
+
+      // Open the newly created query in tabs (double-click behavior)
+      if (newQuery && onQueryDoubleClick) {
+        onQueryDoubleClick(newQuery);
+      }
+    } catch (error) {
+      console.error("Failed to create query:", error);
+    }
   };
 
   const renderSourceIcon = () => {

@@ -106,8 +106,8 @@ export function Editor({ tabId, onQueryExecuted }: EditorProps) {
     if (!tabSource) return;
 
     try {
-      const queryId = await createNewQuery(tabSource.id);
-      await loadQueryInTab(tabId, queryId);
+      const newQuery = await createNewQuery(tabSource.id);
+      await loadQueryInTab(tabId, newQuery.id);
       toast.success("Query created");
     } catch (error) {
       console.error("Failed to create query:", error);

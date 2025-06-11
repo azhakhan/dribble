@@ -44,7 +44,7 @@ interface QueryState {
   setQueryRunsPaginated: (queryId: string, runs: QueryRun[], pagination: PaginationInfo) => void;
 
   // Query creation and management
-  createNewQuery: (sourceId: string) => Promise<string>;
+  createNewQuery: (sourceId: string) => Promise<Query>;
   saveQueryVersion: (queryId: string, sql: string, saveTrigger: "run" | "ai") => Promise<void>;
   updateQueryName: (queryId: string, newName: string) => Promise<Query>;
 
@@ -249,7 +249,7 @@ export const useQueryStore = create<QueryState>((set, get) => ({
       set((state) => ({
         queries: { ...state.queries, [newQuery.id]: newQuery }
       }));
-      return newQuery.id;
+      return newQuery;
     } catch (error) {
       console.error("Failed to create query:", error);
       throw error;
