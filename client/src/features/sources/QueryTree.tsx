@@ -165,7 +165,7 @@ const QueryTreeSource = ({
   const handleCreateQuery = async (e: React.MouseEvent) => {
     e.stopPropagation();
     try {
-      const newQuery = await createNewQuery(source.id);
+      const newQuery = await createNewQuery({ sourceId: source.id });
 
       // Open the newly created query in tabs (double-click behavior)
       if (newQuery && onQueryDoubleClick) {

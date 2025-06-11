@@ -2,8 +2,152 @@ import { X, Plus } from "lucide-react";
 import { useCallback, memo, useRef, useEffect, useState } from "react";
 import { cn } from "@/shared/lib/utils";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
+} from "@/components/ui/select";
+
 import { Query } from "./Query";
 import { useTabStore, useSourceStore } from "@/shared/store";
+
+// New Query Modal component
+// New Query Modal component
+const NewQueryModal = memo(
+  ({
+    isOpen,
+    onClose,
+    onCreateQuery,
+    sources,
+    defaultSourceId,
+    position
+  }: {
+    isOpen: boolean;
+    onClose: () => void;
+    onCreateQuery: (name: string, sourceId: string) => void;
+    sources: Array<{ id: string; name: string }>;
+    defaultSourceId?: string;
+    position?: { x: number; y: number } | null;
+  }) => {
+    const [queryName, setQueryName] = useState("");
+    const [selectedSourceId, setSelectedSourceId] = useState("");
+    const inputRef = useRef<HTMLInputElement>(null);
+
+    // Generate random suffix for query name
+    const generateQueryName = useCallback(() => {
+      const randomSuffix = Math.random().toString(36).substring(2, 8);
+      return `Query ${randomSuffix}`;
+    }, []);
+
+    // Initialize form when modal opens
+    useEffect(() => {
+      if (isOpen) {
+        setQueryName(generateQueryName());
+        const sourceToSelect = defaultSourceId || (sources.length > 0 ? sources[0].id : "");
+        setSelectedSourceId(sourceToSelect);
+
+        // Focus input after a short delay
+        setTimeout(() => {
+          inputRef.current?.focus();
+          inputRef.current?.select();
+        }, 100);
+      }
+    }, [isOpen, defaultSourceId, generateQueryName, sources]);
+
+    // Handle escape key
+    useEffect(() => {
+      const handleEscape = (event: KeyboardEvent) => {
+        if (event.key === "Escape" && isOpen) {
+          onClose();
+        }
+      };
+
+      if (isOpen) {
+        document.addEventListener("keydown", handleEscape);
+        return () => document.removeEventListener("keydown", handleEscape);
+      }
+    }, [isOpen, onClose]);
+
+    // Handle form submission
+    const handleSubmit = useCallback(
+      (e: React.FormEvent) => {
+        e.preventDefault();
+        if (queryName.trim() && selectedSourceId) {
+          onCreateQuery(queryName.trim(), selectedSourceId);
+          onClose();
+        }
+      },
+      [queryName, selectedSourceId, onCreateQuery, onClose]
+    );
+
+    if (!isOpen) return null;
+
+    return (
+      <div className="fixed inset-0 z-50">
+        {/* Backdrop */}
+        <div className="absolute inset-0" onClick={onClose} />
+
+        {/* Modal */}
+        <div
+          className="absolute bg-background border rounded-lg shadow-lg p-4 w-72"
+          style={{
+            left: position?.x || 0,
+            top: position?.y || 0
+          }}
+        >
+          <h3 className="text-sm font-medium mb-3">Create New Query</h3>
+
+          <form onSubmit={handleSubmit} className="space-y-3 pb-2">
+            <div className="space-y-1">
+              <Label htmlFor="queryName" className="text-xs font-medium">
+                Query Name
+              </Label>
+              <Input
+                ref={inputRef}
+                id="queryName"
+                value={queryName}
+                onChange={(e) => setQueryName(e.target.value)}
+                placeholder="Enter query name"
+                className="h-8 text-xs"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <Label htmlFor="sourceSelect" className="text-xs font-medium">
+                Data Source
+              </Label>
+              <Select value={selectedSourceId} onValueChange={setSelectedSourceId}>
+                <SelectTrigger id="sourceSelect" className="h-8 text-xs w-full">
+                  <SelectValue placeholder="Select a data source" />
+                </SelectTrigger>
+                <SelectContent>
+                  {sources.map((source) => (
+                    <SelectItem key={source.id} value={source.id}>
+                      {source.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-1">
+              <Button type="button" variant="outline" size="xs" onClick={onClose}>
+                Cancel
+              </Button>
+              <Button type="submit" size="xs" disabled={!queryName.trim() || !selectedSourceId}>
+                Create Query
+              </Button>
+            </div>
+          </form>
+        </div>
+      </div>
+    );
+  }
+);
 
 // Context menu component
 const ContextMenu = memo(
@@ -128,6 +272,7 @@ function QueryTabsComponent() {
   const openTabs = useTabStore((state) => state.openTabs);
   const activeTabId = useTabStore((state) => state.activeTabId);
   const selectedSource = useSourceStore((state) => state.selectedSource);
+  const sources = useSourceStore((state) => state.allSources);
 
   // Get actions from store
   const { openQueryTab, closeQueryTab, setActiveTab } = useTabStore();
@@ -142,6 +287,10 @@ function QueryTabsComponent() {
     y: number;
     tabId: string;
   } | null>(null);
+
+  // New query modal state
+  const [isNewQueryModalOpen, setIsNewQueryModalOpen] = useState(false);
+  const [modalPosition, setModalPosition] = useState<{ x: number; y: number } | null>(null);
 
   // Auto-scroll to active tab when it changes
   useEffect(() => {
@@ -172,29 +321,40 @@ function QueryTabsComponent() {
     }
   }, [activeTabId, openTabs.length]);
 
-  // Handle creating a new query tab
-  const handleNewTab = useCallback(async () => {
-    if (!selectedSource) return;
+  // Handle showing the new query modal
+  const handleNewTab = useCallback((e: React.MouseEvent) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    setModalPosition({
+      x: rect.left,
+      y: rect.bottom + 5 // 5px below the button
+    });
+    setIsNewQueryModalOpen(true);
+  }, []);
 
-    try {
-      await openQueryTab({
-        queryId: null,
-        sourceId: selectedSource.id,
-        title: "Untitled Query",
-        isDirty: false,
-        editorContent: "",
-        queryResults: null,
-        queryRunning: false,
-        selectedTableData: null,
-        isLoadingQuery: false,
-        isLoadingVersions: false,
-        lastSavedContent: "",
-        originalContent: ""
-      });
-    } catch (error) {
-      console.error("Failed to open new query tab:", error);
-    }
-  }, [selectedSource, openQueryTab]);
+  // Handle creating a new query tab from modal
+  const handleCreateQuery = useCallback(
+    async (queryName: string, sourceId: string) => {
+      try {
+        await openQueryTab({
+          queryId: null,
+          sourceId: sourceId,
+          title: queryName,
+          isDirty: false,
+          editorContent: "",
+          queryResults: null,
+          queryRunning: false,
+          selectedTableData: null,
+          isLoadingQuery: false,
+          isLoadingVersions: false,
+          lastSavedContent: "",
+          originalContent: ""
+        });
+      } catch (error) {
+        console.error("Failed to open new query tab:", error);
+      }
+    },
+    [openQueryTab]
+  );
 
   // Handle closing a tab
   const handleCloseTab = useCallback(
@@ -270,7 +430,7 @@ function QueryTabsComponent() {
             variant="ghost"
             size="sm"
             onClick={handleNewTab}
-            disabled={!selectedSource}
+            disabled={sources.length === 0}
             className="h-8 px-3 rounded-none border-r hover:bg-accent"
           >
             <Plus className="h-4 w-4 mr-1" />
@@ -283,8 +443,8 @@ function QueryTabsComponent() {
           <div className="text-center">
             <p className="text-lg mb-2">No queries open</p>
             <p className="text-sm">
-              {!selectedSource
-                ? "Select a source to create queries"
+              {sources.length === 0
+                ? "Connect a data source to create queries"
                 : "Create a new query or double-click a table to get started"}
             </p>
           </div>
@@ -321,7 +481,7 @@ function QueryTabsComponent() {
             variant="ghost"
             size="xs"
             onClick={handleNewTab}
-            disabled={!selectedSource}
+            disabled={sources.length === 0}
             className="h-full px-3 rounded-none hover:bg-accent flex-shrink-0 min-w-[40px]"
           >
             <Plus className="h-2 w-2" />
@@ -345,6 +505,16 @@ function QueryTabsComponent() {
           canCloseToRight={canCloseToRight(contextMenu.tabId)}
         />
       )}
+
+      {/* New Query Modal */}
+      <NewQueryModal
+        isOpen={isNewQueryModalOpen}
+        onClose={() => setIsNewQueryModalOpen(false)}
+        onCreateQuery={handleCreateQuery}
+        sources={sources.map((source) => ({ id: source.id, name: source.name }))}
+        defaultSourceId={selectedSource?.id}
+        position={modalPosition}
+      />
     </div>
   );
 }

@@ -37,6 +37,7 @@ class QueryService:
         """Create a new query"""
         query = Query(
             source_id=request.source_id,
+            name=request.name,
             created_by=user_id,
             is_ephemeral=request.is_ephemeral or False,
             preview_key=request.preview_key,

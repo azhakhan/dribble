@@ -292,6 +292,7 @@ export interface Query {
 
 export interface CreateQueryRequest {
   source_id: UUID;
+  name?: string;
   is_ephemeral?: boolean;
   preview_key?: string;
 }

@@ -21,10 +21,10 @@ export function Editor({ tabId, onQueryExecuted }: EditorProps) {
   const [tempName, setTempName] = useState("");
 
   // Get all needed state from the store using selectors
-  const { openTabs, updateTabContent, executeQuery, loadQueryInTab } = useTabStore();
+  const { openTabs, updateTabContent, executeQuery } = useTabStore();
   const { sources, connectedSources } = useSourceStore();
   const { proposedChanges, acceptProposedChanges, rejectProposedChanges } = useChatStore();
-  const { createNewQuery, updateQueryName } = useQueryStore();
+  const { updateQueryName } = useQueryStore();
 
   // Find current tab - memoized to prevent unnecessary re-computations
   const currentTab = useMemo(() => openTabs.find((tab) => tab.id === tabId), [openTabs, tabId]);
@@ -100,20 +100,6 @@ export function Editor({ tabId, onQueryExecuted }: EditorProps) {
     },
     [canRunQueries, currentTab, proposedChanges, executeQuery, tabId, isSourceConnected, openTabs]
   );
-
-  // Handle create new query
-  const handleCreateQuery = useCallback(async () => {
-    if (!tabSource) return;
-
-    try {
-      const newQuery = await createNewQuery(tabSource.id);
-      await loadQueryInTab(tabId, newQuery.id);
-      toast.success("Query created");
-    } catch (error) {
-      console.error("Failed to create query:", error);
-      toast.error("Failed to create query");
-    }
-  }, [tabSource, createNewQuery, loadQueryInTab, tabId]);
 
   // Handle name editing
   const startEditingName = useCallback(() => {
@@ -225,14 +211,6 @@ export function Editor({ tabId, onQueryExecuted }: EditorProps) {
 
         {/* Action buttons on the right */}
         <div className="flex items-center gap-2 h-8">
-          <Button
-            onClick={handleCreateQuery}
-            disabled={!isEditorReady || currentTab.queryRunning}
-            className="gap-1 text-xs cursor-pointer"
-            size="xs"
-          >
-            Create Query
-          </Button>
           <Button
             onClick={() => handleRunQuery()}
             disabled={!canRunQueries || currentTab.queryRunning}

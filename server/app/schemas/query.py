@@ -7,6 +7,7 @@ from enum import Enum
 
 class CreateQueryRequest(BaseModel):
     source_id: UUID
+    name: Optional[str] = None
     is_ephemeral: Optional[bool] = False
     preview_key: Optional[str] = None
 
