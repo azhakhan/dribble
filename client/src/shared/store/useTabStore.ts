@@ -390,7 +390,7 @@ export const useTabStore = create<TabState>()(
             }
           } else {
             // No query exists, create a new one
-            const newQuery = await queryStore.createNewQuery(tab.sourceId);
+            const newQuery = await queryStore.createNewQuery({ sourceId: tab.sourceId });
 
             // Update the tab to reference the new query
             set((prevState) => ({

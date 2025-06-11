@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { ChevronRight, ChevronDown, Database, FileText, Plus, MoreVertical } from "lucide-react";
 import { PostgresIcon, MySQLIcon, SQLiteIcon } from "../icons";
 import { Button } from "@/components/ui/button";
@@ -12,6 +12,8 @@ import { useQuery } from "@tanstack/react-query";
 import { getQueries } from "@/shared/lib/api";
 import { useQueryStore, useTreeStore, useSourceStore } from "@/shared/store";
 import type { Query, Source } from "@/shared/lib/api";
+import { RenameQuery } from "../query/dialogs/RenameQuery";
+import { DeleteQuery } from "../query/dialogs/DeleteQuery";
 
 interface QueryTreeProps {
   onQuerySelect?: (query: Query) => void;
@@ -41,11 +43,9 @@ const QueryTreeItem = ({
   isSelected
 }: QueryTreeItemProps) => {
   const [dropdownOpen, setDropdownOpen] = useState(false);
-  const [isEditing, setIsEditing] = useState(false);
-  const [editingName, setEditingName] = useState(query.name || `Query ${query.id.slice(0, 8)}`);
-
-  // Get the centralized updateQueryName function from the store
-  const { updateQueryName } = useQueryStore();
+  const [renameDialogOpen, setRenameDialogOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
 
   const handleQueryClick = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -61,90 +61,75 @@ const QueryTreeItem = ({
     }
   };
 
-  const handleEdit = () => {
-    setIsEditing(true);
+  const handleRename = () => {
+    setRenameDialogOpen(true);
     setDropdownOpen(false);
   };
 
-  const handleNameSubmit = async (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter") {
-      if (editingName.trim() !== query.name) {
-        try {
-          await updateQueryName(query.id, editingName.trim());
-        } catch (error) {
-          console.error("Failed to update query name:", error);
-        }
-      }
-      setIsEditing(false);
-    } else if (e.key === "Escape") {
-      setEditingName(query.name || `Query ${query.id.slice(0, 8)}`);
-      setIsEditing(false);
-    }
-  };
-
-  const handleNameBlur = async () => {
-    if (editingName.trim() !== query.name) {
-      try {
-        await updateQueryName(query.id, editingName.trim());
-      } catch (error) {
-        console.error("Failed to update query name:", error);
-      }
-    }
-    setIsEditing(false);
+  const handleDelete = () => {
+    setDeleteDialogOpen(true);
+    setDropdownOpen(false);
   };
 
   return (
-    <div
-      className={`flex items-center py-1 px-2 text-sm cursor-pointer hover:bg-accent/50 ${
-        isSelected ? "bg-accent text-accent-foreground" : ""
-      }`}
-      style={{ paddingLeft: "24px" }}
-      onClick={handleQueryClick}
-      onDoubleClick={handleQueryDoubleClick}
-    >
-      {/* Icon for query */}
-      <div className="mr-1.5 flex items-center">
-        <FileText className="h-4 w-4" strokeWidth={1} />
+    <>
+      <div
+        className={`flex items-center py-1 px-2 text-sm cursor-pointer hover:bg-accent/50 ${
+          isSelected ? "bg-accent text-accent-foreground" : ""
+        }`}
+        style={{ paddingLeft: "24px" }}
+        onClick={handleQueryClick}
+        onDoubleClick={handleQueryDoubleClick}
+      >
+        {/* Icon for query */}
+        <div className="mr-1.5 flex items-center">
+          <FileText className="h-4 w-4" strokeWidth={1} />
+        </div>
+
+        {/* Query name */}
+        <span className="flex-grow truncate">{query.name || `Query ${query.id.slice(0, 8)}`}</span>
+
+        {/* Actions dropdown */}
+        <DropdownMenu open={dropdownOpen} onOpenChange={setDropdownOpen}>
+          <DropdownMenuTrigger asChild>
+            <Button
+              ref={triggerRef}
+              variant="ghost"
+              size="icon"
+              className="h-4 w-4 ml-1 hover:bg-accent cursor-pointer"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <MoreVertical className="h-2 w-2" strokeWidth={1} />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-40">
+            <DropdownMenuItem onClick={handleRename} className="text-xs cursor-pointer">
+              Rename
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={handleDelete}
+              className="text-destructive text-xs cursor-pointer"
+            >
+              Delete
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
-      {/* Query name */}
-      {isEditing ? (
-        <input
-          type="text"
-          value={editingName}
-          onChange={(e) => setEditingName(e.target.value)}
-          onKeyDown={handleNameSubmit}
-          onBlur={handleNameBlur}
-          className="flex-grow bg-transparent border-none outline-none focus:ring-0 text-sm"
-          autoFocus
-          onClick={(e) => e.stopPropagation()}
-        />
-      ) : (
-        <span className="flex-grow truncate">{query.name || `Query ${query.id.slice(0, 8)}`}</span>
-      )}
-
-      {/* Actions dropdown */}
-      <DropdownMenu open={dropdownOpen} onOpenChange={setDropdownOpen}>
-        <DropdownMenuTrigger asChild>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-4 w-4 ml-1 hover:bg-accent cursor-pointer"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <MoreVertical className="h-2 w-2" strokeWidth={1} />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-40">
-          <DropdownMenuItem onClick={handleEdit} className="text-xs cursor-pointer">
-            Rename
-          </DropdownMenuItem>
-          <DropdownMenuItem className="text-destructive text-xs cursor-pointer">
-            Delete
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
-    </div>
+      {/* Dialogs */}
+      <RenameQuery
+        query={query}
+        open={renameDialogOpen}
+        onOpenChange={setRenameDialogOpen}
+        triggerRef={triggerRef}
+      />
+      <DeleteQuery
+        query={query}
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        triggerRef={triggerRef}
+      />
+    </>
   );
 };
 
