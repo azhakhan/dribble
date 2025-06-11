@@ -1,9 +1,85 @@
 import { X, Plus } from "lucide-react";
-import { useCallback, memo, useRef, useEffect } from "react";
+import { useCallback, memo, useRef, useEffect, useState } from "react";
 import { cn } from "@/shared/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Query } from "./Query";
 import { useTabStore, useSourceStore } from "@/shared/store";
+
+// Context menu component
+const ContextMenu = memo(
+  ({
+    x,
+    y,
+    onClose,
+    onCloseOthers,
+    onCloseToRight,
+    canCloseToRight
+  }: {
+    x: number;
+    y: number;
+    onClose: () => void;
+    onCloseOthers: () => void;
+    onCloseToRight: () => void;
+    canCloseToRight: boolean;
+  }) => {
+    const menuRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+      const handleClickOutside = (event: MouseEvent) => {
+        if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+          onClose();
+        }
+      };
+
+      const handleEscape = (event: KeyboardEvent) => {
+        if (event.key === "Escape") {
+          onClose();
+        }
+      };
+
+      document.addEventListener("mousedown", handleClickOutside);
+      document.addEventListener("keydown", handleEscape);
+
+      return () => {
+        document.removeEventListener("mousedown", handleClickOutside);
+        document.removeEventListener("keydown", handleEscape);
+      };
+    }, [onClose]);
+
+    return (
+      <div
+        ref={menuRef}
+        className="fixed z-50 bg-background border rounded-md shadow-lg py-1 min-w-[150px]"
+        style={{ left: x, top: y }}
+      >
+        <button
+          className="w-full px-3 py-1.5 text-left text-sm hover:bg-accent transition-colors"
+          onClick={() => {
+            onCloseOthers();
+            onClose();
+          }}
+        >
+          Close Others
+        </button>
+        <button
+          className={cn(
+            "w-full px-3 py-1.5 text-left text-sm transition-colors",
+            canCloseToRight ? "hover:bg-accent" : "text-muted-foreground cursor-not-allowed"
+          )}
+          onClick={() => {
+            if (canCloseToRight) {
+              onCloseToRight();
+              onClose();
+            }
+          }}
+          disabled={!canCloseToRight}
+        >
+          Close Tabs to the Right
+        </button>
+      </div>
+    );
+  }
+);
 
 // Memoized tab button component to prevent unnecessary re-renders
 const TabButton = memo(
@@ -12,22 +88,25 @@ const TabButton = memo(
     isActive,
     onTabClick,
     onCloseTab,
+    onRightClick,
     tabRef
   }: {
     tab: { id: string; title: string; isDirty: boolean };
     isActive: boolean;
     onTabClick: (tabId: string) => Promise<void>;
     onCloseTab: (tabId: string, e: React.MouseEvent) => void;
+    onRightClick: (tabId: string, e: React.MouseEvent) => void;
     tabRef?: React.RefObject<HTMLDivElement | null>;
   }) => (
     <div
       ref={tabRef}
       className={cn(
-        "flex items-center px-2 py-1.5 border-r cursor-pointer hover:bg-accent group flex-shrink-0",
+        "flex items-center px-2 py-1.5 border-r cursor-pointer group flex-shrink-0",
         "min-w-[120px] max-w-[200px]", // Set minimum and maximum width
-        isActive ? "bg-background" : "border-b bg-muted/20"
+        isActive ? "bg-background" : "border-b bg-muted/20 hover:bg-accent"
       )}
       onClick={() => onTabClick(tab.id)}
+      onContextMenu={(e) => onRightClick(tab.id, e)}
     >
       <span className="text-sm truncate mx-2 flex-1 min-w-0" title={tab.title}>
         {tab.title}
@@ -56,6 +135,13 @@ function QueryTabsComponent() {
   // Refs for scrolling functionality
   const tabBarScrollRef = useRef<HTMLDivElement>(null);
   const activeTabRef = useRef<HTMLDivElement>(null);
+
+  // Context menu state
+  const [contextMenu, setContextMenu] = useState<{
+    x: number;
+    y: number;
+    tabId: string;
+  } | null>(null);
 
   // Auto-scroll to active tab when it changes
   useEffect(() => {
@@ -127,6 +213,53 @@ function QueryTabsComponent() {
     [setActiveTab]
   );
 
+  // Handle right-click context menu
+  const handleRightClick = useCallback((tabId: string, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    setContextMenu({
+      x: e.clientX,
+      y: e.clientY,
+      tabId
+    });
+  }, []);
+
+  // Handle closing other tabs
+  const handleCloseOthers = useCallback(
+    (exceptTabId: string) => {
+      openTabs.forEach((tab) => {
+        if (tab.id !== exceptTabId) {
+          closeQueryTab(tab.id);
+        }
+      });
+    },
+    [openTabs, closeQueryTab]
+  );
+
+  // Handle closing tabs to the right
+  const handleCloseToRight = useCallback(
+    (fromTabId: string) => {
+      const fromIndex = openTabs.findIndex((tab) => tab.id === fromTabId);
+      if (fromIndex === -1) return;
+
+      // Close all tabs after the specified tab
+      for (let i = fromIndex + 1; i < openTabs.length; i++) {
+        closeQueryTab(openTabs[i].id);
+      }
+    },
+    [openTabs, closeQueryTab]
+  );
+
+  // Check if there are tabs to the right
+  const canCloseToRight = useCallback(
+    (tabId: string) => {
+      const tabIndex = openTabs.findIndex((tab) => tab.id === tabId);
+      return tabIndex !== -1 && tabIndex < openTabs.length - 1;
+    },
+    [openTabs]
+  );
+
   // If no tabs are open, show empty state
   if (openTabs.length === 0) {
     return (
@@ -178,6 +311,7 @@ function QueryTabsComponent() {
               isActive={tab.id === activeTabId}
               onTabClick={handleTabClick}
               onCloseTab={handleCloseTab}
+              onRightClick={handleRightClick}
               tabRef={tab.id === activeTabId ? activeTabRef : undefined}
             />
           ))}
@@ -197,6 +331,18 @@ function QueryTabsComponent() {
 
       {/* Active tab content */}
       <div className="flex-1 min-h-0">{activeTab && <Query tabId={activeTab.id} />}</div>
+
+      {/* Context menu */}
+      {contextMenu && (
+        <ContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          onClose={() => setContextMenu(null)}
+          onCloseOthers={() => handleCloseOthers(contextMenu.tabId)}
+          onCloseToRight={() => handleCloseToRight(contextMenu.tabId)}
+          canCloseToRight={canCloseToRight(contextMenu.tabId)}
+        />
+      )}
     </div>
   );
 }
