@@ -136,8 +136,12 @@ const QueryTreeItem = ({
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-40">
-          <DropdownMenuItem onClick={handleEdit}>Rename</DropdownMenuItem>
-          <DropdownMenuItem className="text-destructive">Delete</DropdownMenuItem>
+          <DropdownMenuItem onClick={handleEdit} className="text-xs cursor-pointer">
+            Rename
+          </DropdownMenuItem>
+          <DropdownMenuItem className="text-destructive text-xs cursor-pointer">
+            Delete
+          </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
     </div>

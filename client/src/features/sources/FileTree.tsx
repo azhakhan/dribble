@@ -388,7 +388,7 @@ const FileTreeItem = ({
                 {isConnected && node.id && (
                   <>
                     <DropdownMenuItem
-                      className="text-destructive"
+                      className="text-destructive text-xs cursor-pointer"
                       onClick={() => disconnectSource(node.id as string)}
                     >
                       Disconnect
@@ -397,12 +397,20 @@ const FileTreeItem = ({
                   </>
                 )}
 
-                <DropdownMenuItem onClick={() => setEditDialogOpen(true)}>Edit</DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setRenameDialogOpen(true)}>
+                <DropdownMenuItem
+                  className="text-xs cursor-pointer"
+                  onClick={() => setEditDialogOpen(true)}
+                >
+                  Edit
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  className="text-xs cursor-pointer"
+                  onClick={() => setRenameDialogOpen(true)}
+                >
                   Rename
                 </DropdownMenuItem>
                 <DropdownMenuItem
-                  className="text-destructive"
+                  className="text-destructive text-xs cursor-pointer"
                   onClick={() => setDeleteDialogOpen(true)}
                 >
                   Delete
