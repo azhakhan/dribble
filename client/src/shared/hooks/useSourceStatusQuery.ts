@@ -1,9 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
 import { getSourceStatus, type SourceStatus } from "@/shared/lib/api";
-import { useAppStore } from "@/shared/store/useAppStore";
+import { useSourceStore } from "@/shared/store";
 
 export function useSourceStatusQuery(sourceId: string | undefined) {
-  const { connectedSources } = useAppStore();
+  const { connectedSources } = useSourceStore();
 
   // Only enable the query if sourceId exists AND the source is connected
   const isSourceConnected = sourceId ? connectedSources.has(sourceId) : false;

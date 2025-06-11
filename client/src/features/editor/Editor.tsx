@@ -2,7 +2,7 @@ import { useRef, useCallback, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { PlayIcon, PencilIcon, CheckIcon, XIcon, Database } from "lucide-react";
 import { toast } from "sonner";
-import { useAppStore } from "@/shared/store/useAppStore";
+import { useTabStore, useSourceStore, useChatStore, useQueryStore } from "@/shared/store";
 import { LanguageIdEnum } from "@/shared/lib/monaco-setup";
 import { MonacoSQLEditor } from "./MonacoSQLEditor";
 import { MonacoDiffEditor } from "./MonacoDiffEditor";
@@ -21,19 +21,10 @@ export function Editor({ tabId, onQueryExecuted }: EditorProps) {
   const [tempName, setTempName] = useState("");
 
   // Get all needed state from the store using selectors
-  const {
-    openTabs,
-    sources,
-    connectedSources,
-    proposedChanges,
-    updateTabContent,
-    executeQuery,
-    createNewQuery,
-    loadQueryInTab,
-    acceptProposedChanges,
-    rejectProposedChanges,
-    updateQueryName
-  } = useAppStore();
+  const { openTabs, updateTabContent, executeQuery, loadQueryInTab } = useTabStore();
+  const { sources, connectedSources } = useSourceStore();
+  const { proposedChanges, acceptProposedChanges, rejectProposedChanges } = useChatStore();
+  const { createNewQuery, updateQueryName } = useQueryStore();
 
   // Find current tab - memoized to prevent unnecessary re-computations
   const currentTab = useMemo(() => openTabs.find((tab) => tab.id === tabId), [openTabs, tabId]);

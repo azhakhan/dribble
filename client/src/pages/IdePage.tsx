@@ -1,6 +1,6 @@
 import { useMemo, useCallback, useEffect, useState } from "react";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
-import { useAppStore } from "@/shared/store/useAppStore";
+import { useUIStore, useSourceStore, useTabStore } from "@/shared/store";
 import { SidebarTabs } from "@/features/sources/SidebarTabs";
 import { QueryTabs } from "@/features/query/QueryTabs";
 import { ChatSidebar } from "@/features/chat/ChatSidebar";
@@ -15,23 +15,24 @@ import type { Source, ConnectedSource, Query } from "@/shared/lib/api";
 
 export function IdePage() {
   // Get state and actions from Zustand store
+  const { panelSizes, setPanelSizes } = useUIStore();
   const {
-    panelSizes,
-    setPanelSizes,
     selectedSource,
     setSelectedSource,
     setSourceSchema,
     sourceSchemaErrors,
     setSourceSchemaError,
     setSourceStatus,
+    setSources,
+    setConnectedSourcesData
+  } = useSourceStore();
+  const {
     activeTabId,
     openTabs,
-    setSources,
-    setConnectedSources,
     initializeQueryTabsRuntimeStates,
     openQueryFromTree,
     openTableFromTree
-  } = useAppStore();
+  } = useTabStore();
 
   // Initialize runtime states for query tabs on app load
   useEffect(() => {
@@ -66,9 +67,9 @@ export function IdePage() {
 
   useEffect(() => {
     if (connectedSourcesData) {
-      setConnectedSources(connectedSourcesData.map((s: ConnectedSource) => s.id));
+      setConnectedSourcesData(connectedSourcesData);
     }
-  }, [connectedSourcesData, setConnectedSources]);
+  }, [connectedSourcesData, setConnectedSourcesData]);
 
   // Query for selected source schemas - only if the source is connected
   const { data: sourceSchemas } = useStoreSourceSchema(
@@ -149,7 +150,7 @@ export function IdePage() {
       setSelectedQueryId(query.id);
 
       // Use unified helper
-      await openQueryFromTree(query);
+      await openQueryFromTree(query.id);
     },
     [setSelectedQueryId, openQueryFromTree]
   );

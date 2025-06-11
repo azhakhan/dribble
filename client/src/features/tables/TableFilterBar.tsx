@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
-import { useAppStore } from "@/shared/store/useAppStore";
+import { useTabStore } from "@/shared/store";
 import { useState, useEffect } from "react";
 import { MiniMonacoSQL } from "@/components/ui/mini-monaco-sql";
 import { usePagination } from "./hooks/usePagination";
@@ -20,7 +20,7 @@ export const TableFilterBar = ({ data, isLoading, columns }: TableFilterBarProps
     setTableFilterOrderBy,
     clearTableFilters,
     executeQuery
-  } = useAppStore();
+  } = useTabStore();
 
   const tabId = activeTabId || "default";
   const { whereInput, orderByInput } = getTabFilterState(tabId);

@@ -3,7 +3,7 @@ import { useCallback, memo } from "react";
 import { cn } from "@/shared/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Query } from "./Query";
-import { useAppStore } from "@/shared/store/useAppStore";
+import { useTabStore, useSourceStore } from "@/shared/store";
 
 // Memoized tab button component to prevent unnecessary re-renders
 const TabButton = memo(
@@ -42,12 +42,12 @@ const TabButton = memo(
 
 function QueryTabsComponent() {
   // Use selective subscriptions to prevent unnecessary re-renders
-  const openTabs = useAppStore((state) => state.openTabs);
-  const activeTabId = useAppStore((state) => state.activeTabId);
-  const selectedSource = useAppStore((state) => state.selectedSource);
+  const openTabs = useTabStore((state) => state.openTabs);
+  const activeTabId = useTabStore((state) => state.activeTabId);
+  const selectedSource = useSourceStore((state) => state.selectedSource);
 
   // Get actions from store
-  const { openQueryTab, closeQueryTab, setActiveTab } = useAppStore();
+  const { openQueryTab, closeQueryTab, setActiveTab } = useTabStore();
 
   // Handle creating a new query tab
   const handleNewTab = useCallback(async () => {
