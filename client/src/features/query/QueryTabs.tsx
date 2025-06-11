@@ -20,17 +20,18 @@ const TabButton = memo(
   }) => (
     <div
       className={cn(
-        "flex items-center px-2 py-1.5 border-r cursor-pointer hover:bg-accent group min-w-0",
-        isActive ? "bg-background border-b-2 border-b-primary" : ""
+        "flex items-center px-2 py-1.5 border-r cursor-pointer hover:bg-accent group flex-shrink-0",
+        "min-w-[120px] max-w-[200px]", // Set minimum and maximum width
+        isActive ? "bg-background" : "border-b bg-muted/20"
       )}
       onClick={() => onTabClick(tab.id)}
     >
-      <span className="text-sm truncate mr-2 min-w-0" title={tab.title}>
+      <span className="text-sm truncate mx-2 flex-1 min-w-0" title={tab.title}>
         {tab.title}
         {tab.isDirty && <span className="ml-1">•</span>}
       </span>
       <button
-        className="opacity-0 group-hover:opacity-100 hover:bg-muted rounded p-0.5 transition-opacity"
+        className="opacity-0 group-hover:opacity-100 hover:bg-muted rounded p-0.5 transition-opacity flex-shrink-0"
         onClick={(e) => onCloseTab(tab.id, e)}
         aria-label="Close tab"
       >
@@ -129,27 +130,29 @@ function QueryTabsComponent() {
   return (
     <div className="h-full flex flex-col">
       {/* Tab bar */}
-      <div className="flex-shrink-0 flex items-stretch border-b border-border/50 bg-muted/10 h-10 overflow-x-auto">
-        {openTabs.map((tab) => (
-          <TabButton
-            key={tab.id}
-            tab={tab}
-            isActive={tab.id === activeTabId}
-            onTabClick={handleTabClick}
-            onCloseTab={handleCloseTab}
-          />
-        ))}
+      <div className="flex-shrink-0 flex items-stretch border-border/50 bg-muted/10 h-10 overflow-x-auto scrollbar-thin scrollbar-thumb-muted/40 scrollbar-track-transparent scrollbar-thumb-rounded-full hover:scrollbar-thumb-muted/60">
+        <div className="flex items-stretch min-w-fit">
+          {openTabs.map((tab) => (
+            <TabButton
+              key={tab.id}
+              tab={tab}
+              isActive={tab.id === activeTabId}
+              onTabClick={handleTabClick}
+              onCloseTab={handleCloseTab}
+            />
+          ))}
 
-        {/* New tab button */}
-        <Button
-          variant="ghost"
-          size="xs"
-          onClick={handleNewTab}
-          disabled={!selectedSource}
-          className="h-full px-3 rounded-none hover:bg-accent flex-shrink-0"
-        >
-          <Plus className="h-2 w-2" />
-        </Button>
+          {/* New tab button */}
+          <Button
+            variant="ghost"
+            size="xs"
+            onClick={handleNewTab}
+            disabled={!selectedSource}
+            className="h-full px-3 rounded-none hover:bg-accent flex-shrink-0 min-w-[40px]"
+          >
+            <Plus className="h-2 w-2" />
+          </Button>
+        </div>
       </div>
 
       {/* Active tab content */}
