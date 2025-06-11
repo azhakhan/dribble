@@ -9,13 +9,15 @@ interface MonacoSQLEditorProps {
   onChange: (value: string) => void;
   language: string;
   readOnly?: boolean;
+  onRunQuery?: () => void;
 }
 
 export function MonacoSQLEditor({
   value,
   onChange,
   language,
-  readOnly = false
+  readOnly = false,
+  onRunQuery
 }: MonacoSQLEditorProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | undefined>(undefined);
@@ -118,6 +120,12 @@ export function MonacoSQLEditor({
     return () => disposable.dispose();
   }, [language, schemaCompletions]);
 
+  // Store onRunQuery in a ref to avoid stale closure
+  const onRunQueryRef = useRef(onRunQuery);
+  useEffect(() => {
+    onRunQueryRef.current = onRunQuery;
+  }, [onRunQuery]);
+
   // Initialize editor once
   useEffect(() => {
     if (hostRef.current && !editorRef.current) {
@@ -146,6 +154,13 @@ export function MonacoSQLEditor({
           showSnippets: true,
           showFunctions: true,
           localityBonus: true
+        }
+      });
+
+      // Add keyboard shortcut handler for Cmd+Enter (or Ctrl+Enter)
+      editorRef.current.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => {
+        if (onRunQueryRef.current) {
+          onRunQueryRef.current();
         }
       });
 

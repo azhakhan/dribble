@@ -286,6 +286,7 @@ export function Editor({ tabId, onQueryExecuted }: EditorProps) {
             onChange={handleContentChange}
             language={getMonacoLanguage(tabSource?.dbtype)}
             readOnly={!isEditorReady}
+            onRunQuery={() => handleRunQuery()}
           />
         )}
       </div>

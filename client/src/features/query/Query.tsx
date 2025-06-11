@@ -163,7 +163,7 @@ function QueryComponent({ tabId }: QueryProps) {
 
             {/* Bottom section with versions and runs info - only show when not viewing runs */}
             {!showRuns && (
-              <div className="flex-shrink-0 border-t bg-muted/30">
+              <div className="flex-shrink-0 border-t">
                 <div className="flex items-center justify-between px-3 py-2 gap-4">
                   {/* Versions dropdown on the left */}
                   <div className="flex items-center gap-2 min-w-0">
@@ -176,7 +176,7 @@ function QueryComponent({ tabId }: QueryProps) {
                       onValueChange={handleVersionChange}
                       disabled={versions.length === 0 || isLoadingVersions}
                     >
-                      <SelectTrigger className="w-48 h-6 text-xs border-none bg-transparent">
+                      <SelectTrigger className="h-auto w-auto p-0 border-0 bg-transparent text-xs text-muted-foreground hover:text-foreground focus:ring-0 focus:ring-offset-0 cursor-pointer">
                         <SelectValue
                           placeholder={isLoadingVersions ? "Loading..." : "Select version"}
                         />
