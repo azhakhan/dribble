@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useQuery } from "@tanstack/react-query";
 import { getQueries } from "@/shared/lib/api";
-import { useAppStore } from "@/shared/store/useAppStore";
+import { useQueryStore, useTreeStore, useSourceStore } from "@/shared/store";
 import type { Query, Source } from "@/shared/lib/api";
 
 interface QueryTreeProps {
@@ -45,7 +45,7 @@ const QueryTreeItem = ({
   const [editingName, setEditingName] = useState(query.name || `Query ${query.id.slice(0, 8)}`);
 
   // Get the centralized updateQueryName function from the store
-  const { updateQueryName } = useAppStore();
+  const { updateQueryName } = useQueryStore();
 
   const handleQueryClick = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -129,7 +129,7 @@ const QueryTreeItem = ({
           <Button
             variant="ghost"
             size="icon"
-            className="h-4 w-4 ml-1 hover:bg-accent"
+            className="h-4 w-4 ml-1 hover:bg-accent cursor-pointer"
             onClick={(e) => e.stopPropagation()}
           >
             <MoreVertical className="h-2 w-2" strokeWidth={1} />
@@ -152,7 +152,7 @@ const QueryTreeSource = ({
   selectedQueryId
 }: QueryTreeSourceProps) => {
   // Use centralized tree state for query source expansion
-  const { isQuerySourceExpanded, setQuerySourceExpanded } = useAppStore();
+  const { isQuerySourceExpanded, setQuerySourceExpanded } = useTreeStore();
   const isOpen = isQuerySourceExpanded(source.id);
 
   const handleClick = (e: React.MouseEvent) => {
@@ -255,14 +255,10 @@ export const QueryTree = ({
   onQueryDoubleClick,
   selectedQueryId
 }: QueryTreeProps) => {
-  // Get queries and sources from the centralized store
-  const {
-    queries,
-    sources: storeSourcesMap,
-    setQuery,
-    loadSources,
-    loadingSources
-  } = useAppStore();
+  // Get queries and sources from the centralized stores
+  const { queries, setQuery } = useQueryStore();
+
+  const { sources: storeSourcesMap, loadSources, loadingSources } = useSourceStore();
 
   // Fetch queries grouped by source (for initial load only)
   const {
@@ -335,7 +331,8 @@ export const QueryTree = ({
           queries: filteredQueries
         };
       })
-      .filter((item) => item.source);
+      .filter((item) => item.source)
+      .sort((a, b) => a.source.name.localeCompare(b.source.name)); // Sort sources alphabetically
   }, [queries, queriesBySource, queriesData, sourceMap]);
 
   if (queriesLoading || loadingSources) {

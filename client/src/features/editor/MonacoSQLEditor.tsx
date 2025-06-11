@@ -1,7 +1,7 @@
 import { useRef, useEffect, useMemo } from "react";
 import * as monaco from "monaco-editor";
 import { LanguageIdEnum } from "monaco-sql-languages";
-import { useAppStore } from "@/shared/store/useAppStore";
+import { useSourceStore } from "@/shared/store";
 import { useTheme } from "@/components/theme-provider";
 
 interface MonacoSQLEditorProps {
@@ -23,7 +23,7 @@ export function MonacoSQLEditor({
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | undefined>(undefined);
 
   // Get schema data from the store
-  const { selectedSource, sourceSchemaMap } = useAppStore();
+  const { selectedSource, sourceSchemaMap } = useSourceStore();
 
   // Get theme from context
   const { theme } = useTheme();

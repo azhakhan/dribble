@@ -33,7 +33,7 @@ export const TableDataDisplay = ({
         </>
       ) : (
         <div className="h-full flex items-center justify-center text-gray-400">
-          Double-click on a table in the file tree to view data or run a SQL query
+          Double-click on a table or a query in the file tree to load data and run a query.
         </div>
       )}
     </div>

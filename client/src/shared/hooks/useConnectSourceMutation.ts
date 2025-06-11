@@ -1,16 +1,11 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { connectSource, disconnectSource, getSourceStatus } from "@/shared/lib/api";
-import { useAppStore } from "@/shared/store/useAppStore";
+import { useTreeStore, useSourceStore } from "@/shared/store";
 
 export function useConnectSourceMutation() {
   const queryClient = useQueryClient();
-  const {
-    addLoadingSourceId,
-    removeLoadingSourceId,
-    setSourceStatus,
-    loadConnectedSources,
-    loadSourceSchema
-  } = useAppStore();
+  const { addLoadingSourceId, removeLoadingSourceId } = useTreeStore();
+  const { setSourceStatus, loadConnectedSources, loadSourceSchema } = useSourceStore();
 
   return useMutation({
     mutationFn: (sourceId: string) => {
@@ -102,7 +97,7 @@ export function useDisconnectSourceMutation() {
     setSourceSchemaError,
     removeSourceStatus,
     loadConnectedSources
-  } = useAppStore();
+  } = useSourceStore();
 
   return useMutation({
     mutationFn: (sourceId: string) => {
@@ -137,7 +132,7 @@ export function useDisconnectSourceMutation() {
       queryClient.removeQueries({ queryKey: ["sourceSchemas", sourceId] });
 
       // Remove the sourceId from sourceSchemaMap instead of setting it to empty object
-      const currentState = useAppStore.getState();
+      const currentState = useSourceStore.getState();
       const newSourceSchemaMap = { ...currentState.sourceSchemaMap };
       delete newSourceSchemaMap[sourceId];
 
@@ -145,7 +140,7 @@ export function useDisconnectSourceMutation() {
       const newLoadingSchemas = new Set(currentState.loadingSchemas);
       newLoadingSchemas.delete(sourceId);
 
-      useAppStore.setState({
+      useSourceStore.setState({
         sourceSchemaMap: newSourceSchemaMap,
         loadingSchemas: newLoadingSchemas
       });

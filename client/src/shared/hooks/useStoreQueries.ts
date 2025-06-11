@@ -1,5 +1,5 @@
 import { useEffect, useMemo } from "react";
-import { useAppStore } from "@/shared/store/useAppStore";
+import { useSourceStore, useQueryStore } from "@/shared/store";
 import type { ConnectedSource } from "@/shared/lib/api";
 
 /**
@@ -7,7 +7,7 @@ import type { ConnectedSource } from "@/shared/lib/api";
  * with React Query-like interface
  */
 export function useStoreSources() {
-  const { allSources, loadingSources, loadSources } = useAppStore();
+  const { allSources, loadingSources, loadSources } = useSourceStore();
 
   useEffect(() => {
     // Load sources on mount if not already loaded and not loading
@@ -27,7 +27,7 @@ export function useStoreSources() {
  * Custom hook that provides connected sources data from the store
  */
 export function useStoreConnectedSources() {
-  const { connectedSourcesData, loadingConnectedSources, loadConnectedSources } = useAppStore();
+  const { connectedSourcesData, loadingConnectedSources, loadConnectedSources } = useSourceStore();
 
   useEffect(() => {
     // Load connected sources on mount if not already loaded and not loading
@@ -47,7 +47,7 @@ export function useStoreConnectedSources() {
  * Custom hook for accessing a specific query from the store
  */
 export function useStoreQuery(queryId: string | null) {
-  const { queries, loadingQueries, loadQuery } = useAppStore();
+  const { queries, loadingQueries, loadQuery } = useQueryStore();
 
   useEffect(() => {
     if (queryId && !queries[queryId] && !loadingQueries.has(queryId)) {
@@ -66,7 +66,7 @@ export function useStoreQuery(queryId: string | null) {
  * Custom hook for accessing query versions from the store
  */
 export function useStoreQueryVersions(queryId: string | null) {
-  const { queryVersions, loadingVersions, loadQueryVersions } = useAppStore();
+  const { queryVersions, loadingVersions, loadQueryVersions } = useQueryStore();
 
   useEffect(() => {
     if (queryId && !queryVersions[queryId] && !loadingVersions.has(queryId)) {
@@ -85,7 +85,7 @@ export function useStoreQueryVersions(queryId: string | null) {
  * Custom hook for query mutations that uses store actions
  */
 export function useStoreQueryMutations() {
-  const { createNewQuery, saveQueryVersion } = useAppStore();
+  const { createNewQuery, saveQueryVersion } = useQueryStore();
 
   const createQuery = useMemo(
     () => ({
@@ -125,7 +125,8 @@ export function useStoreQueryMutations() {
  * with automatic loading and React Query-like interface
  */
 export function useStoreSourceSchema(sourceId: string | undefined) {
-  const { sourceSchemaMap, loadingSchemas, sourceSchemaErrors, loadSourceSchema } = useAppStore();
+  const { sourceSchemaMap, loadingSchemas, sourceSchemaErrors, loadSourceSchema } =
+    useSourceStore();
 
   useEffect(() => {
     if (sourceId && !sourceSchemaMap[sourceId] && !loadingSchemas.has(sourceId)) {
@@ -144,7 +145,7 @@ export function useStoreSourceSchema(sourceId: string | undefined) {
  * Custom hook that loads schemas for all connected sources and integrates with store
  */
 export function useStoreConnectedSourcesSchemas(connectedSources: ConnectedSource[] | undefined) {
-  const { loadingSchemas, sourceSchemaErrors, loadConnectedSourcesSchemas } = useAppStore();
+  const { loadingSchemas, sourceSchemaErrors, loadConnectedSourcesSchemas } = useSourceStore();
 
   useEffect(() => {
     if (connectedSources && connectedSources.length > 0) {

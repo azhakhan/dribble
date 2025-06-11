@@ -1,6 +1,6 @@
 import { memo, useState, useEffect, useMemo } from "react";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
-import { useAppStore } from "@/shared/store/useAppStore";
+import { useTabStore, useQueryStore, useSourceStore } from "@/shared/store";
 import { TableDataDisplay } from "@/features/tables/TableDataDisplay";
 import { Editor } from "@/features/editor/Editor";
 import { QueryRuns } from "./QueryRuns";
@@ -23,17 +23,18 @@ function QueryComponent({ tabId }: QueryProps) {
   const [selectedVersionId, setSelectedVersionId] = useState<string | null>(null);
 
   // Use store selectors to get data for this specific tab
+  const { openTabs, updateTabContent } = useTabStore();
+
   const {
-    openTabs,
-    updateTabContent,
     queryVersions,
     queryRuns,
     loadingVersions,
     loadingRuns,
     loadQueryVersions,
-    loadQueryRuns,
-    sources
-  } = useAppStore();
+    loadQueryRuns
+  } = useQueryStore();
+
+  const { sources } = useSourceStore();
 
   const currentTab = openTabs.find((tab) => tab.id === tabId);
   const currentSource = currentTab?.sourceId ? sources[currentTab.sourceId] : null;

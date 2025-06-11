@@ -2,7 +2,7 @@ import { useRef, useCallback, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { PlayIcon, PencilIcon, CheckIcon, XIcon, Database } from "lucide-react";
 import { toast } from "sonner";
-import { useAppStore } from "@/shared/store/useAppStore";
+import { useTabStore, useSourceStore, useChatStore, useQueryStore } from "@/shared/store";
 import { LanguageIdEnum } from "@/shared/lib/monaco-setup";
 import { MonacoSQLEditor } from "./MonacoSQLEditor";
 import { MonacoDiffEditor } from "./MonacoDiffEditor";
@@ -21,19 +21,10 @@ export function Editor({ tabId, onQueryExecuted }: EditorProps) {
   const [tempName, setTempName] = useState("");
 
   // Get all needed state from the store using selectors
-  const {
-    openTabs,
-    sources,
-    connectedSources,
-    proposedChanges,
-    updateTabContent,
-    executeQuery,
-    createNewQuery,
-    loadQueryInTab,
-    acceptProposedChanges,
-    rejectProposedChanges,
-    updateQueryName
-  } = useAppStore();
+  const { openTabs, updateTabContent, executeQuery, loadQueryInTab } = useTabStore();
+  const { sources, connectedSources } = useSourceStore();
+  const { proposedChanges, acceptProposedChanges, rejectProposedChanges } = useChatStore();
+  const { createNewQuery, updateQueryName } = useQueryStore();
 
   // Find current tab - memoized to prevent unnecessary re-computations
   const currentTab = useMemo(() => openTabs.find((tab) => tab.id === tabId), [openTabs, tabId]);
@@ -74,15 +65,12 @@ export function Editor({ tabId, onQueryExecuted }: EditorProps) {
   // Handle content changes
   const handleContentChange = useCallback(
     (content: string) => {
-      if (!currentTab) return;
-
-      // Update tab content
+      // Update tab content - let the store calculate isDirty based on lastSavedContent
       updateTabContent(tabId, {
-        editorContent: content,
-        isDirty: content !== currentTab.lastSavedContent
+        editorContent: content
       });
     },
-    [currentTab, tabId, updateTabContent]
+    [tabId, updateTabContent]
   );
 
   // Handle query execution
@@ -110,7 +98,7 @@ export function Editor({ tabId, onQueryExecuted }: EditorProps) {
         toast.error("Failed to execute query");
       }
     },
-    [canRunQueries, currentTab, proposedChanges, executeQuery, tabId, isSourceConnected]
+    [canRunQueries, currentTab, proposedChanges, executeQuery, tabId, isSourceConnected, openTabs]
   );
 
   // Handle create new query

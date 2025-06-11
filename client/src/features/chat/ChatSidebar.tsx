@@ -16,7 +16,7 @@ import {
   DropdownMenuTrigger
 } from "@/components/ui/dropdown-menu";
 import { ChevronUp, Database, History, Plus } from "lucide-react";
-import { useAppStore } from "@/shared/store/useAppStore";
+import { useSourceStore, useTabStore, useChatStore } from "@/shared/store";
 import { useChatLLMQuery } from "@/shared/hooks/useChatLLMQuery";
 import { useLLMsQuery, useLLMQuery } from "@/shared/hooks/useLLMsQuery";
 import { useChatSessionsQuery, useChatMessagesQuery } from "@/shared/hooks/useChatQuery";
@@ -43,23 +43,22 @@ export function ChatSidebar() {
   const [input, setInput] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
+  const { selectedSource } = useSourceStore();
+  const { openTabs, activeTabId } = useTabStore();
   const {
-    selectedSource,
     selectedLLM: selectedLLMId,
     setSelectedLLM,
     messages,
     addMessage,
     chatLoading,
     setChatLoading,
-    openTabs,
-    activeTabId,
     setProposedChanges,
     sessionId,
     generateNewSession,
     startNewSession,
     setSessionId,
     loadMessagesFromServer
-  } = useAppStore();
+  } = useChatStore();
 
   // Get active tab's content instead of global editorContent
   const activeTab = activeTabId ? openTabs.find((tab) => tab.id === activeTabId) : null;

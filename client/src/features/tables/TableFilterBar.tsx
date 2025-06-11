@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
-import { useAppStore } from "@/shared/store/useAppStore";
+import { useTabStore } from "@/shared/store";
 import { useState, useEffect } from "react";
 import { MiniMonacoSQL } from "@/components/ui/mini-monaco-sql";
 import { usePagination } from "./hooks/usePagination";
@@ -20,7 +20,7 @@ export const TableFilterBar = ({ data, isLoading, columns }: TableFilterBarProps
     setTableFilterOrderBy,
     clearTableFilters,
     executeQuery
-  } = useAppStore();
+  } = useTabStore();
 
   const tabId = activeTabId || "default";
   const { whereInput, orderByInput } = getTabFilterState(tabId);
@@ -78,10 +78,11 @@ export const TableFilterBar = ({ data, isLoading, columns }: TableFilterBarProps
       setTableFilterWhere(localWhereInput);
     }
 
-    // Execute query with updated filters
-    if (activeTabId) {
+    // Get fresh activeTabId and execute query with updated filters
+    const currentActiveTabId = useTabStore.getState().activeTabId;
+    if (currentActiveTabId) {
       try {
-        await executeQuery(activeTabId);
+        await executeQuery(currentActiveTabId);
       } catch (error) {
         console.error("Failed to execute query for WHERE filter:", error);
       }
@@ -96,10 +97,11 @@ export const TableFilterBar = ({ data, isLoading, columns }: TableFilterBarProps
       setTableFilterOrderBy(localOrderByInput);
     }
 
-    // Execute query with updated filters
-    if (activeTabId) {
+    // Get fresh activeTabId and execute query with updated filters
+    const currentActiveTabId = useTabStore.getState().activeTabId;
+    if (currentActiveTabId) {
       try {
-        await executeQuery(activeTabId);
+        await executeQuery(currentActiveTabId);
       } catch (error) {
         console.error("Failed to execute query for ORDER BY filter:", error);
       }
@@ -113,10 +115,11 @@ export const TableFilterBar = ({ data, isLoading, columns }: TableFilterBarProps
     setLocalWhereInput("");
     setLocalOrderByInput("");
 
-    // Execute query with cleared filters
-    if (activeTabId) {
+    // Get fresh activeTabId and execute query with cleared filters
+    const currentActiveTabId = useTabStore.getState().activeTabId;
+    if (currentActiveTabId) {
       try {
-        await executeQuery(activeTabId);
+        await executeQuery(currentActiveTabId);
       } catch (error) {
         console.error("Failed to execute query after clearing filters:", error);
       }
@@ -142,10 +145,11 @@ export const TableFilterBar = ({ data, isLoading, columns }: TableFilterBarProps
               if (localWhereInput !== whereInput) {
                 setTableFilterWhere(localWhereInput);
               }
-              // Execute query with updated filters
-              if (activeTabId) {
+              // Get fresh activeTabId and execute query with updated filters
+              const currentActiveTabId = useTabStore.getState().activeTabId;
+              if (currentActiveTabId) {
                 try {
-                  await executeQuery(activeTabId);
+                  await executeQuery(currentActiveTabId);
                 } catch (error) {
                   console.error("Failed to execute query for WHERE filter:", error);
                 }
@@ -169,10 +173,11 @@ export const TableFilterBar = ({ data, isLoading, columns }: TableFilterBarProps
               if (localOrderByInput !== orderByInput) {
                 setTableFilterOrderBy(localOrderByInput);
               }
-              // Execute query with updated filters
-              if (activeTabId) {
+              // Get fresh activeTabId and execute query with updated filters
+              const currentActiveTabId = useTabStore.getState().activeTabId;
+              if (currentActiveTabId) {
                 try {
-                  await executeQuery(activeTabId);
+                  await executeQuery(currentActiveTabId);
                 } catch (error) {
                   console.error("Failed to execute query for ORDER BY filter:", error);
                 }

@@ -1,4 +1,4 @@
-import { useAppStore } from "@/shared/store/useAppStore";
+import { useTabStore } from "@/shared/store";
 
 interface PaginationState {
   currentPage: number;
@@ -36,7 +36,7 @@ export const usePagination = ({
     setTableFilterOffset,
     setTableFilterPageSize,
     executeQuery
-  } = useAppStore();
+  } = useTabStore();
 
   const tabId = activeTabId || "default";
   const { currentOffset, pageSize, displaySize } = getTabFilterState(tabId);

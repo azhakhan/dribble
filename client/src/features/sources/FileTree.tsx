@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from "react";
-import { useAppStore } from "@/shared/store/useAppStore";
+import { useTreeStore, useSourceStore } from "@/shared/store";
 import {
   ChevronRight,
   ChevronDown,
@@ -93,17 +93,15 @@ const FileTreeItem = ({
   connectedSourceIds,
   parentContext
 }: FileTreeItemProps) => {
-  // Get state and actions from Zustand store
+  // Get state and actions from Zustand stores
+  const { selectedNodeId, setSelectedNodeId, loadingSourceIds, isNodeExpanded, setNodeExpanded } =
+    useTreeStore();
+
   const {
-    selectedNodeId,
-    setSelectedNodeId,
-    loadingSourceIds,
     sourceSchemaErrors: sourceErrors,
     sourceStatuses,
-    sourceGeneratedChildren,
-    isNodeExpanded,
-    setNodeExpanded
-  } = useAppStore();
+    sourceGeneratedChildren
+  } = useSourceStore();
 
   // Generate unique node ID for this item
   const nodeId = generateNodeId(node, level, parentContext);
@@ -374,7 +372,7 @@ const FileTreeItem = ({
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-4 w-4 ml-1 hover:bg-accent"
+                  className="h-4 w-4 ml-1 hover:bg-accent cursor-pointer"
                   onClick={(e) => e.stopPropagation()}
                 >
                   <MoreVertical className="h-2 w-2" strokeWidth={1} />
@@ -493,11 +491,21 @@ export const FileTree = ({ data, onSourceSelect, onTableDoubleClick }: FileTreeP
   // Fetch schemas for all connected sources and update AppState
   useStoreConnectedSourcesSchemas(connectedSourcesData);
 
+  // Sort sources alphabetically by name
+  const sortedData = useMemo(() => {
+    return [...data].sort((a, b) => {
+      if (a.type === "source" && b.type === "source") {
+        return a.name.localeCompare(b.name);
+      }
+      return 0; // Keep original order for non-source items
+    });
+  }, [data]);
+
   return (
     <div className="h-full flex flex-col">
       {/* Scrollable content */}
       <div className="flex-1 overflow-y-auto mt-2">
-        {data.map((node, index) => (
+        {sortedData.map((node, index) => (
           <FileTreeItem
             key={index}
             node={node}

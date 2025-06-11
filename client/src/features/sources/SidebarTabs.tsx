@@ -1,7 +1,7 @@
 import { Database, FileText } from "lucide-react";
 import { SourcesPanel } from "./SourcesPanel";
 import { QueryTree } from "./QueryTree";
-import { useAppStore } from "@/shared/store/useAppStore";
+import { useTreeStore } from "@/shared/store";
 import type { FileNode } from "@/shared/lib/fileTreeUtils";
 import type { Query } from "@/shared/lib/api";
 
@@ -27,8 +27,8 @@ export const SidebarTabs = ({
   selectedQueryId
 }: SidebarTabsProps) => {
   // Use centralized tree state instead of local state
-  const activeTab = useAppStore((state) => state.sidebarState.activeTab);
-  const setSidebarActiveTab = useAppStore((state) => state.setSidebarActiveTab);
+  const activeTab = useTreeStore((state) => state.sidebarState.activeTab);
+  const setSidebarActiveTab = useTreeStore((state) => state.setSidebarActiveTab);
 
   const renderTabContent = () => {
     switch (activeTab) {
