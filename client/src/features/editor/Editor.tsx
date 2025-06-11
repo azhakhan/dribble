@@ -65,15 +65,12 @@ export function Editor({ tabId, onQueryExecuted }: EditorProps) {
   // Handle content changes
   const handleContentChange = useCallback(
     (content: string) => {
-      if (!currentTab) return;
-
-      // Update tab content
+      // Update tab content - let the store calculate isDirty based on lastSavedContent
       updateTabContent(tabId, {
-        editorContent: content,
-        isDirty: content !== currentTab.lastSavedContent
+        editorContent: content
       });
     },
-    [currentTab, tabId, updateTabContent]
+    [tabId, updateTabContent]
   );
 
   // Handle query execution
@@ -101,7 +98,7 @@ export function Editor({ tabId, onQueryExecuted }: EditorProps) {
         toast.error("Failed to execute query");
       }
     },
-    [canRunQueries, currentTab, proposedChanges, executeQuery, tabId, isSourceConnected]
+    [canRunQueries, currentTab, proposedChanges, executeQuery, tabId, isSourceConnected, openTabs]
   );
 
   // Handle create new query

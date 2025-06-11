@@ -85,7 +85,6 @@ export const useTabStore = create<TabState>()(
         // Auto-execute if conditions are met for the new tab
         const currentState = get();
         if (currentState.shouldAutoExecuteQuery(newTab)) {
-          console.log("Auto-executing query on new tab:", newTabId);
           try {
             await currentState.executeQuery(newTabId);
           } catch (error) {
@@ -161,7 +160,6 @@ export const useTabStore = create<TabState>()(
             const updatedState = get();
             const updatedTab = updatedState.openTabs.find((tab) => tab.id === tabId);
             if (updatedTab && currentState.shouldAutoExecuteQuery(updatedTab)) {
-              console.log("Auto-executing query on tab switch:", tabId);
               await currentState.executeQuery(tabId);
             }
           } catch (error) {
@@ -190,7 +188,6 @@ export const useTabStore = create<TabState>()(
 
           // Auto-execute if conditions are met for tabs without queryId
           if (currentState.shouldAutoExecuteQuery(activeTab)) {
-            console.log("Auto-executing query on tab switch (no queryId):", tabId);
             await currentState.executeQuery(tabId);
           }
         }
@@ -203,9 +200,10 @@ export const useTabStore = create<TabState>()(
             if (tab.id === tabId) {
               const updatedTab = { ...tab, ...content };
 
-              // If editor content is being updated, check if it makes the tab dirty
-              if (content.editorContent !== undefined) {
-                updatedTab.isDirty = content.editorContent.trim() !== tab.lastSavedContent.trim();
+              // If editor content is being updated and isDirty wasn't explicitly provided, calculate it
+              if (content.editorContent !== undefined && content.isDirty === undefined) {
+                updatedTab.isDirty =
+                  content.editorContent.trim() !== (tab.lastSavedContent || "").trim();
               }
 
               return updatedTab;
@@ -284,7 +282,6 @@ export const useTabStore = create<TabState>()(
           const updatedState = get();
           const updatedTab = updatedState.openTabs.find((t) => t.id === tabId);
           if (updatedTab && updatedState.shouldAutoExecuteQuery(updatedTab)) {
-            console.log("Auto-executing query after loading in tab:", tabId);
             await updatedState.executeQuery(tabId);
           }
         } catch (error) {
@@ -303,9 +300,13 @@ export const useTabStore = create<TabState>()(
 
       // Execute query
       executeQuery: async (tabId, sql) => {
-        const currentState = get();
-        const tab = currentState.openTabs.find((t) => t.id === tabId);
+        // Helper function to get the most current tab state
+        const getCurrentTab = () => {
+          const state = get();
+          return state.openTabs.find((t) => t.id === tabId);
+        };
 
+        const tab = getCurrentTab();
         if (!tab) {
           console.error("Tab not found:", tabId);
           return;
@@ -314,7 +315,7 @@ export const useTabStore = create<TabState>()(
         const queryStore = useQueryStore.getState();
         const sourceStore = useSourceStore.getState();
 
-        // Determine what SQL to run
+        // Determine what SQL to run - prioritize the passed sql parameter over tab content
         const queryToRun = sql || tab.editorContent;
         if (!queryToRun.trim()) {
           console.error("No SQL to execute");
@@ -322,10 +323,8 @@ export const useTabStore = create<TabState>()(
         }
 
         // Set running state
-        set(() => ({
-          openTabs: currentState.openTabs.map((t) =>
-            t.id === tabId ? { ...t, queryRunning: true } : t
-          )
+        set((state) => ({
+          openTabs: state.openTabs.map((t) => (t.id === tabId ? { ...t, queryRunning: true } : t))
         }));
 
         try {
@@ -336,8 +335,6 @@ export const useTabStore = create<TabState>()(
             // Check if it's an ephemeral query that should be converted
             const query = queryStore.queries[tab.queryId];
             if (query?.is_ephemeral && tab.isDirty) {
-              console.log("Converting ephemeral query to regular on execution");
-
               // Generate name for the converted query
               const date = new Date();
               const sourceName = sourceStore.sources[tab.sourceId]?.name || "Unknown";
@@ -427,7 +424,7 @@ export const useTabStore = create<TabState>()(
           }
 
           // Step 2: Create a query run and execute
-          const tabFilters = currentState.getTableFilters();
+          const tabFilters = get().getTableFilters();
           const runRequest: CreateQueryRunRequest = {
             query_version_id: versionId,
             modifiers: {
@@ -479,8 +476,8 @@ export const useTabStore = create<TabState>()(
             processedResults = [{ result: results }];
           }
 
-          set(() => ({
-            openTabs: currentState.openTabs.map((t) =>
+          set((state) => ({
+            openTabs: state.openTabs.map((t) =>
               t.id === tabId
                 ? {
                     ...t,
@@ -506,8 +503,8 @@ export const useTabStore = create<TabState>()(
           }
         } catch (error) {
           console.error("Query execution failed:", error);
-          set(() => ({
-            openTabs: currentState.openTabs.map((t) =>
+          set((state) => ({
+            openTabs: state.openTabs.map((t) =>
               t.id === tabId
                 ? {
                     ...t,
@@ -710,7 +707,6 @@ export const useTabStore = create<TabState>()(
               (tab) => tab.id === currentState.activeTabId
             );
             if (activeTab && currentState.shouldAutoExecuteQuery(activeTab)) {
-              console.log("Auto-executing active tab on page reload:", currentState.activeTabId);
               try {
                 await currentState.executeQuery(currentState.activeTabId!);
               } catch (error) {
@@ -820,7 +816,6 @@ export const useTabStore = create<TabState>()(
             // Auto-execute if conditions are met
             const updatedTab = get().openTabs.find((tab) => tab.id === existingTab.id);
             if (updatedTab && currentState.shouldAutoExecuteQuery(updatedTab)) {
-              console.log("Auto-executing existing ephemeral query tab");
               await currentState.executeQuery(existingTab.id);
             }
           } else {

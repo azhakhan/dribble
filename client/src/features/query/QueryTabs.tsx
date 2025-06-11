@@ -330,7 +330,9 @@ function QueryTabsComponent() {
       </div>
 
       {/* Active tab content */}
-      <div className="flex-1 min-h-0">{activeTab && <Query tabId={activeTab.id} />}</div>
+      <div className="flex-1 min-h-0">
+        {activeTab && <Query key={activeTab.id} tabId={activeTab.id} />}
+      </div>
 
       {/* Context menu */}
       {contextMenu && (
