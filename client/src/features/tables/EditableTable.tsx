@@ -96,6 +96,22 @@ const saveColumnSizes = (storageKey: string | null, sizes: Record<string, number
   }
 };
 
+// Helper to determine column type
+const getColumnType = (value: unknown): string => {
+  if (typeof value === "number") return "number";
+  if (value instanceof Date) return "date";
+  if (typeof value === "string") {
+    // Check if it's a URL
+    try {
+      new URL(value);
+      return "url";
+    } catch {
+      return "text";
+    }
+  }
+  return "text";
+};
+
 export const EditableTable = ({
   data: queryData,
   isLoading,
@@ -108,6 +124,24 @@ export const EditableTable = ({
   const storageKey = useMemo(
     () => getStorageKey(tableId, source, schema),
     [tableId, source, schema]
+  );
+
+  // Custom header icons
+  const customHeaderIcons = useMemo(
+    () => ({
+      text: ({ fgColor }: { fgColor: string }) =>
+        `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="${fgColor}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-case-upper-icon lucide-case-upper"><path d="m3 15 4-8 4 8"/><path d="M4 13h6"/><path d="M15 11h4.5a2 2 0 0 1 0 4H15V7h4a2 2 0 0 1 0 4"/></svg>`,
+      number: ({ fgColor }: { fgColor: string }) =>
+        `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="${fgColor}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-hash"><line x1="4" x2="20" y1="9" y2="9"/><line x1="4" x2="20" y1="15" y2="15"/><line x1="10" x2="8" y1="3" y2="21"/><line x1="16" x2="14" y1="3" y2="21"/></svg>`,
+      // number: ({ fgColor }: { fgColor: string }) =>,
+      date: ({ fgColor }: { fgColor: string }) =>
+        `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="${fgColor}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-calendar"><path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/></svg>`,
+      url: ({ fgColor }: { fgColor: string }) =>
+        `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="${fgColor}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-link"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>`,
+      image: ({ fgColor }: { fgColor: string }) =>
+        `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="${fgColor}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-image"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>`
+    }),
+    []
   );
 
   // Use query data if available, otherwise use default data
@@ -171,6 +205,10 @@ export const EditableTable = ({
       textHeader: isDark ? "oklch(0.985 0 0)" : "oklch(0.141 0.005 285.823)",
       textHeaderSelected: isDark ? "oklch(0.985 0 0)" : "oklch(0.141 0.005 285.823)",
 
+      // Icon colors
+      bgIconHeader: isDark ? "#737383" : "#737383",
+      fgIconHeader: isDark ? "#FFFFFF" : "#313139",
+
       // Cell and background colors
       bgCell: isDark ? "#171717" : "#fafafa",
       bgHeader: isDark ? "oklch(0.21 0.006 285.885)" : "oklch(1 0 0)",
@@ -182,18 +220,24 @@ export const EditableTable = ({
     };
   };
 
-  // Dynamically determine column headers from data
+  // Update the columns definition
   const columns = useMemo(() => {
     // Safe check to ensure data[0] exists
     if (!data || data.length === 0 || !data[0]) {
       return defaultColumns;
     }
 
-    return Object.keys(data[0]).map((key) => ({
-      title: key,
-      width: columnSizes[key] || 200, // Use stored width or default
-      id: key
-    }));
+    return Object.keys(data[0]).map((key) => {
+      const value = data[0][key];
+      const columnType = getColumnType(value);
+
+      return {
+        title: key,
+        width: columnSizes[key] || 200,
+        id: key,
+        icon: columnType // This will map to our custom icons
+      };
+    });
   }, [data, columnSizes]);
 
   // Get column indexes safely
@@ -272,6 +316,7 @@ export const EditableTable = ({
   return (
     <DataEditor
       columns={columns}
+      headerIcons={customHeaderIcons}
       getCellContent={getCellContent}
       rows={data.length}
       theme={getGlideTheme()}
