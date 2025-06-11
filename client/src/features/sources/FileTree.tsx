@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from "react";
-import { useAppStore } from "@/shared/store/useAppStore";
+import { useTreeStore, useSourceStore } from "@/shared/store";
 import {
   ChevronRight,
   ChevronDown,
@@ -93,17 +93,15 @@ const FileTreeItem = ({
   connectedSourceIds,
   parentContext
 }: FileTreeItemProps) => {
-  // Get state and actions from Zustand store
+  // Get state and actions from Zustand stores
+  const { selectedNodeId, setSelectedNodeId, loadingSourceIds, isNodeExpanded, setNodeExpanded } =
+    useTreeStore();
+
   const {
-    selectedNodeId,
-    setSelectedNodeId,
-    loadingSourceIds,
     sourceSchemaErrors: sourceErrors,
     sourceStatuses,
-    sourceGeneratedChildren,
-    isNodeExpanded,
-    setNodeExpanded
-  } = useAppStore();
+    sourceGeneratedChildren
+  } = useSourceStore();
 
   // Generate unique node ID for this item
   const nodeId = generateNodeId(node, level, parentContext);

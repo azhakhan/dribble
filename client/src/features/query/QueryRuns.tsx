@@ -22,8 +22,8 @@ import {
   TableHeader,
   TableRow
 } from "@/components/ui/table";
-import { useAppStore } from "@/shared/store/useAppStore";
-import { type QueryRun } from "@/shared/lib/api";
+import { useQueryStore } from "@/shared/store";
+import type { QueryRun } from "@/shared/lib/api";
 
 interface QueryRunsProps {
   queryId: string;
@@ -123,7 +123,7 @@ const columns: ColumnDef<QueryRun>[] = [
 ];
 
 export function QueryRuns({ queryId, onBack, sourceName, queryName }: QueryRunsProps) {
-  const { queryRuns, queryRunsPagination, loadingRuns, loadQueryRunsPaginated } = useAppStore();
+  const { queryRuns, queryRunsPagination, loadingRuns, loadQueryRunsPaginated } = useQueryStore();
   const [rowSelection, setRowSelection] = useState({});
   const [pagination, setPagination] = useState({
     pageIndex: 0,
