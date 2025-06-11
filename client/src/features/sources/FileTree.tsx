@@ -491,11 +491,21 @@ export const FileTree = ({ data, onSourceSelect, onTableDoubleClick }: FileTreeP
   // Fetch schemas for all connected sources and update AppState
   useStoreConnectedSourcesSchemas(connectedSourcesData);
 
+  // Sort sources alphabetically by name
+  const sortedData = useMemo(() => {
+    return [...data].sort((a, b) => {
+      if (a.type === "source" && b.type === "source") {
+        return a.name.localeCompare(b.name);
+      }
+      return 0; // Keep original order for non-source items
+    });
+  }, [data]);
+
   return (
     <div className="h-full flex flex-col">
       {/* Scrollable content */}
       <div className="flex-1 overflow-y-auto mt-2">
-        {data.map((node, index) => (
+        {sortedData.map((node, index) => (
           <FileTreeItem
             key={index}
             node={node}

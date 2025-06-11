@@ -331,7 +331,8 @@ export const QueryTree = ({
           queries: filteredQueries
         };
       })
-      .filter((item) => item.source);
+      .filter((item) => item.source)
+      .sort((a, b) => a.source.name.localeCompare(b.source.name)); // Sort sources alphabetically
   }, [queries, queriesBySource, queriesData, sourceMap]);
 
   if (queriesLoading || loadingSources) {
