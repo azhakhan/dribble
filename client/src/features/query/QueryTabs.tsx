@@ -1,5 +1,5 @@
 import { X, Plus } from "lucide-react";
-import { useCallback, memo } from "react";
+import { useCallback, memo, useRef, useEffect } from "react";
 import { cn } from "@/shared/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Query } from "./Query";
@@ -11,14 +11,17 @@ const TabButton = memo(
     tab,
     isActive,
     onTabClick,
-    onCloseTab
+    onCloseTab,
+    tabRef
   }: {
     tab: { id: string; title: string; isDirty: boolean };
     isActive: boolean;
     onTabClick: (tabId: string) => Promise<void>;
     onCloseTab: (tabId: string, e: React.MouseEvent) => void;
+    tabRef?: React.RefObject<HTMLDivElement | null>;
   }) => (
     <div
+      ref={tabRef}
       className={cn(
         "flex items-center px-2 py-1.5 border-r cursor-pointer hover:bg-accent group flex-shrink-0",
         "min-w-[120px] max-w-[200px]", // Set minimum and maximum width
@@ -49,6 +52,39 @@ function QueryTabsComponent() {
 
   // Get actions from store
   const { openQueryTab, closeQueryTab, setActiveTab } = useTabStore();
+
+  // Refs for scrolling functionality
+  const tabBarScrollRef = useRef<HTMLDivElement>(null);
+  const activeTabRef = useRef<HTMLDivElement>(null);
+
+  // Auto-scroll to active tab when it changes
+  useEffect(() => {
+    if (activeTabRef.current && tabBarScrollRef.current) {
+      const tabElement = activeTabRef.current;
+      const scrollContainer = tabBarScrollRef.current;
+
+      // Calculate the relative position within the scroll container
+      const tabLeft = tabElement.offsetLeft;
+      const tabRight = tabLeft + tabElement.offsetWidth;
+      const scrollLeft = scrollContainer.scrollLeft;
+      const containerWidth = scrollContainer.clientWidth;
+
+      // Check if tab is not fully visible and scroll if needed
+      if (tabLeft < scrollLeft) {
+        // Tab is cut off on the left, scroll to show it
+        scrollContainer.scrollTo({
+          left: tabLeft - 10, // Add some padding
+          behavior: "smooth"
+        });
+      } else if (tabRight > scrollLeft + containerWidth) {
+        // Tab is cut off on the right, scroll to show it
+        scrollContainer.scrollTo({
+          left: tabRight - containerWidth + 10, // Add some padding
+          behavior: "smooth"
+        });
+      }
+    }
+  }, [activeTabId, openTabs.length]);
 
   // Handle creating a new query tab
   const handleNewTab = useCallback(async () => {
@@ -130,7 +166,10 @@ function QueryTabsComponent() {
   return (
     <div className="h-full flex flex-col">
       {/* Tab bar */}
-      <div className="flex-shrink-0 flex items-stretch border-border/50 bg-muted/10 h-10 overflow-x-auto scrollbar-thin scrollbar-thumb-muted/40 scrollbar-track-transparent scrollbar-thumb-rounded-full hover:scrollbar-thumb-muted/60">
+      <div
+        ref={tabBarScrollRef}
+        className="flex-shrink-0 flex items-stretch border-border/50 bg-muted/10 h-10 overflow-x-auto scrollbar-hide"
+      >
         <div className="flex items-stretch min-w-fit">
           {openTabs.map((tab) => (
             <TabButton
@@ -139,6 +178,7 @@ function QueryTabsComponent() {
               isActive={tab.id === activeTabId}
               onTabClick={handleTabClick}
               onCloseTab={handleCloseTab}
+              tabRef={tab.id === activeTabId ? activeTabRef : undefined}
             />
           ))}
 
