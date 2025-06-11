@@ -7,7 +7,8 @@ from app.schemas.query import (
     CreateEphemeralQueryRequest,
     ConvertEphemeralQueryRequest,
 )
-from app.schemas.query_run import QueryRunModifiers, UpdateQueryRunRequest
+from app.schemas.query_execute import QueryRunModifiers
+from app.schemas.query_run import UpdateQueryRunRequest
 from uuid import UUID
 from typing import List, Dict
 from itertools import groupby
@@ -90,15 +91,18 @@ class QueryService:
         query = safe_create(db, query)
 
         # Create initial version with SELECT * query
-        # Extract table name from preview_key (format: "source_id.schema.table")
-        parts = request.preview_key.split(".")
+        # Extract table name from preview_key (format: "table-source_id.schema.table" or "view-source_id.schema.table")
+
+        # New format: "table-source_id.schema.table" or "view-source_id.schema.table"
+        _, rest = request.preview_key.split("-", 1)
+        parts = rest.split(".")
         if len(parts) >= 3:
             schema = parts[-2]
             table = parts[-1]
-            sql = f"SELECT * FROM {schema}.{table} LIMIT 101"
+            sql = f"SELECT * FROM {schema}.{table}"
         else:
             # Fallback if format is unexpected
-            sql = f"SELECT * FROM {request.preview_key} LIMIT 101"
+            sql = f"SELECT * FROM {rest}"
 
         version_request = CreateQueryVersionRequest(
             sql=sql, save_trigger="manual", query_id=query.id, created_by=user_id
@@ -187,7 +191,7 @@ class QueryRunService:
         """Create a new query run"""
         run = QueryRun(
             query_version_id=query_version_id,
-            modifiers=modifiers,
+            modifiers=modifiers.model_dump() if modifiers else None,
             created_by=user_id,
         )
         return safe_create(db, run)

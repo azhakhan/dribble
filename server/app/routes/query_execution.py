@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException, Response
 from app.controllers.query import execute_in_worker_version
 from uuid import UUID
 from app.core._redis import get_result
-from app.schemas.query_run import CreateQueryRunRequest
+from app.schemas.query_execute import CreateQueryRunRequest
 from app.controllers.query_service import QueryRunService, QueryVersionService
 from app.schemas.query_execute import ExecuteQueryVersionRequest
 from app.core.db import get_db

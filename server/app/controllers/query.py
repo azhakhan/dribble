@@ -25,7 +25,7 @@ def execute_in_worker_version(request: ExecuteQueryVersionRequest):
         json={
             "query_run_id": str(request.query_run_id),
             "sql": request.sql,
-            "modifiers": request.modifiers.model_dump_json() if request.modifiers else None,
+            "modifiers": request.modifiers.model_dump() if request.modifiers else None,
         },
         timeout=5,
     )

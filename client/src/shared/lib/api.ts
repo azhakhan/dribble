@@ -329,17 +329,10 @@ export interface QueryRun {
 }
 
 export interface QueryRunModifiers {
-  filters?: Array<{
-    column: string;
-    operator: string;
-    value: string | number | boolean | Array<string | number | boolean>;
-  }>;
-  order_by?: Array<{
-    column: string;
-    direction: string;
-  }>;
   limit?: number;
   offset?: number;
+  where?: string;
+  order_by?: string;
 }
 
 export interface CreateQueryRunRequest {
@@ -385,9 +378,10 @@ export const deleteQuery = async (queryId: string): Promise<void> => {
 export const getOrCreateEphemeralQuery = async (
   sourceId: string,
   schema: string,
-  table: string
+  table: string,
+  nodeType: "table" | "view"
 ): Promise<Query> => {
-  const previewKey = `${sourceId}.${schema}.${table}`;
+  const previewKey = `${nodeType}-${sourceId}.${schema}.${table}`;
   const response = await api.post<Query>("/query/ephemeral", {
     source_id: sourceId,
     preview_key: previewKey

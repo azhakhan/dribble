@@ -127,6 +127,15 @@ interface PaginationInfo {
   has_prev: boolean;
 }
 
+// Table filter interface
+interface TableFilterState {
+  currentOffset: number;
+  whereInput: string;
+  orderByInput: string;
+  pageSize: number;
+  displaySize: number;
+}
+
 // Centralized query state management
 interface QueryState {
   // Cached data
@@ -181,7 +190,12 @@ interface QueryState {
   updateQueryName: (queryId: string, newName: string) => Promise<void>;
 
   // Ephemeral query management
-  getOrCreateEphemeralQuery: (sourceId: string, schema: string, table: string) => Promise<Query>;
+  getOrCreateEphemeralQuery: (
+    sourceId: string,
+    schema: string,
+    table: string,
+    nodeType: "table" | "view"
+  ) => Promise<Query>;
   convertEphemeralToRegular: (queryId: string, name: string) => Promise<Query>;
 
   // Auto-execution helper
@@ -189,7 +203,11 @@ interface QueryState {
 
   // Unified query/table opening helpers
   openQueryFromTree: (query: Query) => Promise<void>;
-  openTableFromTree: (sourceId: string, tableName: string) => Promise<void>;
+  openTableFromTree: (
+    sourceId: string,
+    tableName: string,
+    nodeType: "table" | "view"
+  ) => Promise<void>;
 }
 
 // FileTree state
@@ -222,6 +240,9 @@ interface AppState extends FileTreeState, SourceChildrenState, QueryState, TreeS
   selectedSource: Source | null;
   sourceSchemaMap: Record<string, Record<string, SchemaObject>>;
   selectedTableData: { sourceId: string; tableName: string; query: string } | null;
+
+  // Table filter state - grouped by tab ID
+  tableFilters: Record<string, TableFilterState>;
 
   // Editor-related state
   schemasLoading: boolean;
@@ -327,6 +348,15 @@ interface AppState extends FileTreeState, SourceChildrenState, QueryState, TreeS
   setSchemasLoading: (loading: boolean) => void;
   setSchemasError: (error: unknown) => void;
   setConnectedSourceIds: (sourceIds: Set<string>) => void;
+
+  // Table filter actions
+  setTableFilterOffset: (offset: number) => void;
+  setTableFilterWhere: (where: string) => void;
+  setTableFilterOrderBy: (orderBy: string) => void;
+  setTableFilterPageSize: (displaySize: number) => void;
+  clearTableFilters: () => void;
+  getTableFilters: () => { limit: number; offset: number; where?: string; order_by?: string };
+  getTabFilterState: (tabId: string) => TableFilterState;
 }
 
 // Create the store with persistence for certain values
@@ -351,6 +381,9 @@ export const useAppStore = create<AppState>()(
       selectedSource: null,
       sourceSchemaMap: {},
       selectedTableData: null,
+
+      // Table filter state - grouped by tab ID
+      tableFilters: {},
 
       // Editor-related state
       schemasLoading: false,
@@ -1194,9 +1227,15 @@ export const useAppStore = create<AppState>()(
           }
 
           // Step 2: Create a query run and execute
+          const tabFilters = currentState.getTableFilters();
           const runRequest: CreateQueryRunRequest = {
             query_version_id: versionId,
-            modifiers: undefined // TODO: Add support for modifiers from UI
+            modifiers: {
+              limit: tabFilters.limit,
+              offset: tabFilters.offset,
+              where: tabFilters.where,
+              order_by: tabFilters.order_by
+            }
           };
 
           const runId = await executeQueryVersionRun(runRequest);
@@ -1340,9 +1379,9 @@ export const useAppStore = create<AppState>()(
         }
       },
 
-      getOrCreateEphemeralQuery: async (sourceId, schema, table) => {
+      getOrCreateEphemeralQuery: async (sourceId, schema, table, nodeType) => {
         try {
-          const query = await getOrCreateEphemeralQuery(sourceId, schema, table);
+          const query = await getOrCreateEphemeralQuery(sourceId, schema, table, nodeType);
 
           console.log("Created/retrieved ephemeral query:", query);
 
@@ -1610,7 +1649,11 @@ export const useAppStore = create<AppState>()(
       },
 
       // Unified helper to open table from tree (table double-click)
-      openTableFromTree: async (sourceId: string, tableName: string) => {
+      openTableFromTree: async (
+        sourceId: string,
+        tableName: string,
+        nodeType: "table" | "view"
+      ) => {
         const currentState = get();
 
         try {
@@ -1619,17 +1662,18 @@ export const useAppStore = create<AppState>()(
           const schema = parts.length > 1 ? parts[0] : "public";
           const table = parts.length > 1 ? parts[1] : parts[0];
 
-          // Get or create ephemeral query for this table
+          // Get or create ephemeral query for this table/view
           const ephemeralQuery = await currentState.getOrCreateEphemeralQuery(
             sourceId,
             schema,
-            table
+            table,
+            nodeType
           );
 
           // Load the latest version to get the SQL
           const latestVersion = await currentState.loadLatestQueryVersion(ephemeralQuery.id);
 
-          const sql = latestVersion?.sql || `SELECT * FROM ${schema}.${table} LIMIT 101`;
+          const sql = latestVersion?.sql || `SELECT * FROM ${schema}.${table}`;
 
           // Create a new tab for this ephemeral query
           // Auto-execution will handle running the query automatically
@@ -1650,7 +1694,7 @@ export const useAppStore = create<AppState>()(
         } catch (error) {
           console.error("Failed to handle table double-click:", error);
           // Fallback to simple query - auto-execution will handle running
-          const query = `SELECT * FROM ${tableName} LIMIT 101`;
+          const query = `SELECT * FROM ${tableName}`;
           await currentState.openQueryTab({
             queryId: null,
             sourceId,
@@ -1666,6 +1710,132 @@ export const useAppStore = create<AppState>()(
             originalContent: ""
           });
         }
+      },
+
+      // Table filter actions
+      setTableFilterOffset: (offset: number) =>
+        set((state) => {
+          const tabId = state.activeTabId || "default";
+          const currentFilter = state.tableFilters[tabId] || {
+            currentOffset: 0,
+            whereInput: "",
+            orderByInput: "",
+            pageSize: 501,
+            displaySize: 500
+          };
+          return {
+            tableFilters: {
+              ...state.tableFilters,
+              [tabId]: { ...currentFilter, currentOffset: offset }
+            }
+          };
+        }),
+
+      setTableFilterWhere: (where: string) =>
+        set((state) => {
+          const tabId = state.activeTabId || "default";
+          const currentFilter = state.tableFilters[tabId] || {
+            currentOffset: 0,
+            whereInput: "",
+            orderByInput: "",
+            pageSize: 501,
+            displaySize: 500
+          };
+          return {
+            tableFilters: {
+              ...state.tableFilters,
+              [tabId]: { ...currentFilter, whereInput: where, currentOffset: 0 }
+            }
+          };
+        }),
+
+      setTableFilterOrderBy: (orderBy: string) =>
+        set((state) => {
+          const tabId = state.activeTabId || "default";
+          const currentFilter = state.tableFilters[tabId] || {
+            currentOffset: 0,
+            whereInput: "",
+            orderByInput: "",
+            pageSize: 501,
+            displaySize: 500
+          };
+          return {
+            tableFilters: {
+              ...state.tableFilters,
+              [tabId]: { ...currentFilter, orderByInput: orderBy, currentOffset: 0 }
+            }
+          };
+        }),
+
+      clearTableFilters: () =>
+        set((state) => {
+          const tabId = state.activeTabId || "default";
+          return {
+            tableFilters: {
+              ...state.tableFilters,
+              [tabId]: {
+                currentOffset: 0,
+                whereInput: "",
+                orderByInput: "",
+                pageSize: 501,
+                displaySize: 500
+              }
+            }
+          };
+        }),
+
+      setTableFilterPageSize: (displaySize: number) =>
+        set((state) => {
+          const tabId = state.activeTabId || "default";
+          const currentFilter = state.tableFilters[tabId] || {
+            currentOffset: 0,
+            whereInput: "",
+            orderByInput: "",
+            pageSize: 501,
+            displaySize: 500
+          };
+          return {
+            tableFilters: {
+              ...state.tableFilters,
+              [tabId]: {
+                ...currentFilter,
+                displaySize,
+                pageSize: displaySize + 1, // DataGrip style: fetch one extra to check for next page
+                currentOffset: 0 // Reset to first page when changing page size
+              }
+            }
+          };
+        }),
+
+      getTableFilters: () => {
+        const state = get();
+        const tabId = state.activeTabId || "default";
+        const filter = state.tableFilters[tabId] || {
+          currentOffset: 0,
+          whereInput: "",
+          orderByInput: "",
+          pageSize: 501,
+          displaySize: 500
+        };
+        return {
+          limit: filter.pageSize,
+          offset: filter.currentOffset,
+          where: filter.whereInput.trim() || undefined,
+          order_by: filter.orderByInput.trim() || undefined
+        };
+      },
+
+      getTabFilterState: (tabId: string) => {
+        const state = get();
+        return (
+          state.tableFilters[tabId] || {
+            currentOffset: 0,
+            whereInput: "",
+            orderByInput: "",
+            pageSize: 501,
+            displaySize: 500
+          }
+        );
       }
     }),
     {

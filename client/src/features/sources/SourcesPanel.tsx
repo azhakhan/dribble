@@ -5,7 +5,7 @@ import type { FileNode } from "@/shared/lib/fileTreeUtils";
 interface SourcesPanelProps {
   data: FileNode[];
   onSourceSelect?: (source: { id: string; name: string; dbtype: string }) => void;
-  onTableDoubleClick?: (sourceId: string, tableName: string) => void;
+  onTableDoubleClick?: (sourceId: string, tableName: string, nodeType: "table" | "view") => void;
 }
 
 export const SourcesPanel = ({ data, onSourceSelect, onTableDoubleClick }: SourcesPanelProps) => {

@@ -1,4 +1,5 @@
 import { EditableTable } from "@/features/tables/EditableTable";
+import { TableFilterBar } from "@/features/tables/TableFilterBar";
 
 interface TableDataDisplayProps {
   tableData: {
@@ -18,17 +19,12 @@ export const TableDataDisplay = ({
   const displayData = queryResults;
   const isLoading = isQueryRunning;
 
-  // Determine the title to show
-  const title = tableData ? tableData.tableName : queryResults ? "Query Results" : "";
-
   return (
     <div className="h-full flex flex-col">
       {tableData || queryResults ? (
         <>
-          {/* Fixed header */}
-          <div className="flex-shrink-0 p-2 font-semibold text-sm border-b flex items-center justify-between">
-            <span>{title}</span>
-          </div>
+          {/* Filter bar with title */}
+          <TableFilterBar data={displayData as object[]} isLoading={isLoading} />
 
           {/* Scrollable content */}
           <div className="flex-1 min-h-0">

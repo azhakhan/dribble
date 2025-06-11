@@ -10,7 +10,7 @@ interface SidebarTabsProps {
   sourcesLoading: boolean;
   sourcesError: unknown;
   onSourceSelect?: (source: { id: string; name: string; dbtype: string }) => void;
-  onTableDoubleClick?: (sourceId: string, tableName: string) => void;
+  onTableDoubleClick?: (sourceId: string, tableName: string, nodeType: "table" | "view") => void;
   onQuerySelect?: (query: Query) => void;
   onQueryDoubleClick?: (query: Query) => void;
   selectedQueryId?: string;
