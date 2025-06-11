@@ -219,7 +219,7 @@ export function MiniMonacoSQL({
 
       // Handle Enter key to execute query instead of new line
       editorRef.current.onKeyDown((e) => {
-        if (e.keyCode === monaco.KeyCode.Enter && !e.ctrlKey && !e.shiftKey) {
+        if (e.keyCode === monaco.KeyCode.Enter) {
           e.preventDefault();
           e.stopPropagation();
 

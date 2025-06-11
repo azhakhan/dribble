@@ -216,7 +216,11 @@ export const EditableTable = ({
       bgHeaderHovered: isDark ? "oklch(0.274 0.006 286.033)" : "oklch(0.967 0.001 286.375)",
 
       // Border and link colors
-      borderColor: isDark ? "oklch(1 0 0 / 10%)" : "oklch(0.92 0.004 286.32)"
+      borderColor: isDark ? "oklch(1 0 0 / 10%)" : "oklch(0.92 0.004 286.32)",
+      drilldownBorder: isDark ? "#2E2E2E" : "#E4E4E7",
+      headerBottomBorderColor: isDark ? "#2E2E2E" : "#E4E4E7",
+      resizeIndicatorColor: isDark ? "#2E2E2E" : "#E4E4E7",
+      horizontalBorderColor: isDark ? "#2E2E2E" : "#E4E4E7"
     };
   };
 
