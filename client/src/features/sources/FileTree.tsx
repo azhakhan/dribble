@@ -372,7 +372,7 @@ const FileTreeItem = ({
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-4 w-4 ml-1 hover:bg-accent"
+                  className="h-4 w-4 ml-1 hover:bg-accent cursor-pointer"
                   onClick={(e) => e.stopPropagation()}
                 >
                   <MoreVertical className="h-2 w-2" strokeWidth={1} />

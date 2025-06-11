@@ -34,7 +34,7 @@ const TabButton = memo(
         onClick={(e) => onCloseTab(tab.id, e)}
         aria-label="Close tab"
       >
-        <X className="h-2.5 w-2.5" />
+        <X className="h-3 w-3 cursor-pointer hover:bg-primary/40 rounded-xs" />
       </button>
     </div>
   )
