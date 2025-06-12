@@ -33,12 +33,11 @@ class QueryService:
         return get_or_404(db, Query, query_id, "Query not found")
 
     @staticmethod
-    def create_query(db: Session, request: CreateQueryRequest, user_id: UUID) -> Query:
+    def create_query(db: Session, request: CreateQueryRequest) -> Query:
         """Create a new query"""
         query = Query(
             source_id=request.source_id,
             name=request.name,
-            created_by=user_id,
             is_ephemeral=request.is_ephemeral or False,
             preview_key=request.preview_key,
         )
@@ -64,9 +63,7 @@ class QueryService:
         return safe_delete(db, query)
 
     @staticmethod
-    def get_or_create_ephemeral_query(
-        db: Session, request: CreateEphemeralQueryRequest, user_id: UUID
-    ) -> Query:
+    def get_or_create_ephemeral_query(db: Session, request: CreateEphemeralQueryRequest) -> Query:
         """Get existing ephemeral query or create new one for table preview"""
         # Try to find existing ephemeral query
         existing_query = (
@@ -85,7 +82,6 @@ class QueryService:
         # Create new ephemeral query
         query = Query(
             source_id=request.source_id,
-            created_by=user_id,
             is_ephemeral=True,
             preview_key=request.preview_key,
         )
@@ -106,7 +102,7 @@ class QueryService:
             sql = f"SELECT * FROM {rest}"
 
         version_request = CreateQueryVersionRequest(
-            sql=sql, save_trigger="manual", query_id=query.id, created_by=user_id
+            sql=sql, save_trigger="manual", query_id=query.id
         )
         QueryVersionService.create_version(db, version_request)
 
@@ -173,7 +169,6 @@ class QueryVersionService:
             sql=request.sql,
             save_trigger=request.save_trigger,
             query_id=request.query_id,
-            created_by=request.created_by,
         )
         return safe_create(db, version)
 
@@ -186,14 +181,11 @@ class QueryVersionService:
 
 class QueryRunService:
     @staticmethod
-    def create_run(
-        db: Session, query_version_id: UUID, modifiers: QueryRunModifiers, user_id: UUID
-    ) -> QueryRun:
+    def create_run(db: Session, query_version_id: UUID, modifiers: QueryRunModifiers) -> QueryRun:
         """Create a new query run"""
         run = QueryRun(
             query_version_id=query_version_id,
             modifiers=modifiers.model_dump() if modifiers else None,
-            created_by=user_id,
         )
         return safe_create(db, run)
 

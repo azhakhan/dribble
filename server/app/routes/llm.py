@@ -13,7 +13,6 @@ from app.core.db import get_db
 from app.core.encryption import encrypt_password
 from sqlalchemy.orm import Session
 from app.models import LLM, Source, ChatSession
-from app.dependencies import get_current_workspace, get_current_user
 from uuid import UUID
 from typing import List
 import json
@@ -26,15 +25,14 @@ router = APIRouter(prefix="/llms", tags=["llms"])
 async def create_llm(
     request: CreateLLMRequest,
     db: Session = Depends(get_db),
-    workspace=Depends(get_current_workspace),
 ):
     """Create a new LLM configuration"""
-    # Check if LLM with same name already exists in workspace
-    existing_llms = get_all_active(db, LLM, workspace_id=workspace.id)
+    # Check if LLM with same name already exists
+    existing_llms = get_all_active(db, LLM)
     if len(existing_llms) > 0 and request.name in [llm.name for llm in existing_llms]:
         raise HTTPException(
             status_code=400,
-            detail=f"LLM with name '{request.name}' already exists in this workspace",
+            detail=f"LLM with name '{request.name}' already exists",
         )
 
     llm = LLM(
@@ -44,7 +42,6 @@ async def create_llm(
         base_url=request.base_url,
         api_version=request.api_version,
         settings=request.settings,
-        workspace_id=workspace.id,
         default=True if len(existing_llms) == 0 else False,
     )
 
@@ -57,10 +54,9 @@ async def create_llm(
 @router.get("/", response_model=List[LLMListResponse])
 async def get_llms(
     db: Session = Depends(get_db),
-    workspace=Depends(get_current_workspace),
 ):
-    """Get all LLMs in the current workspace"""
-    llms = get_all_active(db, LLM, workspace_id=workspace.id)
+    """Get all LLMs"""
+    llms = get_all_active(db, LLM)
     return [LLMListResponse.model_validate(llm) for llm in llms]
 
 
@@ -68,12 +64,9 @@ async def get_llms(
 async def get_llm(
     llm_id: UUID,
     db: Session = Depends(get_db),
-    workspace=Depends(get_current_workspace),
 ):
     """Get a specific LLM by ID"""
     llm = get_or_404(db, LLM, llm_id, "LLM not found")
-    if llm.workspace_id != workspace.id:
-        raise HTTPException(status_code=404, detail="LLM not found")
     return LLMResponse.model_validate(llm)
 
 
@@ -82,24 +75,17 @@ async def update_llm(
     llm_id: UUID,
     request: UpdateLLMRequest,
     db: Session = Depends(get_db),
-    workspace=Depends(get_current_workspace),
 ):
     """Update an existing LLM configuration"""
     llm = get_or_404(db, LLM, llm_id, "LLM not found")
-    if llm.workspace_id != workspace.id:
-        raise HTTPException(status_code=404, detail="LLM not found")
 
     # Check if new name conflicts with existing LLM (if name is being changed)
     if request.name and request.name != llm.name:
-        existing_llm = (
-            db.query(LLM)
-            .filter_by(name=request.name, workspace_id=workspace.id, deleted_at=None)
-            .first()
-        )
+        existing_llm = db.query(LLM).filter_by(name=request.name, deleted_at=None).first()
         if existing_llm:
             raise HTTPException(
                 status_code=400,
-                detail=f"LLM with name '{request.name}' already exists in this workspace",
+                detail=f"LLM with name '{request.name}' already exists",
             )
 
     # Update only provided fields
@@ -116,12 +102,9 @@ async def update_llm(
 async def delete_llm(
     llm_id: UUID,
     db: Session = Depends(get_db),
-    workspace=Depends(get_current_workspace),
 ):
     """Delete an LLM configuration"""
     llm = get_or_404(db, LLM, llm_id, "LLM not found")
-    if llm.workspace_id != workspace.id:
-        raise HTTPException(status_code=404, detail="LLM not found")
     return safe_delete(db, llm)
 
 
@@ -129,25 +112,20 @@ async def delete_llm(
 async def chat_llm_req(
     request: ChatLLMRequest,
     db: Session = Depends(get_db),
-    user=Depends(get_current_user),
-    workspace=Depends(get_current_workspace),
 ):
     """Chat with an LLM - supports both streaming and non-streaming"""
-    llm = db.query(LLM).filter_by(id=request.llm_id, workspace_id=workspace.id).first()
+    llm = db.query(LLM).filter_by(id=request.llm_id).first()
     if not llm:
         raise HTTPException(status_code=404, detail="LLM not found")
 
-    source = db.query(Source).filter_by(id=request.source_id, workspace_id=workspace.id).first()
+    source = db.query(Source).filter_by(id=request.source_id).first()
     if not source:
         raise HTTPException(status_code=404, detail="Source not found")
 
-    chat_session = (
-        db.query(ChatSession).filter_by(id=request.session_id, workspace_id=workspace.id).first()
-    )
+    chat_session = db.query(ChatSession).filter_by(id=request.session_id).first()
     if not chat_session:
         chat_session = ChatSession(
             id=request.session_id,
-            workspace_id=workspace.id,
             source_id=request.source_id,
             llm_id=request.llm_id,
         )
@@ -156,7 +134,7 @@ async def chat_llm_req(
         db.refresh(chat_session)
 
     try:
-        service = ChatService(llm, source, chat_session, db, user_id=user.id)
+        service = ChatService(llm, source, chat_session, db)
 
         if request.stream:
             # Return streaming response

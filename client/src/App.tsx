@@ -1,13 +1,16 @@
-import { ThemeProvider } from "@/components/theme-provider";
+import { ThemeProvider, useTheme } from "@/components/theme-provider";
 import { BrowserRouter as Router, Routes, Route, useNavigate, Link } from "react-router-dom";
 import { ModeToggle } from "@/components/mode-toggle";
-import logo from "@/assets/logo.png";
+import logoLight from "@/assets/logo-light.svg";
+import logoDark from "@/assets/logo-dark.svg";
+
 import { SettingsPage } from "@/pages";
 import { SettingsIcon } from "lucide-react";
 import { IdePage } from "./pages/IdePage";
 
 function TopMenu() {
   const navigate = useNavigate();
+  const { theme } = useTheme();
 
   const handleLogoClick = () => {
     navigate("/");
@@ -17,7 +20,7 @@ function TopMenu() {
     <div className="h-8 border-b flex items-center justify-between px-3 bg-background">
       <div className="flex items-center gap-2">
         <img
-          src={logo}
+          src={theme === "dark" ? logoDark : logoLight}
           alt="Dribble IDE"
           className="w-5 h-5 cursor-pointer hover:opacity-80 transition-opacity"
           onClick={handleLogoClick}

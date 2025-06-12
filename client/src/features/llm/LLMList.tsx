@@ -34,7 +34,6 @@ export function LLMList({ onLLMSelect }: LLMListProps) {
       base_url: undefined,
       api_version: undefined,
       settings: undefined,
-      workspace_id: "",
       created_at: ""
     };
     openEditForm(fullLLM);

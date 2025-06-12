@@ -16,7 +16,6 @@ class CreateQueryVersionRequest(BaseModel):
     sql: str
     save_trigger: QueryTriggerEnum
     query_id: UUID
-    created_by: UUID
 
 
 class QueryVersionResponse(BaseModel):
@@ -24,7 +23,6 @@ class QueryVersionResponse(BaseModel):
     sql: str
     save_trigger: QueryTriggerEnum
     query_id: UUID
-    created_by: UUID
     created_at: datetime
 
     class Config:

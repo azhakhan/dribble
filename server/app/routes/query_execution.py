@@ -6,8 +6,7 @@ from app.schemas.query_execute import CreateQueryRunRequest
 from app.controllers.query_service import QueryRunService, QueryVersionService
 from app.schemas.query_execute import ExecuteQueryVersionRequest
 from app.core.db import get_db
-from app.dependencies import get_current_user
-from app.models import User, Source, Query
+from app.models import Source, Query
 from sqlalchemy.orm import Session
 from fastapi import Depends
 from app.core.db_utils import get_or_404
@@ -20,7 +19,6 @@ router = APIRouter(prefix="/execution", tags=["query-execution"])
 async def execute_query_version_run(
     request: CreateQueryRunRequest,
     db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
 ):
     # get version
     version = QueryVersionService.get_version_by_id(db, request.query_version_id)
@@ -32,7 +30,7 @@ async def execute_query_version_run(
     get_or_404(db, Source, query.source_id, "Source not found")
 
     # create a run
-    run = QueryRunService.create_run(db, request.query_version_id, request.modifiers, user.id)
+    run = QueryRunService.create_run(db, request.query_version_id, request.modifiers)
 
     """Execute a query run"""
     try:

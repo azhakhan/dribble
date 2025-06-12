@@ -1,5 +1,4 @@
 from fastapi import APIRouter, Depends
-from app.dependencies import get_current_workspace
 from app.core.db import get_db
 from sqlalchemy.orm import Session
 from app.models import ChatSession, ChatMessage, MessageTypeEnum, ChatRoleEnum
@@ -19,9 +18,8 @@ router = APIRouter(prefix="/chat", tags=["chat"])
 @router.get("/sessions", response_model=ChatSessionsResponse)
 async def get_sessions(
     db: Session = Depends(get_db),
-    workspace=Depends(get_current_workspace),
 ):
-    chat_sessions = db.query(ChatSession).filter_by(workspace_id=workspace.id).all()
+    chat_sessions = db.query(ChatSession).all()
 
     return ChatSessionsResponse(
         sessions=[ChatSessionResponse.model_validate(session) for session in chat_sessions],
@@ -33,10 +31,9 @@ async def get_sessions(
 async def get_messages(
     session_id: UUID,
     db: Session = Depends(get_db),
-    workspace=Depends(get_current_workspace),
 ):
     # Get the session to validate access
-    session = db.query(ChatSession).filter_by(id=session_id, workspace_id=workspace.id).first()
+    session = db.query(ChatSession).filter_by(id=session_id).first()
 
     if not session:
         raise HTTPException(status_code=404, detail="Chat session not found")

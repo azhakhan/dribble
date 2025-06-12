@@ -287,8 +287,7 @@ export const useQueryStore = create<QueryState>((set, get) => ({
       await createQueryVersion({
         query_id: queryId,
         sql,
-        save_trigger: saveTrigger,
-        created_by: "00000000-0000-0000-0000-000000000000" // TODO: Replace with actual user ID
+        save_trigger: saveTrigger
       });
 
       // Reload versions to get the latest

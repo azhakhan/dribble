@@ -162,7 +162,6 @@ export interface LLM {
   api_version?: string;
   settings?: Record<string, unknown>;
   default?: boolean;
-  workspace_id: string;
   created_at: string;
 }
 
@@ -257,7 +256,6 @@ export interface ChatSessionResponse {
   name?: string;
   source_id: string;
   llm_id: string;
-  workspace_id: string;
   created_at: string;
 }
 
@@ -286,7 +284,6 @@ export interface Query {
   is_ephemeral?: boolean;
   preview_key?: string;
   source_id: UUID;
-  created_by: UUID;
   created_at: string;
 }
 
@@ -307,7 +304,6 @@ export interface QueryVersion {
   sql: string;
   save_trigger: "manual" | "run" | "ai" | "on_exit";
   query_id: UUID;
-  created_by: UUID;
   created_at: string;
 }
 
@@ -315,7 +311,6 @@ export interface CreateQueryVersionRequest {
   sql: string;
   save_trigger: "manual" | "run" | "ai" | "on_exit";
   query_id: UUID;
-  created_by: UUID;
 }
 
 export interface QueryRun {
@@ -325,7 +320,6 @@ export interface QueryRun {
   row_count?: number;
   execution_time_ms?: number;
   query_version_id: UUID;
-  created_by: UUID;
   created_at: string;
 }
 

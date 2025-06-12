@@ -11,7 +11,6 @@ from app.controllers.query_service import QueryService
 from sqlalchemy.orm import Session
 from uuid import UUID
 from typing import List, Dict
-from app.dependencies import get_current_user
 
 router = APIRouter(prefix="/query", tags=["query"])
 
@@ -29,21 +28,18 @@ async def get_query_by_id(query_id: UUID, db: Session = Depends(get_db)):
 
 
 @router.post("/", response_model=QueryResponse)
-async def create_query(
-    request: CreateQueryRequest, db: Session = Depends(get_db), user=Depends(get_current_user)
-):
+async def create_query(request: CreateQueryRequest, db: Session = Depends(get_db)):
     """Create a new query"""
-    return QueryService.create_query(db, request, user.id)
+    return QueryService.create_query(db, request)
 
 
 @router.post("/ephemeral", response_model=QueryResponse)
 async def get_or_create_ephemeral_query(
     request: CreateEphemeralQueryRequest,
     db: Session = Depends(get_db),
-    user=Depends(get_current_user),
 ):
     """Get existing ephemeral query or create new one for table preview"""
-    return QueryService.get_or_create_ephemeral_query(db, request, user.id)
+    return QueryService.get_or_create_ephemeral_query(db, request)
 
 
 @router.put("/{query_id}", response_model=QueryResponse)

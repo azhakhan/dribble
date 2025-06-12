@@ -55,7 +55,6 @@ class TestCreateLLM:
         assert data["settings"] == sample_llm_data["settings"]
         assert "id" in data
         assert "created_at" in data
-        assert "workspace_id" in data
 
     def test_create_llm_missing_fields(self):
         incomplete_data = {"name": "openai"}

@@ -41,7 +41,6 @@ class LLMResponse(BaseModel):
     api_version: Optional[str] = None
     settings: Optional[Dict[str, Any]] = None
     default: Optional[bool] = None
-    workspace_id: UUID
     created_at: datetime
 
     class Config:
