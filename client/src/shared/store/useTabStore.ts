@@ -23,6 +23,7 @@ interface TabState {
   // Actions for tabs
   openQueryTab: (tab: Omit<QueryTab, "id">) => Promise<void>;
   closeQueryTab: (tabId: string) => void;
+  closeTabsByQueryId: (queryId: string) => void;
   setActiveTab: (tabId: string | null) => Promise<void>;
   updateTabContent: (tabId: string, content: Partial<QueryTab>) => void;
   updateTabTitle: (tabId: string, title: string) => void;
@@ -103,6 +104,26 @@ export const useTabStore = create<TabState>()(
                 ? newOpenTabs[newOpenTabs.length - 1].id
                 : null
               : state.activeTabId;
+          return {
+            openTabs: newOpenTabs,
+            activeTabId: newActiveTabId
+          };
+        }),
+
+      // Close all tabs with a specific query ID
+      closeTabsByQueryId: (queryId) =>
+        set((state) => {
+          const tabsToClose = state.openTabs.filter((tab) => tab.queryId === queryId);
+          const newOpenTabs = state.openTabs.filter((tab) => tab.queryId !== queryId);
+
+          // If the active tab is being closed, set a new active tab
+          const isActiveTabClosed = tabsToClose.some((tab) => tab.id === state.activeTabId);
+          const newActiveTabId = isActiveTabClosed
+            ? newOpenTabs.length > 0
+              ? newOpenTabs[newOpenTabs.length - 1].id
+              : null
+            : state.activeTabId;
+
           return {
             openTabs: newOpenTabs,
             activeTabId: newActiveTabId

@@ -322,6 +322,11 @@ export const useQueryStore = create<QueryState>((set, get) => ({
     try {
       await deleteQuery(queryId);
 
+      // Close any open tabs for this query
+      const { useTabStore } = await import("./useTabStore");
+      const { closeTabsByQueryId } = useTabStore.getState();
+      closeTabsByQueryId(queryId);
+
       // Remove the query from the store
       set((state) => {
         const newQueries = { ...state.queries };
