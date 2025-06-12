@@ -20,14 +20,38 @@ interface TabState {
   // Global editor state (legacy, for backward compatibility)
   editorContent: string;
 
+  // Unsaved changes dialog state
+  unsavedChangesDialog: {
+    isOpen: boolean;
+    tabId: string | null;
+    tabTitle: string;
+    action: "close" | "closeOthers" | "closeToRight" | null;
+    resolve: ((result: boolean) => void) | null;
+  };
+
   // Actions for tabs
   openQueryTab: (tab: Omit<QueryTab, "id">) => Promise<void>;
   closeQueryTab: (tabId: string) => void;
+  closeQueryTabWithConfirmation: (tabId: string) => Promise<boolean>;
   closeTabsByQueryId: (queryId: string) => void;
   setActiveTab: (tabId: string | null) => Promise<void>;
   updateTabContent: (tabId: string, content: Partial<QueryTab>) => void;
   updateTabTitle: (tabId: string, title: string) => void;
   loadQueryInTab: (tabId: string, queryId: string) => Promise<void>;
+
+  // Helper functions for unsaved changes
+  hasUnsavedChanges: (tabId: string) => boolean;
+  discardChanges: (tabId: string) => void;
+  saveChanges: (tabId: string) => Promise<void>;
+
+  // Dialog management
+  showUnsavedChangesDialog: (
+    tabId: string,
+    action: "close" | "closeOthers" | "closeToRight"
+  ) => Promise<boolean>;
+  hideUnsavedChangesDialog: () => void;
+  handleDialogSave: () => Promise<void>;
+  handleDialogDiscard: () => void;
 
   // Editor actions
   setEditorContent: (content: string) => void;
@@ -65,6 +89,13 @@ export const useTabStore = create<TabState>()(
       activeTabId: null,
       tableFilters: {},
       editorContent: "",
+      unsavedChangesDialog: {
+        isOpen: false,
+        tabId: null,
+        tabTitle: "",
+        action: null,
+        resolve: null
+      },
 
       // Open a new query tab
       openQueryTab: async (tab) => {
@@ -110,6 +141,18 @@ export const useTabStore = create<TabState>()(
           };
         }),
 
+      // Close a query tab with confirmation if there are unsaved changes
+      closeQueryTabWithConfirmation: async (tabId) => {
+        const state = get();
+        const shouldClose = await state.showUnsavedChangesDialog(tabId, "close");
+
+        if (shouldClose) {
+          state.closeQueryTab(tabId);
+        }
+
+        return shouldClose;
+      },
+
       // Close all tabs with a specific query ID
       closeTabsByQueryId: (queryId) =>
         set((state) => {
@@ -142,46 +185,56 @@ export const useTabStore = create<TabState>()(
 
         if (!activeTab) return;
 
-        // If the tab has a query, load its latest content and set source
+        // If the tab has a query, only load from server if tab doesn't have unsaved changes
         if (activeTab.queryId) {
           try {
             const queryStore = useQueryStore.getState();
             const sourceStore = useSourceStore.getState();
-
-            // Load the latest version of the query
-            const latestVersion = await queryStore.loadLatestQueryVersion(activeTab.queryId);
 
             // Get the query and its source
             await queryStore.loadQuery(activeTab.queryId);
             const query = queryStore.queries[activeTab.queryId];
             const querySource = query?.source_id ? sourceStore.sources[query.source_id] : null;
 
-            // Update the tab with the latest content and set the query's source as selected
-            set((state) => ({
-              openTabs: state.openTabs.map((tab) =>
-                tab.id === tabId
-                  ? {
-                      ...tab,
-                      editorContent: latestVersion?.sql || tab.editorContent,
-                      lastSavedContent: latestVersion?.sql || tab.lastSavedContent,
-                      originalContent: latestVersion?.sql || tab.originalContent
-                    }
-                  : tab
-              ),
-              // Update global editorContent for backward compatibility
-              editorContent: latestVersion?.sql || activeTab.editorContent
-            }));
+            // Only load latest version from server if tab is not dirty (has no unsaved changes)
+            if (!activeTab.isDirty) {
+              // Load the latest version of the query
+              const latestVersion = await queryStore.loadLatestQueryVersion(activeTab.queryId);
+
+              // Update the tab with the latest content only if not dirty
+              set((state) => ({
+                openTabs: state.openTabs.map((tab) =>
+                  tab.id === tabId
+                    ? {
+                        ...tab,
+                        editorContent: latestVersion?.sql || tab.editorContent,
+                        lastSavedContent: latestVersion?.sql || tab.lastSavedContent,
+                        originalContent: latestVersion?.sql || tab.originalContent
+                      }
+                    : tab
+                ),
+                // Update global editorContent for backward compatibility
+                editorContent: latestVersion?.sql || activeTab.editorContent
+              }));
+            } else {
+              // Tab has unsaved changes, just update global editorContent without overwriting tab content
+              set(() => ({
+                editorContent: activeTab.editorContent
+              }));
+            }
 
             // Set the selected source
             if (querySource) {
               sourceStore.setSelectedSource(querySource);
             }
 
-            // Auto-execute if conditions are met
-            const updatedState = get();
-            const updatedTab = updatedState.openTabs.find((tab) => tab.id === tabId);
-            if (updatedTab && currentState.shouldAutoExecuteQuery(updatedTab)) {
-              await currentState.executeQuery(tabId);
+            // Auto-execute if conditions are met (only if not dirty to avoid losing unsaved changes)
+            if (!activeTab.isDirty) {
+              const updatedState = get();
+              const updatedTab = updatedState.openTabs.find((tab) => tab.id === tabId);
+              if (updatedTab && currentState.shouldAutoExecuteQuery(updatedTab)) {
+                await currentState.executeQuery(tabId);
+              }
             }
           } catch (error) {
             console.error("Failed to load latest query version when switching tabs:", error);
@@ -193,6 +246,10 @@ export const useTabStore = create<TabState>()(
             if (querySource) {
               sourceStore.setSelectedSource(querySource);
             }
+            // Update global editorContent with tab content
+            set(() => ({
+              editorContent: activeTab.editorContent
+            }));
           }
         } else {
           // For tabs without a queryId, just update the global editorContent
@@ -880,6 +937,184 @@ export const useTabStore = create<TabState>()(
             originalContent: ""
           });
         }
+      },
+
+      // Helper functions for unsaved changes
+      hasUnsavedChanges: (tabId) => {
+        const state = get();
+        const tab = state.openTabs.find((t) => t.id === tabId);
+        return tab ? tab.isDirty : false;
+      },
+
+      discardChanges: (tabId) => {
+        set((state) => ({
+          openTabs: state.openTabs.map((tab) =>
+            tab.id === tabId
+              ? {
+                  ...tab,
+                  editorContent: tab.lastSavedContent,
+                  isDirty: false
+                }
+              : tab
+          ),
+          // Update global editorContent if this is the active tab
+          editorContent:
+            state.activeTabId === tabId
+              ? state.openTabs.find((t) => t.id === tabId)?.lastSavedContent || state.editorContent
+              : state.editorContent
+        }));
+      },
+
+      saveChanges: async (tabId) => {
+        // Get fresh state
+        const state = get();
+        const tab = state.openTabs.find((t) => t.id === tabId);
+
+        if (!tab || !tab.isDirty) {
+          return;
+        }
+
+        const queryStore = useQueryStore.getState();
+
+        try {
+          if (tab.queryId) {
+            // Save new version for existing query
+            await queryStore.saveQueryVersion(tab.queryId, tab.editorContent, "run");
+
+            // Update tab to mark as clean
+            set((prevState) => {
+              const updatedTabs = prevState.openTabs.map((t) =>
+                t.id === tabId
+                  ? {
+                      ...t,
+                      lastSavedContent: t.editorContent, // Use current tab content from prevState
+                      isDirty: false
+                    }
+                  : t
+              );
+              return { openTabs: updatedTabs };
+            });
+          } else {
+            // Create new query for tab without queryId
+            const newQuery = await queryStore.createNewQuery({ sourceId: tab.sourceId });
+            await queryStore.saveQueryVersion(newQuery.id, tab.editorContent, "run");
+
+            // Update tab with new queryId and mark as clean
+            set((prevState) => {
+              const updatedTabs = prevState.openTabs.map((t) =>
+                t.id === tabId
+                  ? {
+                      ...t,
+                      queryId: newQuery.id,
+                      lastSavedContent: t.editorContent, // Use current tab content from prevState
+                      isDirty: false
+                    }
+                  : t
+              );
+              return { openTabs: updatedTabs };
+            });
+          }
+        } catch (error) {
+          console.error("Failed to save changes:", error);
+          throw error;
+        }
+      },
+
+      // Dialog management functions
+      showUnsavedChangesDialog: (tabId, action) => {
+        return new Promise((resolve) => {
+          const state = get();
+          const tab = state.openTabs.find((t) => t.id === tabId);
+
+          if (!tab) {
+            resolve(true); // Tab not found, consider it closed
+            return;
+          }
+
+          // If tab has no unsaved changes, resolve immediately
+          if (!tab.isDirty) {
+            resolve(true);
+            return;
+          }
+
+          // Show dialog and store resolver
+          set({
+            unsavedChangesDialog: {
+              isOpen: true,
+              tabId,
+              tabTitle: tab.title,
+              action,
+              resolve
+            }
+          });
+        });
+      },
+
+      hideUnsavedChangesDialog: () => {
+        const state = get();
+        if (state.unsavedChangesDialog.resolve) {
+          state.unsavedChangesDialog.resolve(false); // User cancelled
+        }
+        set({
+          unsavedChangesDialog: {
+            isOpen: false,
+            tabId: null,
+            tabTitle: "",
+            action: null,
+            resolve: null
+          }
+        });
+      },
+
+      handleDialogSave: async () => {
+        const state = get();
+        const { tabId, resolve } = state.unsavedChangesDialog;
+
+        if (!tabId || !resolve) return;
+
+        try {
+          await state.saveChanges(tabId);
+
+          // Hide dialog first
+          set({
+            unsavedChangesDialog: {
+              isOpen: false,
+              tabId: null,
+              tabTitle: "",
+              action: null,
+              resolve: null
+            }
+          });
+
+          // Then resolve - this ensures the dialog is hidden before the tab close logic runs
+          resolve(true);
+        } catch (error) {
+          console.error("Failed to save changes:", error);
+          // Don't hide dialog on error, let user try again
+          resolve(false);
+        }
+      },
+
+      handleDialogDiscard: () => {
+        const state = get();
+        const { tabId, resolve } = state.unsavedChangesDialog;
+
+        if (!tabId || !resolve) return;
+
+        // Discard changes and resolve
+        state.discardChanges(tabId);
+        resolve(true);
+
+        // Hide dialog
+        set({
+          unsavedChangesDialog: {
+            isOpen: false,
+            tabId: null,
+            tabTitle: "",
+            action: null,
+            resolve: null
+          }
+        });
       }
     }),
     {
