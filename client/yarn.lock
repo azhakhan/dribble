@@ -1583,6 +1583,18 @@
   resolved "https://registry.yarnpkg.com/@radix-ui/rect/-/rect-1.1.1.tgz#78244efe12930c56fd255d7923865857c41ac8cb"
   integrity sha512-HPwpGIzkl28mWyZqG52jiqDJ12waP11Pa1lGoiyUkIEuMLBP0oeK/C89esbXrxsky5we7dfd8U58nm0SgAWpVw==
 
+"@rive-app/canvas@2.29.3":
+  version "2.29.3"
+  resolved "https://registry.yarnpkg.com/@rive-app/canvas/-/canvas-2.29.3.tgz#a50224d174b1871ebbbf7f63eb8bba69a1ad29c1"
+  integrity sha512-tZrKAEMdmjg5ipAAVoOe/CqW9Y+zW/gqZBvFTmWszJGaXbW6wt+hRPkTuHIlpNMLA6oFe57t/5xHsxLoXTq8mA==
+
+"@rive-app/react-canvas@^4.21.3":
+  version "4.21.3"
+  resolved "https://registry.yarnpkg.com/@rive-app/react-canvas/-/react-canvas-4.21.3.tgz#4c07480281dc4abdac4c0bfe85a4fd388d8171d6"
+  integrity sha512-DUCVwOF4gX7ZeMmESEu3B2LDeHvkw925mPXqq89tA6aybhwsxZchUktHp0jM6WsI2TAFjNgPSylOgIsa9gSavA==
+  dependencies:
+    "@rive-app/canvas" "2.29.3"
+
 "@rollup/rollup-android-arm-eabi@4.41.0":
   version "4.41.0"
   resolved "https://registry.yarnpkg.com/@rollup/rollup-android-arm-eabi/-/rollup-android-arm-eabi-4.41.0.tgz#9145b38faf3fbfe3ec557130110e772f797335aa"
