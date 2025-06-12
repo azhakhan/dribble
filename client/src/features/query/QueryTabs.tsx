@@ -14,6 +14,7 @@ import {
 
 import { Query } from "./Query";
 import { useTabStore, useSourceStore } from "@/shared/store";
+import { UnsavedChangesDialog } from "./UnsavedChangesDialog";
 
 // New Query Modal component
 // New Query Modal component
@@ -162,8 +163,8 @@ const ContextMenu = memo(
     x: number;
     y: number;
     onClose: () => void;
-    onCloseOthers: () => void;
-    onCloseToRight: () => void;
+    onCloseOthers: () => Promise<void>;
+    onCloseToRight: () => Promise<void>;
     canCloseToRight: boolean;
   }) => {
     const menuRef = useRef<HTMLDivElement>(null);
@@ -198,8 +199,8 @@ const ContextMenu = memo(
       >
         <button
           className="w-full px-3 py-1.5 text-left text-sm hover:bg-accent transition-colors"
-          onClick={() => {
-            onCloseOthers();
+          onClick={async () => {
+            await onCloseOthers();
             onClose();
           }}
         >
@@ -210,9 +211,9 @@ const ContextMenu = memo(
             "w-full px-3 py-1.5 text-left text-sm transition-colors",
             canCloseToRight ? "hover:bg-accent" : "text-muted-foreground cursor-not-allowed"
           )}
-          onClick={() => {
+          onClick={async () => {
             if (canCloseToRight) {
-              onCloseToRight();
+              await onCloseToRight();
               onClose();
             }
           }}
@@ -238,7 +239,7 @@ const TabButton = memo(
     tab: { id: string; title: string; isDirty: boolean };
     isActive: boolean;
     onTabClick: (tabId: string) => Promise<void>;
-    onCloseTab: (tabId: string, e: React.MouseEvent) => void;
+    onCloseTab: (tabId: string, e: React.MouseEvent) => Promise<void>;
     onRightClick: (tabId: string, e: React.MouseEvent) => void;
     tabRef?: React.RefObject<HTMLDivElement | null>;
   }) => (
@@ -274,8 +275,18 @@ function QueryTabsComponent() {
   const selectedSource = useSourceStore((state) => state.selectedSource);
   const sources = useSourceStore((state) => state.allSources);
 
+  // Dialog state
+  const unsavedChangesDialog = useTabStore((state) => state.unsavedChangesDialog);
+
   // Get actions from store
-  const { openQueryTab, closeQueryTab, setActiveTab } = useTabStore();
+  const {
+    openQueryTab,
+    closeQueryTabWithConfirmation,
+    setActiveTab,
+    hideUnsavedChangesDialog,
+    handleDialogSave,
+    handleDialogDiscard
+  } = useTabStore();
 
   // Refs for scrolling functionality
   const tabBarScrollRef = useRef<HTMLDivElement>(null);
@@ -358,11 +369,11 @@ function QueryTabsComponent() {
 
   // Handle closing a tab
   const handleCloseTab = useCallback(
-    (tabId: string, e: React.MouseEvent) => {
+    async (tabId: string, e: React.MouseEvent) => {
       e.stopPropagation();
-      closeQueryTab(tabId);
+      await closeQueryTabWithConfirmation(tabId);
     },
-    [closeQueryTab]
+    [closeQueryTabWithConfirmation]
   );
 
   // Handle tab click to make it active
@@ -387,28 +398,50 @@ function QueryTabsComponent() {
 
   // Handle closing other tabs
   const handleCloseOthers = useCallback(
-    (exceptTabId: string) => {
-      openTabs.forEach((tab) => {
-        if (tab.id !== exceptTabId) {
-          closeQueryTab(tab.id);
-        }
+    async (exceptTabId: string) => {
+      const { showUnsavedChangesDialog, closeQueryTab } = useTabStore.getState();
+
+      // Check if any other tabs have unsaved changes
+      const otherTabs = openTabs.filter((tab) => tab.id !== exceptTabId);
+      const dirtyTabs = otherTabs.filter((tab) => tab.isDirty);
+
+      if (dirtyTabs.length > 0) {
+        // If there are dirty tabs, show a single confirmation for all
+        const shouldClose = await showUnsavedChangesDialog(dirtyTabs[0].id, "closeOthers");
+        if (!shouldClose) return;
+      }
+
+      // Close all other tabs
+      otherTabs.forEach((tab) => {
+        closeQueryTab(tab.id);
       });
     },
-    [openTabs, closeQueryTab]
+    [openTabs]
   );
 
   // Handle closing tabs to the right
   const handleCloseToRight = useCallback(
-    (fromTabId: string) => {
+    async (fromTabId: string) => {
+      const { showUnsavedChangesDialog, closeQueryTab } = useTabStore.getState();
       const fromIndex = openTabs.findIndex((tab) => tab.id === fromTabId);
       if (fromIndex === -1) return;
 
-      // Close all tabs after the specified tab
-      for (let i = fromIndex + 1; i < openTabs.length; i++) {
-        closeQueryTab(openTabs[i].id);
+      // Get tabs to the right
+      const tabsToClose = openTabs.slice(fromIndex + 1);
+      const dirtyTabs = tabsToClose.filter((tab) => tab.isDirty);
+
+      if (dirtyTabs.length > 0) {
+        // If there are dirty tabs, show a single confirmation for all
+        const shouldClose = await showUnsavedChangesDialog(dirtyTabs[0].id, "closeToRight");
+        if (!shouldClose) return;
       }
+
+      // Close all tabs to the right
+      tabsToClose.forEach((tab) => {
+        closeQueryTab(tab.id);
+      });
     },
-    [openTabs, closeQueryTab]
+    [openTabs]
   );
 
   // Check if there are tabs to the right
@@ -514,6 +547,20 @@ function QueryTabsComponent() {
         sources={sources.map((source) => ({ id: source.id, name: source.name }))}
         defaultSourceId={selectedSource?.id}
         position={modalPosition}
+      />
+
+      {/* Unsaved Changes Dialog */}
+      <UnsavedChangesDialog
+        open={unsavedChangesDialog.isOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            hideUnsavedChangesDialog();
+          }
+        }}
+        onSave={handleDialogSave}
+        onDiscard={handleDialogDiscard}
+        tabTitle={unsavedChangesDialog.tabTitle}
+        action={unsavedChangesDialog.action}
       />
     </div>
   );

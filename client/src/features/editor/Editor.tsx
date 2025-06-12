@@ -1,6 +1,6 @@
-import { useRef, useCallback, useMemo } from "react";
+import { useRef, useCallback, useMemo, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { PlayIcon, PencilIcon, CheckIcon, XIcon, Database } from "lucide-react";
+import { PlayIcon, PencilIcon, CheckIcon, XIcon, Database, SaveIcon } from "lucide-react";
 import { toast } from "sonner";
 import { useTabStore, useSourceStore, useChatStore, useQueryStore } from "@/shared/store";
 import { LanguageIdEnum } from "@/shared/lib/monaco-setup";
@@ -21,7 +21,8 @@ export function Editor({ tabId, onQueryExecuted }: EditorProps) {
   const [tempName, setTempName] = useState("");
 
   // Get all needed state from the store using selectors
-  const { openTabs, updateTabContent, executeQuery } = useTabStore();
+  const { openTabs, updateTabContent, executeQuery, saveChanges, hasUnsavedChanges } =
+    useTabStore();
   const { sources, connectedSources } = useSourceStore();
   const { proposedChanges, acceptProposedChanges, rejectProposedChanges } = useChatStore();
   const { updateQueryName } = useQueryStore();
@@ -72,6 +73,19 @@ export function Editor({ tabId, onQueryExecuted }: EditorProps) {
     },
     [tabId, updateTabContent]
   );
+
+  // Handle saving changes
+  const handleSaveChanges = useCallback(async () => {
+    if (!currentTab || !hasUnsavedChanges(tabId)) return;
+
+    try {
+      await saveChanges(tabId);
+      toast.success("Changes saved successfully");
+    } catch (error) {
+      console.error("Failed to save changes:", error);
+      toast.error("Failed to save changes");
+    }
+  }, [currentTab, tabId, saveChanges, hasUnsavedChanges]);
 
   // Handle query execution
   const handleRunQuery = useCallback(
@@ -126,6 +140,20 @@ export function Editor({ tabId, onQueryExecuted }: EditorProps) {
       toast.error("Failed to update query name");
     }
   }, [currentTab?.queryId, tempName, updateQueryName]);
+
+  // Handle keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      // Ctrl+S or Cmd+S to save
+      if ((event.ctrlKey || event.metaKey) && event.key === "s") {
+        event.preventDefault();
+        handleSaveChanges();
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [handleSaveChanges]);
 
   if (!currentTab) {
     return (
@@ -211,6 +239,19 @@ export function Editor({ tabId, onQueryExecuted }: EditorProps) {
 
         {/* Action buttons on the right */}
         <div className="flex items-center gap-2 h-8">
+          {currentTab.isDirty && (
+            <Button
+              onClick={handleSaveChanges}
+              disabled={!currentTab.isDirty}
+              variant="outline"
+              className="gap-1 text-xs cursor-pointer"
+              size="xs"
+              title="Save changes (Ctrl+S)"
+            >
+              <SaveIcon size={16} />
+              Save
+            </Button>
+          )}
           <Button
             onClick={() => handleRunQuery()}
             disabled={!canRunQueries || currentTab.queryRunning}
