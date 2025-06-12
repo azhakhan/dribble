@@ -22,6 +22,19 @@ class User(Base):
     created_at = Column(DateTime, default=datetime.now)
 
 
+class SoftDeleteMixin:
+    deleted_at = Column(DateTime, nullable=True)
+
+    def soft_delete(self):
+        self.deleted_at = datetime.now()
+
+    def restore(self):
+        self.deleted_at = None
+
+    def is_deleted(self):
+        return self.deleted_at is not None
+
+
 class Workspace(Base):
     __tablename__ = "workspaces"
 
@@ -50,7 +63,7 @@ class WorkspaceUser(Base):
     created_at = Column(DateTime, default=datetime.now)
 
 
-class Source(Base):
+class Source(Base, SoftDeleteMixin):
     __tablename__ = "sources"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -65,7 +78,7 @@ class Source(Base):
     created_at = Column(DateTime, default=datetime.now)
 
 
-class Query(Base):
+class Query(Base, SoftDeleteMixin):
     __tablename__ = "queries"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -117,7 +130,7 @@ class QueryRun(Base):
     created_at = Column(DateTime, default=datetime.now)
 
 
-class Worker(Base):
+class Worker(Base, SoftDeleteMixin):
     __tablename__ = "workers"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -132,7 +145,7 @@ class Worker(Base):
     created_at = Column(DateTime, default=datetime.now)
 
 
-class LLM(Base):
+class LLM(Base, SoftDeleteMixin):
     __tablename__ = "llms"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
@@ -149,7 +162,7 @@ class LLM(Base):
     created_at = Column(DateTime, default=datetime.now)
 
 
-class ChatSession(Base):
+class ChatSession(Base, SoftDeleteMixin):
     __tablename__ = "chat_sessions"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
