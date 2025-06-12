@@ -3,6 +3,14 @@ description:
 globs: 
 alwaysApply: false
 ---
-uv used to install packages
+the app is running in docker containers via docker compose (see docker-compose.yml)
+
+server is in server directory. uv used to install packages.
+
+client is in client directory. i use yarn to install packages and run the client.
+
+formatting is done with ruff. i also have pre-commit installed (.pre-commit-config.yaml).
+
 keep your changes to minimum, avoid duplication, don't add example files.
+
 don't mix dataclasses and pydantic models

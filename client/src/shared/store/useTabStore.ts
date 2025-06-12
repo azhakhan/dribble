@@ -23,6 +23,7 @@ interface TabState {
   // Actions for tabs
   openQueryTab: (tab: Omit<QueryTab, "id">) => Promise<void>;
   closeQueryTab: (tabId: string) => void;
+  closeTabsByQueryId: (queryId: string) => void;
   setActiveTab: (tabId: string | null) => Promise<void>;
   updateTabContent: (tabId: string, content: Partial<QueryTab>) => void;
   updateTabTitle: (tabId: string, title: string) => void;
@@ -103,6 +104,26 @@ export const useTabStore = create<TabState>()(
                 ? newOpenTabs[newOpenTabs.length - 1].id
                 : null
               : state.activeTabId;
+          return {
+            openTabs: newOpenTabs,
+            activeTabId: newActiveTabId
+          };
+        }),
+
+      // Close all tabs with a specific query ID
+      closeTabsByQueryId: (queryId) =>
+        set((state) => {
+          const tabsToClose = state.openTabs.filter((tab) => tab.queryId === queryId);
+          const newOpenTabs = state.openTabs.filter((tab) => tab.queryId !== queryId);
+
+          // If the active tab is being closed, set a new active tab
+          const isActiveTabClosed = tabsToClose.some((tab) => tab.id === state.activeTabId);
+          const newActiveTabId = isActiveTabClosed
+            ? newOpenTabs.length > 0
+              ? newOpenTabs[newOpenTabs.length - 1].id
+              : null
+            : state.activeTabId;
+
           return {
             openTabs: newOpenTabs,
             activeTabId: newActiveTabId
@@ -390,20 +411,20 @@ export const useTabStore = create<TabState>()(
             }
           } else {
             // No query exists, create a new one
-            const newQueryId = await queryStore.createNewQuery(tab.sourceId);
+            const newQuery = await queryStore.createNewQuery({ sourceId: tab.sourceId });
 
             // Update the tab to reference the new query
             set((prevState) => ({
               openTabs: prevState.openTabs.map((t) =>
-                t.id === tabId ? { ...t, queryId: newQueryId } : t
+                t.id === tabId ? { ...t, queryId: newQuery.id } : t
               )
             }));
 
             // Save the current editor content as the first version
-            await queryStore.saveQueryVersion(newQueryId, queryToRun, "run");
+            await queryStore.saveQueryVersion(newQuery.id, queryToRun, "run");
 
             // Get the version we just created
-            const newVersion = await queryStore.loadLatestQueryVersion(newQueryId);
+            const newVersion = await queryStore.loadLatestQueryVersion(newQuery.id);
             if (!newVersion) {
               throw new Error("Failed to create query version");
             }

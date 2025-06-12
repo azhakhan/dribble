@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { ChevronRight, ChevronDown, Database, FileText, Plus, MoreVertical } from "lucide-react";
 import { PostgresIcon, MySQLIcon, SQLiteIcon } from "../icons";
 import { Button } from "@/components/ui/button";
@@ -12,6 +12,8 @@ import { useQuery } from "@tanstack/react-query";
 import { getQueries } from "@/shared/lib/api";
 import { useQueryStore, useTreeStore, useSourceStore } from "@/shared/store";
 import type { Query, Source } from "@/shared/lib/api";
+import { RenameQuery } from "../query/dialogs/RenameQuery";
+import { DeleteQuery } from "../query/dialogs/DeleteQuery";
 
 interface QueryTreeProps {
   onQuerySelect?: (query: Query) => void;
@@ -41,11 +43,9 @@ const QueryTreeItem = ({
   isSelected
 }: QueryTreeItemProps) => {
   const [dropdownOpen, setDropdownOpen] = useState(false);
-  const [isEditing, setIsEditing] = useState(false);
-  const [editingName, setEditingName] = useState(query.name || `Query ${query.id.slice(0, 8)}`);
-
-  // Get the centralized updateQueryName function from the store
-  const { updateQueryName } = useQueryStore();
+  const [renameDialogOpen, setRenameDialogOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
 
   const handleQueryClick = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -61,86 +61,75 @@ const QueryTreeItem = ({
     }
   };
 
-  const handleEdit = () => {
-    setIsEditing(true);
+  const handleRename = () => {
+    setRenameDialogOpen(true);
     setDropdownOpen(false);
   };
 
-  const handleNameSubmit = async (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter") {
-      if (editingName.trim() !== query.name) {
-        try {
-          await updateQueryName(query.id, editingName.trim());
-        } catch (error) {
-          console.error("Failed to update query name:", error);
-        }
-      }
-      setIsEditing(false);
-    } else if (e.key === "Escape") {
-      setEditingName(query.name || `Query ${query.id.slice(0, 8)}`);
-      setIsEditing(false);
-    }
-  };
-
-  const handleNameBlur = async () => {
-    if (editingName.trim() !== query.name) {
-      try {
-        await updateQueryName(query.id, editingName.trim());
-      } catch (error) {
-        console.error("Failed to update query name:", error);
-      }
-    }
-    setIsEditing(false);
+  const handleDelete = () => {
+    setDeleteDialogOpen(true);
+    setDropdownOpen(false);
   };
 
   return (
-    <div
-      className={`flex items-center py-1 px-2 text-sm cursor-pointer hover:bg-accent/50 ${
-        isSelected ? "bg-accent text-accent-foreground" : ""
-      }`}
-      style={{ paddingLeft: "24px" }}
-      onClick={handleQueryClick}
-      onDoubleClick={handleQueryDoubleClick}
-    >
-      {/* Icon for query */}
-      <div className="mr-1.5 flex items-center">
-        <FileText className="h-4 w-4" strokeWidth={1} />
+    <>
+      <div
+        className={`flex items-center py-1 px-2 text-sm cursor-pointer hover:bg-accent/50 ${
+          isSelected ? "bg-accent text-accent-foreground" : ""
+        }`}
+        style={{ paddingLeft: "24px" }}
+        onClick={handleQueryClick}
+        onDoubleClick={handleQueryDoubleClick}
+      >
+        {/* Icon for query */}
+        <div className="mr-1.5 flex items-center">
+          <FileText className="h-4 w-4" strokeWidth={1} />
+        </div>
+
+        {/* Query name */}
+        <span className="flex-grow truncate">{query.name || `Query ${query.id.slice(0, 8)}`}</span>
+
+        {/* Actions dropdown */}
+        <DropdownMenu open={dropdownOpen} onOpenChange={setDropdownOpen}>
+          <DropdownMenuTrigger asChild>
+            <Button
+              ref={triggerRef}
+              variant="ghost"
+              size="icon"
+              className="h-4 w-4 ml-1 hover:bg-accent cursor-pointer"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <MoreVertical className="h-2 w-2" strokeWidth={1} />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-40">
+            <DropdownMenuItem onClick={handleRename} className="text-xs cursor-pointer">
+              Rename
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={handleDelete}
+              className="text-destructive text-xs cursor-pointer"
+            >
+              Delete
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
-      {/* Query name */}
-      {isEditing ? (
-        <input
-          type="text"
-          value={editingName}
-          onChange={(e) => setEditingName(e.target.value)}
-          onKeyDown={handleNameSubmit}
-          onBlur={handleNameBlur}
-          className="flex-grow bg-transparent border-none outline-none focus:ring-0 text-sm"
-          autoFocus
-          onClick={(e) => e.stopPropagation()}
-        />
-      ) : (
-        <span className="flex-grow truncate">{query.name || `Query ${query.id.slice(0, 8)}`}</span>
-      )}
-
-      {/* Actions dropdown */}
-      <DropdownMenu open={dropdownOpen} onOpenChange={setDropdownOpen}>
-        <DropdownMenuTrigger asChild>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-4 w-4 ml-1 hover:bg-accent cursor-pointer"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <MoreVertical className="h-2 w-2" strokeWidth={1} />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-40">
-          <DropdownMenuItem onClick={handleEdit}>Rename</DropdownMenuItem>
-          <DropdownMenuItem className="text-destructive">Delete</DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
-    </div>
+      {/* Dialogs */}
+      <RenameQuery
+        query={query}
+        open={renameDialogOpen}
+        onOpenChange={setRenameDialogOpen}
+        triggerRef={triggerRef}
+      />
+      <DeleteQuery
+        query={query}
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        triggerRef={triggerRef}
+      />
+    </>
   );
 };
 
@@ -153,6 +142,7 @@ const QueryTreeSource = ({
 }: QueryTreeSourceProps) => {
   // Use centralized tree state for query source expansion
   const { isQuerySourceExpanded, setQuerySourceExpanded } = useTreeStore();
+  const { createNewQuery } = useQueryStore();
   const isOpen = isQuerySourceExpanded(source.id);
 
   const handleClick = (e: React.MouseEvent) => {
@@ -161,10 +151,18 @@ const QueryTreeSource = ({
     setQuerySourceExpanded(source.id, !isOpen);
   };
 
-  const handleCreateQuery = (e: React.MouseEvent) => {
+  const handleCreateQuery = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    // TODO: Implement create query functionality
-    console.log("Create query for source:", source.id);
+    try {
+      const newQuery = await createNewQuery({ sourceId: source.id });
+
+      // Open the newly created query in tabs (double-click behavior)
+      if (newQuery && onQueryDoubleClick) {
+        onQueryDoubleClick(newQuery);
+      }
+    } catch (error) {
+      console.error("Failed to create query:", error);
+    }
   };
 
   const renderSourceIcon = () => {
@@ -256,7 +254,7 @@ export const QueryTree = ({
   selectedQueryId
 }: QueryTreeProps) => {
   // Get queries and sources from the centralized stores
-  const { queries, setQuery } = useQueryStore();
+  const { queries, setQuery, removeQuery } = useQueryStore();
 
   const { sources: storeSourcesMap, loadSources, loadingSources } = useSourceStore();
 
@@ -280,16 +278,33 @@ export const QueryTree = ({
   // Update store cache when fresh API data arrives
   useEffect(() => {
     if (queriesData) {
+      // Get all query IDs from the API response
+      const apiQueryIds = new Set<string>();
       Object.entries(queriesData).forEach(([, sourceQueries]) => {
         (sourceQueries as Query[]).forEach((query: Query) => {
+          apiQueryIds.add(query.id);
           // Don't overwrite if we already have a more recent version in store
           if (!queries[query.id]) {
             setQuery(query.id, query);
           }
         });
       });
+
+      // Remove queries from store that are no longer in the API response
+      // This handles cases where queries were deleted
+      const storeQueryIds = Object.keys(queries);
+      storeQueryIds.forEach((queryId) => {
+        // Don't remove ephemeral queries as they're not returned by the API
+        const query = queries[queryId];
+        if (!query.is_ephemeral && !apiQueryIds.has(queryId)) {
+          // This query was deleted, remove it from store
+          console.log(`Removing deleted query ${queryId} from store`);
+          // We need to add a removeQuery method to the store
+          removeQuery(queryId);
+        }
+      });
     }
-  }, [queriesData, queries, setQuery]);
+  }, [queriesData, queries, setQuery, removeQuery]);
 
   // Note: Removed automatic cleanup during initialization to prevent interference with persistence
 

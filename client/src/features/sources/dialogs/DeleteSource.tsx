@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Loader2 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
+import { useSourceStore } from "@/shared/store";
 import { toast } from "sonner";
 
 interface DeleteSourceProps {
@@ -26,6 +27,7 @@ export const DeleteSource = ({ open, onOpenChange, sourceId, sourceName }: Delet
   const [confirmName, setConfirmName] = useState("");
   const [loading, setLoading] = useState(false);
   const queryClient = useQueryClient();
+  const { loadSources } = useSourceStore();
 
   // Reset confirmation when dialog opens
   useEffect(() => {
@@ -44,6 +46,7 @@ export const DeleteSource = ({ open, onOpenChange, sourceId, sourceName }: Delet
       setLoading(true);
       await deleteSource(sourceId);
       queryClient.invalidateQueries({ queryKey: ["sources"] });
+      await loadSources();
       toast.success(`Source "${sourceName}" deleted successfully`);
       onOpenChange(false);
     } catch (error) {

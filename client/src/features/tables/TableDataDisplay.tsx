@@ -1,5 +1,6 @@
 import { EditableTable } from "@/features/tables/EditableTable";
 import { TableFilterBar } from "@/features/tables/TableFilterBar";
+import { Capybara } from "@/components/Capybara";
 
 interface TableDataDisplayProps {
   tableData: {
@@ -32,8 +33,8 @@ export const TableDataDisplay = ({
           </div>
         </>
       ) : (
-        <div className="h-full flex items-center justify-center text-gray-400">
-          Double-click on a table or a query in the file tree to load data and run a query.
+        <div className="h-full flex flex-col items-center justify-center text-gray-400">
+          <Capybara />
         </div>
       )}
     </div>

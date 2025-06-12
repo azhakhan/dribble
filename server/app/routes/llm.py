@@ -17,6 +17,7 @@ from app.dependencies import get_current_workspace, get_current_user
 from uuid import UUID
 from typing import List
 import json
+from app.core.db_utils import get_or_404, safe_delete, get_all_active
 
 router = APIRouter(prefix="/llms", tags=["llms"])
 
@@ -29,7 +30,7 @@ async def create_llm(
 ):
     """Create a new LLM configuration"""
     # Check if LLM with same name already exists in workspace
-    existing_llms = db.query(LLM).filter_by(workspace_id=workspace.id).all()
+    existing_llms = get_all_active(db, LLM, workspace_id=workspace.id)
     if len(existing_llms) > 0 and request.name in [llm.name for llm in existing_llms]:
         raise HTTPException(
             status_code=400,
@@ -59,7 +60,7 @@ async def get_llms(
     workspace=Depends(get_current_workspace),
 ):
     """Get all LLMs in the current workspace"""
-    llms = db.query(LLM).filter_by(workspace_id=workspace.id).all()
+    llms = get_all_active(db, LLM, workspace_id=workspace.id)
     return [LLMListResponse.model_validate(llm) for llm in llms]
 
 
@@ -70,8 +71,8 @@ async def get_llm(
     workspace=Depends(get_current_workspace),
 ):
     """Get a specific LLM by ID"""
-    llm = db.query(LLM).filter_by(id=llm_id, workspace_id=workspace.id).first()
-    if not llm:
+    llm = get_or_404(db, LLM, llm_id, "LLM not found")
+    if llm.workspace_id != workspace.id:
         raise HTTPException(status_code=404, detail="LLM not found")
     return LLMResponse.model_validate(llm)
 
@@ -84,13 +85,17 @@ async def update_llm(
     workspace=Depends(get_current_workspace),
 ):
     """Update an existing LLM configuration"""
-    llm = db.query(LLM).filter_by(id=llm_id, workspace_id=workspace.id).first()
-    if not llm:
+    llm = get_or_404(db, LLM, llm_id, "LLM not found")
+    if llm.workspace_id != workspace.id:
         raise HTTPException(status_code=404, detail="LLM not found")
 
     # Check if new name conflicts with existing LLM (if name is being changed)
     if request.name and request.name != llm.name:
-        existing_llm = db.query(LLM).filter_by(name=request.name, workspace_id=workspace.id).first()
+        existing_llm = (
+            db.query(LLM)
+            .filter_by(name=request.name, workspace_id=workspace.id, deleted_at=None)
+            .first()
+        )
         if existing_llm:
             raise HTTPException(
                 status_code=400,
@@ -114,13 +119,10 @@ async def delete_llm(
     workspace=Depends(get_current_workspace),
 ):
     """Delete an LLM configuration"""
-    llm = db.query(LLM).filter_by(id=llm_id, workspace_id=workspace.id).first()
-    if not llm:
+    llm = get_or_404(db, LLM, llm_id, "LLM not found")
+    if llm.workspace_id != workspace.id:
         raise HTTPException(status_code=404, detail="LLM not found")
-
-    db.delete(llm)
-    db.commit()
-    return {"message": "LLM deleted successfully"}
+    return safe_delete(db, llm)
 
 
 @router.post("/chat")

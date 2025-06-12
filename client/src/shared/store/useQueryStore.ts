@@ -8,6 +8,7 @@ import {
   createQuery,
   createQueryVersion,
   updateQuery,
+  deleteQuery,
   getQueryRunsByQueryId,
   getQueryRunsByQueryIdPaginated,
   getOrCreateEphemeralQuery,
@@ -42,11 +43,13 @@ interface QueryState {
   setQueryVersions: (queryId: string, versions: QueryVersion[]) => void;
   setQueryRuns: (queryId: string, runs: QueryRun[]) => void;
   setQueryRunsPaginated: (queryId: string, runs: QueryRun[], pagination: PaginationInfo) => void;
+  removeQuery: (queryId: string) => void;
 
   // Query creation and management
-  createNewQuery: (sourceId: string) => Promise<string>;
+  createNewQuery: ({ sourceId, name }: { sourceId: string; name?: string }) => Promise<Query>;
   saveQueryVersion: (queryId: string, sql: string, saveTrigger: "run" | "ai") => Promise<void>;
   updateQueryName: (queryId: string, newName: string) => Promise<Query>;
+  deleteQuery: (queryId: string) => Promise<void>;
 
   // Ephemeral query management
   getOrCreateEphemeralQuery: (
@@ -242,14 +245,36 @@ export const useQueryStore = create<QueryState>((set, get) => ({
       queryRunsPagination: { ...state.queryRunsPagination, [queryId]: pagination }
     })),
 
+  removeQuery: (queryId) =>
+    set((state) => {
+      const newQueries = { ...state.queries };
+      delete newQueries[queryId];
+
+      const newQueryVersions = { ...state.queryVersions };
+      delete newQueryVersions[queryId];
+
+      const newQueryRuns = { ...state.queryRuns };
+      delete newQueryRuns[queryId];
+
+      const newQueryRunsPagination = { ...state.queryRunsPagination };
+      delete newQueryRunsPagination[queryId];
+
+      return {
+        queries: newQueries,
+        queryVersions: newQueryVersions,
+        queryRuns: newQueryRuns,
+        queryRunsPagination: newQueryRunsPagination
+      };
+    }),
+
   // Create new query
-  createNewQuery: async (sourceId) => {
+  createNewQuery: async ({ sourceId, name }: { sourceId: string; name?: string }) => {
     try {
-      const newQuery = await createQuery({ source_id: sourceId });
+      const newQuery = await createQuery({ source_id: sourceId, name });
       set((state) => ({
         queries: { ...state.queries, [newQuery.id]: newQuery }
       }));
-      return newQuery.id;
+      return newQuery;
     } catch (error) {
       console.error("Failed to create query:", error);
       throw error;
@@ -288,6 +313,43 @@ export const useQueryStore = create<QueryState>((set, get) => ({
       return updatedQuery;
     } catch (error) {
       console.error("Failed to update query name:", error);
+      throw error;
+    }
+  },
+
+  // Delete query
+  deleteQuery: async (queryId) => {
+    try {
+      await deleteQuery(queryId);
+
+      // Close any open tabs for this query
+      const { useTabStore } = await import("./useTabStore");
+      const { closeTabsByQueryId } = useTabStore.getState();
+      closeTabsByQueryId(queryId);
+
+      // Remove the query from the store
+      set((state) => {
+        const newQueries = { ...state.queries };
+        delete newQueries[queryId];
+
+        const newQueryVersions = { ...state.queryVersions };
+        delete newQueryVersions[queryId];
+
+        const newQueryRuns = { ...state.queryRuns };
+        delete newQueryRuns[queryId];
+
+        const newQueryRunsPagination = { ...state.queryRunsPagination };
+        delete newQueryRunsPagination[queryId];
+
+        return {
+          queries: newQueries,
+          queryVersions: newQueryVersions,
+          queryRuns: newQueryRuns,
+          queryRunsPagination: newQueryRunsPagination
+        };
+      });
+    } catch (error) {
+      console.error("Failed to delete query:", error);
       throw error;
     }
   },
