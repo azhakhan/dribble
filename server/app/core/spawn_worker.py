@@ -38,7 +38,7 @@ class WorkerContainer:
         except docker.errors.NotFound:
             return False
 
-    def start(self, workspace_id: UUID = None, db: Session = None):
+    def start(self, db: Session = None):
         # Test credentials first
         test_result = self.test()
         if test_result.get("status") != "success":
@@ -60,8 +60,8 @@ class WorkerContainer:
         self.container_id = container.id
 
         # Save worker record immediately to prevent race conditions with cleanup
-        if workspace_id and db:
-            self.save_worker(workspace_id, db)
+        if db:
+            self.save_worker(db)
 
         # Wait for container to be running and healthy (up to 10 seconds)
         max_wait_time = 10
@@ -102,10 +102,8 @@ class WorkerContainer:
                 raise
             raise Exception("Container was removed during startup") from e
 
-    def save_worker(self, workspace_id: UUID, db: Session):
-        existing_worker = (
-            db.query(Worker).filter_by(source_id=self.source_id, workspace_id=workspace_id).first()
-        )
+    def save_worker(self, db: Session):
+        existing_worker = db.query(Worker).filter_by(source_id=self.source_id).first()
 
         if existing_worker:
             existing_worker.container_id = self.container_id
@@ -121,7 +119,6 @@ class WorkerContainer:
                 container_id=self.container_id,
                 port=self.port,
                 host=self.container_url,
-                workspace_id=workspace_id,
                 status="running",
             )
             db.add(worker)

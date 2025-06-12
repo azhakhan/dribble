@@ -414,13 +414,11 @@ class ChatService:
         source: Source,
         chat_session: ChatSession,
         db_session: Session,
-        user_id: Optional[str] = None,
     ):
         self.llm = llm
         self.source = source
         self.chat_session = chat_session
         self.db = db_session
-        self.user_id = user_id
         self.query_executor = SQLQueryExecutor(source)
         self.message_service = ChatMessageService(db_session, chat_session)
         self.provider = LLMProviderFactory.create_provider(
@@ -448,9 +446,7 @@ class ChatService:
             messages.append(ChatMessage(role="system", content=system_prompt))
 
         # Save user message to database
-        self.message_service.save_message(
-            role="user", content=request.message, user_id=self.user_id
-        )
+        self.message_service.save_message(role="user", content=request.message)
 
         # Add user message to the conversation
         messages.append(ChatMessage(role="user", content=request.message))

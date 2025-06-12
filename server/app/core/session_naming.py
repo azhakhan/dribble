@@ -88,38 +88,37 @@ class SessionNamingService:
                 # Find all unnamed sessions
                 unnamed_sessions = db.query(ChatSession).filter(ChatSession.name.is_(None)).all()
 
-                # Group sessions by workspace to optimize LLM queries
-                sessions_by_workspace = {}
-                for chat_session in unnamed_sessions:
-                    if self._should_name_session(db, chat_session):
-                        workspace_id = chat_session.workspace_id
-                        if workspace_id not in sessions_by_workspace:
-                            sessions_by_workspace[workspace_id] = []
-                        sessions_by_workspace[workspace_id].append(chat_session)
+                # Filter sessions that should be named
+                sessions_to_name = [
+                    chat_session
+                    for chat_session in unnamed_sessions
+                    if self._should_name_session(db, chat_session)
+                ]
 
-                # Process each workspace's sessions
-                for workspace_id, sessions in sessions_by_workspace.items():
-                    # Get the default LLM for this workspace once
-                    default_llm = (
-                        db.query(LLM)
-                        .filter(LLM.workspace_id == workspace_id, LLM.default == True)  # noqa
-                        .first()
+                if not sessions_to_name:
+                    return
+
+                # Get the default LLM
+                default_llm = (
+                    db.query(LLM)
+                    .filter(LLM.default == True)  # noqa
+                    .first()
+                )
+
+                if not default_llm:
+                    logger.warning("No default LLM found")
+                    return
+
+                # Only support OpenAI for now
+                if default_llm.name != "openai":
+                    logger.warning(
+                        f"Session naming only supports OpenAI LLMs, got {default_llm.name}"
                     )
+                    return
 
-                    if not default_llm:
-                        logger.warning(f"No default LLM found for workspace {workspace_id}")
-                        continue
-
-                    # Only support OpenAI for now
-                    if default_llm.name != "openai":
-                        logger.warning(
-                            f"Session naming only supports OpenAI LLMs, got {default_llm.name} for workspace {workspace_id}"
-                        )
-                        continue
-
-                    # Process all sessions for this workspace
-                    for chat_session in sessions:
-                        asyncio.run(self._generate_session_name(db, chat_session, default_llm))
+                # Process all sessions
+                for chat_session in sessions_to_name:
+                    asyncio.run(self._generate_session_name(db, chat_session, default_llm))
 
                 db.commit()
 

@@ -7,7 +7,6 @@ from app.routes.query_run import router as query_run_router
 from app.routes.query_execution import router as query_execution_router
 from app.routes.llm import router as llm_router
 from app.routes.chat import router as chat_router
-from app.core.start import ensure_user_and_workspace
 from app.core.worker_health_check import start_health_check, stop_health_check
 from app.core.reconcile import reconcile_workers
 from app.core.session_naming import start_session_naming, stop_session_naming
@@ -22,7 +21,6 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
-    ensure_user_and_workspace()
     reconcile_workers()
     start_health_check()
     start_session_naming()

@@ -18,7 +18,6 @@ class QueryRunResponse(BaseModel):
     row_count: Optional[int]
     execution_time_ms: Optional[int]
     query_version_id: UUID
-    created_by: UUID
     created_at: datetime
 
     class Config:
@@ -50,7 +49,6 @@ class QueryResponse(BaseModel):
     is_ephemeral: Optional[bool]
     preview_key: Optional[str]
     source_id: UUID
-    created_by: UUID
     created_at: datetime
 
     class Config:

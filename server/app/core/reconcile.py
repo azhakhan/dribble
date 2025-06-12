@@ -60,7 +60,7 @@ def reconcile_workers():
 
                     # Create and start a new container
                     worker_container = WorkerContainer(source_id=source.id, creds=creds)
-                    worker_container.start(worker.workspace_id, db)
+                    worker_container.start(db)
 
                     # Update worker record with new container info
                     worker.container_id = worker_container.container_id

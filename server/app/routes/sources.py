@@ -9,7 +9,6 @@ from app.controllers.sources import get_source_schema, invalidate_source_schema_
 from app.core.db import get_db
 from sqlalchemy.orm import Session
 from app.models import Source
-from app.dependencies import get_current_workspace
 from uuid import UUID
 from app.core.spawn_worker import WorkerContainer, stop_worker
 from app.schemas.sources import PostgresCreds
@@ -25,19 +24,16 @@ router = APIRouter(prefix="/sources", tags=["sources"])
 async def add_source(
     request: CreateSourceRequest,
     db: Session = Depends(get_db),
-    workspace=Depends(get_current_workspace),
 ):
-    db.add(
-        Source(
-            name=request.name,
-            dbtype=request.dbtype,
-            creds=request.creds.model_dump(),
-            workspace_id=workspace.id,
-        )
+    source = Source(
+        name=request.name,
+        dbtype=request.dbtype,
+        creds=request.creds.model_dump(),
     )
+    db.add(source)
     db.commit()
-    db.refresh(db.query(Source).filter_by(name=request.name).first())
-    return db.query(Source).filter_by(name=request.name).first()
+    db.refresh(source)
+    return source
 
 
 @router.post("/test/")
@@ -76,7 +72,6 @@ async def delete_source(
 @router.get("/connect/{source_id}")
 async def connect(
     source_id: UUID,
-    workspace=Depends(get_current_workspace),
     db: Session = Depends(get_db),
 ):
     source = get_or_404(db, Source, source_id, "Source not found")
@@ -94,11 +89,11 @@ async def connect(
 
             if not container_exists:
                 # Container doesn't exist, start it and create worker record
-                worker.start(workspace.id, db)
+                worker.start(db)
             else:
                 # Container exists, ensure worker record exists and is up-to-date
                 if not db_worker:
-                    worker.save_worker(workspace.id, db)
+                    worker.save_worker(db)
                 else:
                     # Update existing worker record with current container info
                     db_worker.container_id = worker.container_id
@@ -162,23 +157,20 @@ async def get_schemas(
 @router.get("/")
 async def get_sources(
     db: Session = Depends(get_db),
-    workspace=Depends(get_current_workspace),
 ):
     # only return name and id
-    sources = get_all_active(db, Source, workspace_id=workspace.id)
+    sources = get_all_active(db, Source)
     return [{"id": source.id, "name": source.name, "dbtype": source.dbtype} for source in sources]
 
 
 @router.get("/connected/")
 async def get_connected_sources(
     db: Session = Depends(get_db),
-    workspace=Depends(get_current_workspace),
 ):
     # get all workers that are running, starting, or healthy
     workers = (
         db.query(Worker)
         .filter(
-            Worker.workspace_id == workspace.id,
             Worker.status.in_(["healthy", "running", "starting"]),
         )
         .all()
@@ -191,40 +183,32 @@ async def get_connected_sources(
 async def disconnect_source(
     source_id: UUID,
     db: Session = Depends(get_db),
-    workspace=Depends(get_current_workspace),
 ):
-    worker = db.query(Worker).filter_by(source_id=source_id, workspace_id=workspace.id).first()
+    worker = db.query(Worker).filter_by(source_id=source_id).first()
     if not worker:
         raise HTTPException(status_code=404, detail="Worker not found")
 
     # stop the worker
-    if not stop_worker(worker.container_id):
-        raise HTTPException(status_code=404, detail="Worker not found")
-
-    # remove worker record
+    stop_worker(worker.container_id)
+    # delete the worker
     db.delete(worker)
     db.commit()
-
-    # invalidate source schema cache
-    await invalidate_source_schema_cache(str(source_id))
-
     return {"message": "Disconnected"}
 
 
-# get a source by id
 @router.get("/credentials/{source_id}/")
 async def get_credentials(
     source_id: UUID,
     db: Session = Depends(get_db),
 ):
     source = get_or_404(db, Source, source_id, "Source not found")
-    # remove password from creds
-    creds = source.creds
-    creds.pop("password", None)
-    return {"name": source.name, "dbtype": source.dbtype, "creds": creds}
+    # Remove sensitive data before returning
+    creds = source.creds.copy()
+    if "password" in creds:
+        creds["password"] = "***"
+    return creds
 
 
-# edit a credential
 @router.put("/credentials/{source_id}/")
 async def edit_source(
     source_id: UUID,
@@ -232,12 +216,7 @@ async def edit_source(
     db: Session = Depends(get_db),
 ):
     source = get_or_404(db, Source, source_id, "Source not found")
-
     source.creds = request.creds.model_dump()
     db.commit()
     db.refresh(source)
-
-    # invalidate source schema cache since credentials changed
-    await invalidate_source_schema_cache(str(source_id))
-
     return source

@@ -31,7 +31,6 @@ class QueryResponse(BaseModel):
     is_ephemeral: Optional[bool]
     preview_key: Optional[str]
     source_id: UUID
-    created_by: UUID
     created_at: datetime
 
     class Config:

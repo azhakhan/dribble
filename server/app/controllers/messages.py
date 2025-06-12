@@ -59,7 +59,6 @@ class ChatMessageService:
         message_type: MessageTypeEnum = MessageTypeEnum.message,
         metadata: Optional[Dict[str, Any]] = None,
         parent_message_id: Optional[str] = None,
-        user_id: Optional[str] = None,
     ) -> ChatMessageModel:
         """Save a message to the database"""
 
@@ -84,7 +83,6 @@ class ChatMessageService:
             message_metadata=metadata,
             parent_message_id=parent_message_id,
             chat_session_id=self.chat_session.id,
-            user_id=user_id,
         )
 
         self.db.add(db_message)

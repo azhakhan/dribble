@@ -31,7 +31,6 @@ class ChatSessionResponse(BaseModel):
     name: Optional[str] = None
     source_id: UUID
     llm_id: UUID
-    workspace_id: UUID
     created_at: datetime
 
     class Config:
