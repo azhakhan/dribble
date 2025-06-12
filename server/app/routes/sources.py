@@ -15,6 +15,7 @@ from app.core.spawn_worker import WorkerContainer, stop_worker
 from app.schemas.sources import PostgresCreds
 from uuid import uuid4
 from app.models import Worker
+from app.core.db_utils import get_or_404, safe_delete, get_all_active
 
 router = APIRouter(prefix="/sources", tags=["sources"])
 
@@ -55,9 +56,7 @@ async def rename_source(
     request: RenameSourceRequest,
     db: Session = Depends(get_db),
 ):
-    source = db.query(Source).filter_by(id=source_id).first()
-    if not source:
-        raise HTTPException(status_code=404, detail="Source not found")
+    source = get_or_404(db, Source, source_id, "Source not found")
     source.name = request.name
     db.commit()
     db.refresh(source)
@@ -70,12 +69,8 @@ async def delete_source(
     source_id: UUID,
     db: Session = Depends(get_db),
 ):
-    source = db.query(Source).filter_by(id=source_id).first()
-    if not source:
-        raise HTTPException(status_code=404, detail="Source not found")
-    db.delete(source)
-    db.commit()
-    return {"message": "Source deleted"}
+    source = get_or_404(db, Source, source_id, "Source not found")
+    return safe_delete(db, source)
 
 
 @router.get("/connect/{source_id}")
@@ -84,9 +79,7 @@ async def connect(
     workspace=Depends(get_current_workspace),
     db: Session = Depends(get_db),
 ):
-    source = db.query(Source).filter_by(id=source_id).first()
-    if not source:
-        raise HTTPException(status_code=404, detail="Source not found")
+    source = get_or_404(db, Source, source_id, "Source not found")
 
     try:
         creds = PostgresCreds(**source.creds)
@@ -152,9 +145,7 @@ async def get_schemas(
     source_id: UUID,
     db: Session = Depends(get_db),
 ):
-    source = db.query(Source).filter_by(id=source_id).first()
-    if not source:
-        raise HTTPException(status_code=404, detail="Source not found")
+    source = get_or_404(db, Source, source_id, "Source not found")
 
     # Check if there's already a connected worker for this source
     db_worker = db.query(Worker).filter_by(source_id=source_id).first()
@@ -174,7 +165,7 @@ async def get_sources(
     workspace=Depends(get_current_workspace),
 ):
     # only return name and id
-    sources = db.query(Source).filter_by(workspace_id=workspace.id).all()
+    sources = get_all_active(db, Source, workspace_id=workspace.id)
     return [{"id": source.id, "name": source.name, "dbtype": source.dbtype} for source in sources]
 
 
@@ -226,9 +217,7 @@ async def get_credentials(
     source_id: UUID,
     db: Session = Depends(get_db),
 ):
-    source = db.query(Source).filter_by(id=source_id).first()
-    if not source:
-        raise HTTPException(status_code=404, detail="Source not found")
+    source = get_or_404(db, Source, source_id, "Source not found")
     # remove password from creds
     creds = source.creds
     creds.pop("password", None)
@@ -242,9 +231,7 @@ async def edit_source(
     request: UpdateCredentialsRequest,
     db: Session = Depends(get_db),
 ):
-    source = db.query(Source).filter_by(id=source_id).first()
-    if not source:
-        raise HTTPException(status_code=404, detail="Source not found")
+    source = get_or_404(db, Source, source_id, "Source not found")
 
     source.creds = request.creds.model_dump()
     db.commit()

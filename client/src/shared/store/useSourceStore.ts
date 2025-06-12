@@ -40,6 +40,7 @@ interface SourceState {
   setSourceSchemaError: (sourceId: string, error: string | null) => void;
   setSourceStatus: (sourceId: string, status: SourceStatus) => void;
   removeSourceStatus: (sourceId: string) => void;
+  removeSource: (sourceId: string) => void;
 
   cleanupDisconnectedSources: (connectedSourceIds: string[]) => void;
 }
@@ -214,6 +215,36 @@ export const useSourceStore = create<SourceState>((set, get) => ({
       const newStatuses = { ...state.sourceStatuses };
       delete newStatuses[sourceId];
       return { sourceStatuses: newStatuses };
+    }),
+
+  removeSource: (sourceId) =>
+    set((state) => {
+      const newSources = { ...state.sources };
+      delete newSources[sourceId];
+
+      const newAllSources = state.allSources.filter((source) => source.id !== sourceId);
+
+      // Clean up related data
+      const newSourceSchemaMap = { ...state.sourceSchemaMap };
+      delete newSourceSchemaMap[sourceId];
+
+      const newSourceGeneratedChildren = { ...state.sourceGeneratedChildren };
+      delete newSourceGeneratedChildren[sourceId];
+
+      const newSourceSchemaErrors = { ...state.sourceSchemaErrors };
+      delete newSourceSchemaErrors[sourceId];
+
+      const newSourceStatuses = { ...state.sourceStatuses };
+      delete newSourceStatuses[sourceId];
+
+      return {
+        sources: newSources,
+        allSources: newAllSources,
+        sourceSchemaMap: newSourceSchemaMap,
+        sourceGeneratedChildren: newSourceGeneratedChildren,
+        sourceSchemaErrors: newSourceSchemaErrors,
+        sourceStatuses: newSourceStatuses
+      };
     }),
 
   // Cleanup disconnected sources

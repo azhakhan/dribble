@@ -1,6 +1,6 @@
 from sqlalchemy.orm import Session
 from app.models import Query, QueryVersion, QueryRun
-from app.core.db_utils import get_or_404, safe_create, safe_update, safe_delete
+from app.core.db_utils import get_or_404, safe_create, safe_update, safe_delete, get_all_active
 from app.schemas.query import (
     CreateQueryRequest,
     UpdateQueryRequest,
@@ -19,7 +19,7 @@ class QueryService:
     @staticmethod
     def get_all_queries_grouped_by_source(db: Session) -> Dict[UUID, List[Query]]:
         """Get all queries grouped by source_id"""
-        queries = db.query(Query).order_by(Query.source_id).all()
+        queries = sorted(get_all_active(db, Query), key=lambda x: x.source_id)
 
         grouped_queries = {}
         for source_id, group in groupby(queries, lambda x: x.source_id):

@@ -1,5 +1,5 @@
 from fastapi import HTTPException
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, Query
 from typing import Type, TypeVar, Any
 from uuid import UUID
 
@@ -24,7 +24,10 @@ def get_or_404(db: Session, model: Type[T], id: UUID, error_message: str = None)
     """
     error_message = error_message or f"{model.__name__} not found"
 
-    obj = db.query(model).filter_by(id=id).first()
+    query = db.query(model).filter_by(id=id)
+    if hasattr(model, "deleted_at"):
+        query = query.filter(model.deleted_at.is_(None))
+    obj = query.first()
     if not obj:
         raise HTTPException(status_code=404, detail=error_message)
     return obj
@@ -51,7 +54,10 @@ def get_or_404_by_field(
     """
     error_message = error_message or f"{model.__name__} not found"
 
-    obj = db.query(model).filter(getattr(model, field) == value).first()
+    query = db.query(model).filter(getattr(model, field) == value)
+    if hasattr(model, "deleted_at"):
+        query = query.filter(model.deleted_at.is_(None))
+    obj = query.first()
     if not obj:
         raise HTTPException(status_code=404, detail=error_message)
     return obj
@@ -60,6 +66,7 @@ def get_or_404_by_field(
 def safe_delete(db: Session, obj: Any) -> dict:
     """
     Safely delete an object and commit the transaction.
+    Uses soft delete if the model supports it, otherwise hard delete.
 
     Args:
         db: Database session
@@ -68,8 +75,13 @@ def safe_delete(db: Session, obj: Any) -> dict:
     Returns:
         Success message dictionary
     """
-    db.delete(obj)
-    db.commit()
+    if hasattr(obj, "soft_delete"):
+        obj.soft_delete()
+        db.commit()
+        db.refresh(obj)
+    else:
+        db.delete(obj)
+        db.commit()
     return {"message": f"{obj.__class__.__name__} deleted successfully"}
 
 
@@ -104,3 +116,75 @@ def safe_update(db: Session, obj: Any) -> Any:
     db.commit()
     db.refresh(obj)
     return obj
+
+
+def filter_soft_deleted(query: Query) -> Query:
+    """
+    Filter out soft-deleted records from a query.
+    Only applies to models that have a deleted_at column.
+    """
+    model = query.column_descriptions[0]["type"]
+    if hasattr(model, "deleted_at"):
+        return query.filter(model.deleted_at.is_(None))
+    return query
+
+
+def soft_delete_record(db, record):
+    """
+    Soft delete a record by setting its deleted_at timestamp.
+    """
+    if hasattr(record, "soft_delete"):
+        record.soft_delete()
+        db.commit()
+        db.refresh(record)
+    else:
+        raise ValueError(f"Model {type(record)} does not support soft delete")
+
+
+def restore_record(db, record):
+    """
+    Restore a soft-deleted record by clearing its deleted_at timestamp.
+    """
+    if hasattr(record, "restore"):
+        record.restore()
+        db.commit()
+        db.refresh(record)
+    else:
+        raise ValueError(f"Model {type(record)} does not support soft delete")
+
+
+def get_by_id_active(db, model: Type, id: Any):
+    """
+    Get a record by ID, filtering out soft-deleted records.
+    """
+    query = db.query(model).filter_by(id=id)
+    if hasattr(model, "deleted_at"):
+        query = query.filter(model.deleted_at.is_(None))
+    return query.first()
+
+
+def get_by_field_active(db, model: Type, field: str, value: Any):
+    """
+    Get a record by field value, filtering out soft-deleted records.
+    """
+    query = db.query(model).filter(getattr(model, field) == value)
+    if hasattr(model, "deleted_at"):
+        query = query.filter(model.deleted_at.is_(None))
+    return query.first()
+
+
+def get_all_active(db, model: Type, **filters):
+    """
+    Get all active (non-soft-deleted) records for a model.
+    """
+    query = db.query(model)
+
+    # Apply filters
+    for field, value in filters.items():
+        query = query.filter(getattr(model, field) == value)
+
+    # Filter out soft-deleted records
+    if hasattr(model, "deleted_at"):
+        query = query.filter(model.deleted_at.is_(None))
+
+    return query.all()

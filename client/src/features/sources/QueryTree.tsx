@@ -254,7 +254,7 @@ export const QueryTree = ({
   selectedQueryId
 }: QueryTreeProps) => {
   // Get queries and sources from the centralized stores
-  const { queries, setQuery } = useQueryStore();
+  const { queries, setQuery, removeQuery } = useQueryStore();
 
   const { sources: storeSourcesMap, loadSources, loadingSources } = useSourceStore();
 
@@ -278,16 +278,33 @@ export const QueryTree = ({
   // Update store cache when fresh API data arrives
   useEffect(() => {
     if (queriesData) {
+      // Get all query IDs from the API response
+      const apiQueryIds = new Set<string>();
       Object.entries(queriesData).forEach(([, sourceQueries]) => {
         (sourceQueries as Query[]).forEach((query: Query) => {
+          apiQueryIds.add(query.id);
           // Don't overwrite if we already have a more recent version in store
           if (!queries[query.id]) {
             setQuery(query.id, query);
           }
         });
       });
+
+      // Remove queries from store that are no longer in the API response
+      // This handles cases where queries were deleted
+      const storeQueryIds = Object.keys(queries);
+      storeQueryIds.forEach((queryId) => {
+        // Don't remove ephemeral queries as they're not returned by the API
+        const query = queries[queryId];
+        if (!query.is_ephemeral && !apiQueryIds.has(queryId)) {
+          // This query was deleted, remove it from store
+          console.log(`Removing deleted query ${queryId} from store`);
+          // We need to add a removeQuery method to the store
+          removeQuery(queryId);
+        }
+      });
     }
-  }, [queriesData, queries, setQuery]);
+  }, [queriesData, queries, setQuery, removeQuery]);
 
   // Note: Removed automatic cleanup during initialization to prevent interference with persistence
 
