@@ -966,10 +966,13 @@ export const useTabStore = create<TabState>()(
       },
 
       saveChanges: async (tabId) => {
+        // Get fresh state
         const state = get();
         const tab = state.openTabs.find((t) => t.id === tabId);
 
-        if (!tab || !tab.isDirty) return;
+        if (!tab || !tab.isDirty) {
+          return;
+        }
 
         const queryStore = useQueryStore.getState();
 
@@ -979,35 +982,37 @@ export const useTabStore = create<TabState>()(
             await queryStore.saveQueryVersion(tab.queryId, tab.editorContent, "run");
 
             // Update tab to mark as clean
-            set((prevState) => ({
-              openTabs: prevState.openTabs.map((t) =>
+            set((prevState) => {
+              const updatedTabs = prevState.openTabs.map((t) =>
                 t.id === tabId
                   ? {
                       ...t,
-                      lastSavedContent: tab.editorContent,
+                      lastSavedContent: t.editorContent, // Use current tab content from prevState
                       isDirty: false
                     }
                   : t
-              )
-            }));
+              );
+              return { openTabs: updatedTabs };
+            });
           } else {
             // Create new query for tab without queryId
             const newQuery = await queryStore.createNewQuery({ sourceId: tab.sourceId });
             await queryStore.saveQueryVersion(newQuery.id, tab.editorContent, "run");
 
             // Update tab with new queryId and mark as clean
-            set((prevState) => ({
-              openTabs: prevState.openTabs.map((t) =>
+            set((prevState) => {
+              const updatedTabs = prevState.openTabs.map((t) =>
                 t.id === tabId
                   ? {
                       ...t,
                       queryId: newQuery.id,
-                      lastSavedContent: tab.editorContent,
+                      lastSavedContent: t.editorContent, // Use current tab content from prevState
                       isDirty: false
                     }
                   : t
-              )
-            }));
+              );
+              return { openTabs: updatedTabs };
+            });
           }
         } catch (error) {
           console.error("Failed to save changes:", error);
@@ -1069,24 +1074,25 @@ export const useTabStore = create<TabState>()(
 
         try {
           await state.saveChanges(tabId);
+
+          // Hide dialog first
+          set({
+            unsavedChangesDialog: {
+              isOpen: false,
+              tabId: null,
+              tabTitle: "",
+              action: null,
+              resolve: null
+            }
+          });
+
+          // Then resolve - this ensures the dialog is hidden before the tab close logic runs
           resolve(true);
         } catch (error) {
           console.error("Failed to save changes:", error);
-          // Don't resolve, let the user try again or cancel manually
-          // The error handling is done in the saveChanges function
+          // Don't hide dialog on error, let user try again
           resolve(false);
         }
-
-        // Hide dialog
-        set({
-          unsavedChangesDialog: {
-            isOpen: false,
-            tabId: null,
-            tabTitle: "",
-            action: null,
-            resolve: null
-          }
-        });
       },
 
       handleDialogDiscard: () => {

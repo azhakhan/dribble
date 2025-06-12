@@ -86,12 +86,12 @@ export const UnsavedChangesDialog = ({
           </div>
           <DialogDescription className="text-left">{getDescription()}</DialogDescription>
         </DialogHeader>
-        <DialogFooter className="gap-2 sm:gap-2 items-center justify-center">
+        <DialogFooter className="flex flex-row gap-2 justify-center items-center sm:flex-row sm:justify-center sm:space-x-2">
           <DialogClose asChild>
             <Button
               variant="outline"
               size="xs"
-              className="cursor-pointer"
+              className="cursor-pointer px-4"
               disabled={saving || loading}
             >
               Keep Editing
@@ -101,26 +101,26 @@ export const UnsavedChangesDialog = ({
             variant="outline"
             onClick={handleDiscard}
             disabled={saving || loading}
-            className="text-destructive hover:text-destructive cursor-pointer"
+            className="text-destructive hover:text-destructive cursor-pointer px-4"
             size="xs"
           >
-            <X className="h-4 w-4 mr-2" />
+            <X className="h-4 w-4 mr-1" />
             Discard Changes
           </Button>
           <Button
             onClick={handleSave}
             disabled={saving || loading}
             size="xs"
-            className="cursor-pointer"
+            className="cursor-pointer px-4"
           >
             {saving ? (
               <>
-                <Save className="h-4 w-4 mr-2 animate-pulse" />
+                <Save className="h-4 w-4 mr-1 animate-pulse" />
                 Saving...
               </>
             ) : (
               <>
-                <Save className="h-4 w-4 mr-2" />
+                <Save className="h-4 w-4 mr-1" />
                 Save & {getActionText()}
               </>
             )}
