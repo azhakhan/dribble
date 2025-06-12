@@ -43,6 +43,7 @@ interface QueryState {
   setQueryVersions: (queryId: string, versions: QueryVersion[]) => void;
   setQueryRuns: (queryId: string, runs: QueryRun[]) => void;
   setQueryRunsPaginated: (queryId: string, runs: QueryRun[], pagination: PaginationInfo) => void;
+  removeQuery: (queryId: string) => void;
 
   // Query creation and management
   createNewQuery: ({ sourceId, name }: { sourceId: string; name?: string }) => Promise<Query>;
@@ -243,6 +244,28 @@ export const useQueryStore = create<QueryState>((set, get) => ({
       queryRuns: { ...state.queryRuns, [queryId]: runs },
       queryRunsPagination: { ...state.queryRunsPagination, [queryId]: pagination }
     })),
+
+  removeQuery: (queryId) =>
+    set((state) => {
+      const newQueries = { ...state.queries };
+      delete newQueries[queryId];
+
+      const newQueryVersions = { ...state.queryVersions };
+      delete newQueryVersions[queryId];
+
+      const newQueryRuns = { ...state.queryRuns };
+      delete newQueryRuns[queryId];
+
+      const newQueryRunsPagination = { ...state.queryRunsPagination };
+      delete newQueryRunsPagination[queryId];
+
+      return {
+        queries: newQueries,
+        queryVersions: newQueryVersions,
+        queryRuns: newQueryRuns,
+        queryRunsPagination: newQueryRunsPagination
+      };
+    }),
 
   // Create new query
   createNewQuery: async ({ sourceId, name }: { sourceId: string; name?: string }) => {
