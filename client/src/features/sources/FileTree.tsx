@@ -114,6 +114,13 @@ const FileTreeItem = ({
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
 
+  // Close dropdown when any dialog opens to prevent conflicts
+  useEffect(() => {
+    if (editDialogOpen || renameDialogOpen || deleteDialogOpen) {
+      setDropdownOpen(false);
+    }
+  }, [editDialogOpen, renameDialogOpen, deleteDialogOpen]);
+
   const isFolder = node.type === "folder";
   const isSource = node.type === "source";
   const isSchema = node.type === "schema";
@@ -373,7 +380,10 @@ const FileTreeItem = ({
                   variant="ghost"
                   size="icon"
                   className="h-4 w-4 ml-1 hover:bg-accent cursor-pointer"
-                  onClick={(e) => e.stopPropagation()}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    e.preventDefault();
+                  }}
                 >
                   <MoreVertical className="h-2 w-2" strokeWidth={1} />
                 </Button>
@@ -381,7 +391,15 @@ const FileTreeItem = ({
               <DropdownMenuContent align="end" className="w-40">
                 {!isConnected && !isLoading && node.id && (
                   <>
-                    <DropdownMenuItem onClick={handleConnectClick}>Connect</DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setDropdownOpen(false);
+                        handleConnectClick(e);
+                      }}
+                    >
+                      Connect
+                    </DropdownMenuItem>
                     <DropdownMenuSeparator />
                   </>
                 )}
@@ -389,7 +407,11 @@ const FileTreeItem = ({
                   <>
                     <DropdownMenuItem
                       className="text-destructive text-xs cursor-pointer"
-                      onClick={() => disconnectSource(node.id as string)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setDropdownOpen(false);
+                        disconnectSource(node.id as string);
+                      }}
                     >
                       Disconnect
                     </DropdownMenuItem>
@@ -399,19 +421,31 @@ const FileTreeItem = ({
 
                 <DropdownMenuItem
                   className="text-xs cursor-pointer"
-                  onClick={() => setEditDialogOpen(true)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setDropdownOpen(false);
+                    setEditDialogOpen(true);
+                  }}
                 >
                   Edit
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   className="text-xs cursor-pointer"
-                  onClick={() => setRenameDialogOpen(true)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setDropdownOpen(false);
+                    setRenameDialogOpen(true);
+                  }}
                 >
                   Rename
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   className="text-destructive text-xs cursor-pointer"
-                  onClick={() => setDeleteDialogOpen(true)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setDropdownOpen(false);
+                    setDeleteDialogOpen(true);
+                  }}
                 >
                   Delete
                 </DropdownMenuItem>

@@ -105,6 +105,16 @@ export const EditSource = ({ open, onOpenChange, sourceId }: EditSourceProps) =>
     }
   }, [open, sourceId]);
 
+  // Cleanup effect to reset state when component unmounts or sourceId changes
+  useEffect(() => {
+    return () => {
+      // Reset all loading states
+      setLoading(false);
+      setLoadingCreds(false);
+      setTesting(false);
+    };
+  }, [sourceId]);
+
   const resetForm = () => {
     setSourceType("");
     setFormError("");
@@ -199,7 +209,6 @@ export const EditSource = ({ open, onOpenChange, sourceId }: EditSourceProps) =>
       queryClient.invalidateQueries({ queryKey: ["sources"] });
 
       onOpenChange(false);
-      resetForm();
     } catch (error) {
       console.error("Failed to update source:", error);
       setFormError("Failed to update source");
@@ -215,12 +224,12 @@ export const EditSource = ({ open, onOpenChange, sourceId }: EditSourceProps) =>
     <Dialog
       open={open}
       onOpenChange={(newOpen) => {
-        // When dialog is closed, trigger onOpenChange
+        // Always trigger onOpenChange first
         onOpenChange(newOpen);
 
-        // If dialog is being closed, reset form after short delay
+        // If dialog is being closed, reset form immediately
         if (!newOpen) {
-          setTimeout(resetForm, 100);
+          resetForm();
         }
       }}
     >
@@ -430,13 +439,13 @@ export const EditSource = ({ open, onOpenChange, sourceId }: EditSourceProps) =>
                 variant="outline"
                 onClick={() => {
                   onOpenChange(false);
-                  resetForm();
                 }}
                 disabled={isFormDisabled}
+                size="sm"
               >
                 Cancel
               </Button>
-              <Button onClick={handleTest} disabled={isFormDisabled}>
+              <Button onClick={handleTest} disabled={isFormDisabled} size="sm">
                 {testing ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin mr-2" />
@@ -446,7 +455,7 @@ export const EditSource = ({ open, onOpenChange, sourceId }: EditSourceProps) =>
                   "Test Connection"
                 )}
               </Button>
-              <Button onClick={handleSave} disabled={isFormDisabled}>
+              <Button onClick={handleSave} disabled={isFormDisabled} size="sm">
                 {loading ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin mr-2" />

@@ -62,12 +62,7 @@ export const DeleteSource = ({ open, onOpenChange, sourceId, sourceName }: Delet
   };
 
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(newOpen) => {
-        onOpenChange(newOpen);
-      }}
-    >
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
           <DialogTitle>Delete Source</DialogTitle>
@@ -84,7 +79,7 @@ export const DeleteSource = ({ open, onOpenChange, sourceId, sourceName }: Delet
         </div>
         <DialogFooter>
           <DialogClose asChild>
-            <Button variant="outline" disabled={loading}>
+            <Button variant="outline" disabled={loading} size="sm">
               Cancel
             </Button>
           </DialogClose>
@@ -92,6 +87,7 @@ export const DeleteSource = ({ open, onOpenChange, sourceId, sourceName }: Delet
             variant="destructive"
             onClick={handleDelete}
             disabled={loading || confirmName !== sourceName}
+            size="sm"
           >
             {loading ? (
               <>
