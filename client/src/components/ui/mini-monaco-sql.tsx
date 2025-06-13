@@ -271,7 +271,7 @@ export function MiniMonacoSQL({
         className
       )}
       style={{
-        height: "24px",
+        height: "26px",
         width: "160px"
       }}
       onClick={() => {
@@ -284,9 +284,9 @@ export function MiniMonacoSQL({
       {/* Monaco editor container */}
       <div
         ref={hostRef}
-        className="absolute inset-0 [&_.monaco-editor]:!border-none [&_.monaco-editor_.monaco-editor-background]:!border-none [&_.monaco-editor_.inputarea]:!border-none [&_.monaco-editor_.inputarea]:!outline-none [&_.monaco-editor_.view-overlays]:!border-none [&_.monaco-editor_.margin]:!border-none"
+        className="absolute border-1 inset-0 [&_.monaco-editor]:!border-none [&_.monaco-editor_.monaco-editor-background]:!border-none [&_.monaco-editor_.inputarea]:!border-none [&_.monaco-editor_.inputarea]:!outline-none [&_.monaco-editor_.view-overlays]:!border-none [&_.monaco-editor_.margin]:!border-none"
         style={{
-          height: "24px"
+          height: "26px"
         }}
       />
     </div>
