@@ -20,28 +20,34 @@ build-client:
     docker compose build client
 
 start:
-    #! /usr/bin/env bash
-    # if the dribble-network doesn't exist, create it
-    if ! docker network ls | grep -q dribble-network
-    then
+    #!/usr/bin/env bash
+    set -e
+
+    # Create the network if it doesn't exist
+    if ! docker network ls --format '{{"{{"}}.Name{{"}}"}}' | grep -q '^dribble-network$'; then
+        echo "Creating network dribble-network..."
         docker network create dribble-network
     fi
-    # if dribble-worker-postgres does not exist, build it
-    if ! docker ps | grep -q dribble-worker-postgres
-    then
+
+    # Check and build dribble-worker-postgres image if missing
+    if ! docker image ls --format '{{"{{"}}.Repository{{"}}"}}:{{"{{"}}.Tag{{"}}"}}' | grep -q '^dribble-worker-postgres:latest$'; then
+        echo "Building dribble-worker-postgres..."
         docker build -t dribble-worker-postgres:latest ./worker/postgres
     fi
-    # if client does not exist, build it
-    if ! docker ps | grep -q dribble-client
-    then
+
+    # Check and build client if image is missing
+    if ! docker image ls --format '{{"{{"}}.Repository{{"}}"}}:{{"{{"}}.Tag{{"}}"}}' | grep -q '^dribble-client:latest$'; then
+        echo "Building dribble-client..."
         docker compose build client
     fi
-    # if server does not exist, build it
-    if ! docker ps | grep -q dribble-server
-    then
+
+    # Check and build server if image is missing
+    if ! docker image ls --format '{{"{{"}}.Repository{{"}}"}}:{{"{{"}}.Tag{{"}}"}}' | grep -q '^dribble-server:latest$'; then
+        echo "Building dribble-server..."
         docker compose build server
     fi
-    # start the stack
+
+    echo "Starting the stack..."
     docker compose up -d
 
 up:
