@@ -130,3 +130,30 @@ class ChatMessageService:
             metadata=metadata,
             parent_message_id=parent_message_id,
         )
+
+    def update_system_message(
+        self, content: str, metadata: Optional[Dict[str, Any]] = None
+    ) -> ChatMessageModel:
+        """Update the system message content and metadata"""
+        # Find the system message (should be the first message with role=system)
+        system_message = (
+            self.db.query(ChatMessageModel)
+            .filter(
+                ChatMessageModel.chat_session_id == self.chat_session.id,
+                ChatMessageModel.role == ChatRoleEnum.system,
+            )
+            .order_by(ChatMessageModel.position)
+            .first()
+        )
+
+        if system_message:
+            # Update existing system message
+            system_message.content = content
+            if metadata:
+                system_message.message_metadata = metadata
+            self.db.commit()
+            self.db.refresh(system_message)
+            return system_message
+        else:
+            # Create new system message if none exists
+            return self.save_message(role="system", content=content, metadata=metadata)

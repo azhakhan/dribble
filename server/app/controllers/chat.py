@@ -106,6 +106,55 @@ class ChatContextService:
         """Find query by ID in context"""
         return next((q for q in context_queries if q.query_id == query_id), None)
 
+    def get_last_message_context(self, chat_session_id: UUID) -> List[ContextQuery]:
+        """Get context from the last user message in the session"""
+        # Get the last user message
+        last_message = (
+            self.db.query(ChatMessageModel)
+            .filter(
+                ChatMessageModel.chat_session_id == chat_session_id,
+                ChatMessageModel.role == ChatRoleEnum.user,
+            )
+            .order_by(ChatMessageModel.created_at.desc())
+            .first()
+        )
+
+        if not last_message:
+            return []
+
+        # Get context for that message
+        context_models = (
+            self.db.query(ChatContextModel)
+            .filter(ChatContextModel.message_id == last_message.id)
+            .all()
+        )
+
+        # Convert to ChatContextSchema and load
+        context_schemas = []
+        for ctx_model in context_models:
+            context_schemas.append(
+                ChatContextSchema(
+                    query_id=ctx_model.query_id,
+                    query_version_id=ctx_model.query_version_id,
+                    active=ctx_model.active,
+                )
+            )
+
+        return self.load_context_queries(context_schemas)
+
+    def contexts_are_different(
+        self, context1: List[ContextQuery], context2: List[ContextQuery]
+    ) -> bool:
+        """Compare two context lists to see if they're different"""
+        if len(context1) != len(context2):
+            return True
+
+        # Create comparable sets (query_id, version_id, active)
+        set1 = {(q.query_id, q.query_version_id, q.active) for q in context1}
+        set2 = {(q.query_id, q.query_version_id, q.active) for q in context2}
+
+        return set1 != set2
+
 
 class ChatService:
     """Main service for handling LLM chat functionality with context support"""
@@ -117,18 +166,10 @@ class ChatService:
     async def chat(self, request: ChatLLMRequest) -> ChatResponse:
         """Main chat method with context support"""
 
-        # Load context queries
-        context_queries = []
+        # Load current context queries
+        current_context_queries = []
         if request.context:
-            context_queries = self.context_service.load_context_queries(request.context)
-
-        # Check if we have context queries
-        # TODO: allow to chat without context
-        if not context_queries:
-            return ChatResponse(
-                content="No queries found in context. Please attach queries to start chatting about them.",
-                metadata={"requires_context": True},
-            )
+            current_context_queries = self.context_service.load_context_queries(request.context)
 
         # Create or get chat session
         chat_session = await self._get_or_create_session(request)
@@ -136,33 +177,66 @@ class ChatService:
         # Initialize message service
         message_service = ChatMessageService(self.db, chat_session)
 
-        # Save user message and context
-        await self._save_user_message_with_context(request, chat_session)
-
         # Load existing messages from database
         messages = message_service.load_messages()
 
-        # Add system prompt if no messages exist yet
+        # Check if this is the first message or if context has changed
+        should_update_system_prompt = False
+
         if not messages:
-            system_prompt = self._compose_system_prompt(context_queries, request.message)
-            message_service.save_message(
-                role="system",
-                content=system_prompt,
-                metadata={"schema_version": "1.0", "context_queries": len(context_queries)},
-            )
-            messages.append(ChatMessage(role="system", content=system_prompt))
+            # First message - always create system prompt
+            should_update_system_prompt = True
+        else:
+            # Check if context has changed from last message
+            last_context_queries = self.context_service.get_last_message_context(chat_session.id)
+            if self.context_service.contexts_are_different(
+                current_context_queries, last_context_queries
+            ):
+                should_update_system_prompt = True
+
+        # Update system prompt if needed
+        if should_update_system_prompt:
+            new_system_prompt = self._compose_system_prompt(current_context_queries)
+
+            if messages and messages[0].role == "system":
+                # Update existing system message
+                messages[0] = ChatMessage(role="system", content=new_system_prompt)
+                # Save the updated system prompt to database
+                # TODO: make system messages immutable
+                message_service.update_system_message(
+                    new_system_prompt,
+                    {
+                        "schema_version": "1.0",
+                        "context_queries": len(current_context_queries),
+                        "context_updated": True,
+                    },
+                )
+            else:
+                # Create new system message
+                message_service.save_message(
+                    role="system",
+                    content=new_system_prompt,
+                    metadata={
+                        "schema_version": "1.0",
+                        "context_queries": len(current_context_queries),
+                    },
+                )
+                messages.insert(0, ChatMessage(role="system", content=new_system_prompt))
+
+        # Save user message and context
+        await self._save_user_message_with_context(request, chat_session)
 
         # Add user message to the conversation
         messages.append(ChatMessage(role="user", content=request.message))
 
-        # Create LLM provider with context
+        # Create LLM provider with current context
         llm = self.db.query(LLM).filter(LLM.id == request.llm_id).first()
         if not llm:
             return ChatResponse(content="LLM not found", metadata={"error": "invalid_llm_id"})
 
-        provider = LLMProviderFactory.create_provider(llm, context_queries, message_service)
+        provider = LLMProviderFactory.create_provider(llm, current_context_queries, message_service)
 
-        tools = self._get_tools(context_queries)
+        tools = self._get_tools(current_context_queries)
 
         # Generate response
         return await self._handle_regular_response(messages, provider, tools, message_service)
@@ -244,6 +318,11 @@ class ChatService:
 
     def _get_tools(self, context_queries: List[ContextQuery]) -> List[Dict]:
         """Get available tools for the LLM with context information"""
+
+        # If no context queries, don't provide SQL execution tools
+        if not context_queries:
+            return []
+
         # Create query reference list for the LLM
         query_refs = []
         for query in context_queries:
@@ -286,8 +365,42 @@ class ChatService:
             }
         ]
 
-    def _compose_system_prompt(self, context_queries: List[ContextQuery], user_message: str) -> str:
+    def _compose_system_prompt(self, context_queries: List[ContextQuery]) -> str:
         """Compose system prompt for the LLM with context information"""
+
+        # If no context queries, provide general SQL assistance
+        if not context_queries:
+            return """
+You are a senior SQL expert assistant helping users learn and write SQL queries.
+
+Your job is to help users:
+- Generate correct and optimized SQL based on natural language requests
+- Explain SQL concepts and syntax in plain English
+- Review and improve SQL queries
+- Teach best practices for database querying
+- Answer questions about SQL syntax, functions, and operations
+
+You must respond with a JSON object in the following format:
+{
+  "content": "Your response content here",
+  "sql_query": "SQL query here (only when generating/modifying SQL)"
+}
+
+IMPORTANT RULES:
+1. Include the "sql_query" field when:
+   - User asks you to generate, create, write, or modify SQL
+   - User wants a query for a specific task
+   - User asks for optimization or improvement of SQL
+
+2. Provide educational explanations when teaching SQL concepts
+3. Always write syntactically correct SQL
+4. Explain what queries do in plain English
+5. Suggest best practices and optimizations
+6. Never hallucinate table or column names - ask for clarification if needed
+7. Avoid destructive commands (DROP, DELETE, TRUNCATE) unless explicitly requested and explained
+
+Since you don't have access to specific databases, focus on teaching SQL concepts and syntax.
+"""
 
         # Check if user is asking to update a specific query
         active_query = self.context_service.get_active_query(context_queries)
