@@ -19,6 +19,31 @@ build-server:
 build-client:
     docker compose build client
 
+start:
+    #! /usr/bin/env bash
+    # if the dribble-network doesn't exist, create it
+    if ! docker network ls | grep -q dribble-network
+    then
+        docker network create dribble-network
+    fi
+    # if dribble-worker-postgres does not exist, build it
+    if ! docker ps | grep -q dribble-worker-postgres
+    then
+        docker build -t dribble-worker-postgres:latest ./worker/postgres
+    fi
+    # if client does not exist, build it
+    if ! docker ps | grep -q dribble-client
+    then
+        docker compose build client
+    fi
+    # if server does not exist, build it
+    if ! docker ps | grep -q dribble-server
+    then
+        docker compose build server
+    fi
+    # start the stack
+    docker compose up -d
+
 up:
     #! /usr/bin/env bash
     if ! docker network ls | grep -q dribble-network

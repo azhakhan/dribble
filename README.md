@@ -1,48 +1,15 @@
 # dribble
 
-a web based database manager
+AI-powered, open source IDE for Databases
 
 ## Getting Started
 
 ```bash
-docker compose up --build
+just start
 ```
 
-## Features
+make sure you have [just](https://github.com/casey/just) installed
 
-- 🎨 **Rich SQL Editor**: Monaco Editor with intelligent auto-complete
-- 🧠 **Schema-Aware Completions**: Table and column suggestions from your database
-- 🔍 **Multi-Database Support**: PostgreSQL and MySQL
-- 🌙 **Dark Theme**: Professional coding environment
-- 📊 **Query Results**: Interactive data tables
-- 🐳 **Docker-Based**: Isolated database connections
+the client will be running on [http://localhost:3000](http://localhost:3000) and the server on [http://localhost:8000](http://localhost:8000)
 
-## Documentation
-
-- **[SQL Editor & Auto-Complete](docs/EDITOR.md)** - Comprehensive guide to the SQL editor and intelligent completion system
-- **[Workers](docs/WORKERS.md)** - Database connection management and worker architecture
-
-## DB Migrations
-
-```bash
-cd server
-# if you haven't already, install uv
-uv sync
-# run migrations
-cd app/
-alembic upgrade head
-```
-
-you might need to restart docker compose after running migrations
-
-## Building worker
-
-```bash
-docker compose build worker-postgres
-```
-
-## Creating network
-
-```bash
-docker network create dribble-network
-```
+all the services will be running in docker containers, so make sure you have docker installed and running.
