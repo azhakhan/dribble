@@ -133,7 +133,6 @@ export const AddSource = ({ onSourceAdded }: AddSourceProps) => {
       queryClient.invalidateQueries({ queryKey: ["sources"] });
 
       setOpen(false);
-      resetForm();
 
       if (onSourceAdded) {
         onSourceAdded();
@@ -189,7 +188,15 @@ export const AddSource = ({ onSourceAdded }: AddSourceProps) => {
   const isFormDisabled = loading || testing;
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog
+      open={open}
+      onOpenChange={(newOpen) => {
+        setOpen(newOpen);
+        if (!newOpen) {
+          resetForm();
+        }
+      }}
+    >
       <DialogTrigger asChild>
         <Button
           variant="outline"
@@ -435,7 +442,6 @@ export const AddSource = ({ onSourceAdded }: AddSourceProps) => {
             variant="outline"
             onClick={() => {
               setOpen(false);
-              resetForm();
             }}
             disabled={isFormDisabled}
           >

@@ -59,12 +59,7 @@ export const RenameSource = ({ open, onOpenChange, sourceId, sourceName }: Renam
   };
 
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(newOpen) => {
-        onOpenChange(newOpen);
-      }}
-    >
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
           <DialogTitle>Rename Source</DialogTitle>
@@ -87,11 +82,11 @@ export const RenameSource = ({ open, onOpenChange, sourceId, sourceName }: Renam
         </div>
         <DialogFooter>
           <DialogClose asChild>
-            <Button variant="outline" disabled={loading}>
+            <Button variant="outline" disabled={loading} size="sm">
               Cancel
             </Button>
           </DialogClose>
-          <Button onClick={handleRename} disabled={loading}>
+          <Button onClick={handleRename} disabled={loading} size="sm">
             {loading ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin mr-2" />
