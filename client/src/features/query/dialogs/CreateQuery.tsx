@@ -3,9 +3,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Check, X, Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import { useQueryClient } from "@tanstack/react-query";
-import { useQueryStore } from "@/shared/store";
 import { generateQueryName } from "@/shared/lib/queryUtils";
+import { useCreateQuery } from "@/shared/hooks/useCreateQuery";
 import type { Source } from "@/shared/lib/api";
 
 interface CreateQueryProps {
@@ -28,8 +27,7 @@ export const CreateQuery = ({
   const [position, setPosition] = useState({ top: 0, left: 0 });
   const formRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const { createNewQuery } = useQueryStore();
-  const queryClient = useQueryClient();
+  const { createQueryWithCallback } = useCreateQuery();
 
   // Reset name when dialog opens
   useEffect(() => {
@@ -75,24 +73,10 @@ export const CreateQuery = ({
 
     try {
       setLoading(true);
-      const newQuery = await createNewQuery({
-        sourceId: source.id,
-        name: queryName.trim()
-      });
-
-      // Invalidate queries to refresh the QueryTree
-      queryClient.invalidateQueries({ queryKey: ["queries"] });
-
-      toast.success(`Query "${queryName.trim()}" created successfully`);
+      await createQueryWithCallback(source.id, queryName.trim(), onQueryCreated);
       onOpenChange(false);
-
-      // Notify parent component that query was created
-      if (onQueryCreated) {
-        onQueryCreated(newQuery.id);
-      }
-    } catch (error) {
-      toast.error("Failed to create query");
-      console.error("Failed to create query:", error);
+    } catch {
+      // Error handling is done in the hook
     } finally {
       setLoading(false);
     }

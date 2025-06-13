@@ -16,6 +16,7 @@ import { Query } from "./Query";
 import { useTabStore, useSourceStore } from "@/shared/store";
 import { UnsavedChangesDialog } from "./UnsavedChangesDialog";
 import { generateQueryName } from "@/shared/lib/queryUtils";
+import { useCreateQuery } from "@/shared/hooks/useCreateQuery";
 
 // New Query Modal component
 // New Query Modal component
@@ -275,13 +276,15 @@ function QueryTabsComponent() {
 
   // Get actions from store
   const {
-    openQueryTab,
     closeQueryTabWithConfirmation,
     setActiveTab,
     hideUnsavedChangesDialog,
     handleDialogSave,
     handleDialogDiscard
   } = useTabStore();
+
+  // Get reusable query creation hook
+  const { createQueryAndOpenInTab } = useCreateQuery();
 
   // Refs for scrolling functionality
   const tabBarScrollRef = useRef<HTMLDivElement>(null);
@@ -340,26 +343,9 @@ function QueryTabsComponent() {
   // Handle creating a new query tab from modal
   const handleCreateQuery = useCallback(
     async (queryName: string, sourceId: string) => {
-      try {
-        await openQueryTab({
-          queryId: null,
-          sourceId: sourceId,
-          title: queryName,
-          isDirty: false,
-          editorContent: "",
-          queryResults: null,
-          queryRunning: false,
-          selectedTableData: null,
-          isLoadingQuery: false,
-          isLoadingVersions: false,
-          lastSavedContent: "",
-          originalContent: ""
-        });
-      } catch (error) {
-        console.error("Failed to open new query tab:", error);
-      }
+      await createQueryAndOpenInTab(sourceId, queryName);
     },
-    [openQueryTab]
+    [createQueryAndOpenInTab]
   );
 
   // Handle closing a tab
