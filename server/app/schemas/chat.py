@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from datetime import datetime
 from uuid import UUID
 
@@ -42,3 +42,27 @@ class ChatSessionsResponse(BaseModel):
 
     sessions: List[ChatSessionResponse]
     total_count: int
+
+
+class ChatContext(BaseModel):
+    """Chat context"""
+
+    query_id: Optional[UUID] = None
+    query_version_id: Optional[UUID] = None
+    active: bool = False
+
+
+class ChatLLMRequest(BaseModel):
+    session_id: Optional[UUID]
+    context: Optional[List[ChatContext]] = None
+    llm_id: UUID
+    message: str
+
+
+class ChatLLMResponse(BaseModel):
+    """Structured response for non-streaming chat"""
+
+    content: str
+    sql_query: Optional[str] = None
+    metadata: Optional[Dict[str, Any]] = None
+    query_id: Optional[UUID] = None

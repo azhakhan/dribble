@@ -233,7 +233,7 @@ export interface ChatLLMResponse {
 }
 
 export const chatLLM = async (data: ChatLLMRequest): Promise<ChatLLMResponse> => {
-  const response = await api.post<ChatLLMResponse>("/llms/chat", data);
+  const response = await api.post<ChatLLMResponse>("/chat/", data);
   return response.data;
 };
 

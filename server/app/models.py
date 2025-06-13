@@ -114,8 +114,6 @@ class ChatSession(Base, SoftDeleteMixin):
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     name = Column(String, nullable=True)
-    source_id = Column(UUID(as_uuid=True), ForeignKey("sources.id"), nullable=False)
-    source = relationship("Source", back_populates="chat_sessions")
     llm_id = Column(UUID(as_uuid=True), ForeignKey("llms.id"), nullable=False)
     llm = relationship("LLM", back_populates="chat_sessions")
     messages = relationship("ChatMessage", back_populates="chat_session")
@@ -142,14 +140,31 @@ class ChatMessage(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     role = Column(SqlEnum(ChatRoleEnum), nullable=False)
     content = Column(String, nullable=False)
-    sql_query = Column(String, nullable=True)  # Store SQL queries as first-class field
     position = Column(Integer, nullable=False)
     message_type = Column(SqlEnum(MessageTypeEnum), nullable=False, default=MessageTypeEnum.message)
     message_metadata = Column(JSON, nullable=True)  # Store tool calls, reasoning, etc.
+    chat_session_id = Column(UUID(as_uuid=True), ForeignKey("chat_sessions.id"), nullable=False)
+    chat_session = relationship("ChatSession", back_populates="messages")
+
     parent_message_id = Column(
         UUID(as_uuid=True), ForeignKey("chat_messages.id"), nullable=True
     )  # For threading tool calls
-    chat_session_id = Column(UUID(as_uuid=True), ForeignKey("chat_sessions.id"), nullable=False)
-    chat_session = relationship("ChatSession", back_populates="messages")
     parent_message = relationship("ChatMessage", remote_side=[id], backref="child_messages")
+
+    context = relationship("ChatContext", back_populates="messages")
+    created_at = Column(DateTime, default=datetime.now)
+
+
+class ChatContext(Base):
+    __tablename__ = "chat_contexts"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    active = Column(Boolean, default=False)
+    message_id = Column(UUID(as_uuid=True), ForeignKey("chat_messages.id"), nullable=False)
+    message = relationship("ChatMessage", back_populates="context")
+    query_id = Column(UUID(as_uuid=True), ForeignKey("queries.id"), nullable=False)
+    query = relationship("Query", back_populates="chat_query_versions")
+    query_version_id = Column(UUID(as_uuid=True), ForeignKey("query_versions.id"), nullable=True)
+    query_version = relationship("QueryVersion", back_populates="chat_query_versions")
+    messages = relationship("ChatMessage", back_populates="context")
     created_at = Column(DateTime, default=datetime.now)

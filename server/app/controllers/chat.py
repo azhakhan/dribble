@@ -5,8 +5,9 @@ import re
 import asyncio
 from dataclasses import dataclass
 from sqlalchemy.orm import Session
-
-from app.schemas.llm import LLMName, ChatLLMRequest
+from uuid import UUID
+from app.schemas.llm import LLMName
+from app.schemas.chat import ChatLLMRequest
 from app.models import LLM, Source, ChatSession, MessageTypeEnum
 from openai import OpenAI
 from app.core.encryption import decrypt_password
@@ -22,15 +23,7 @@ class ChatResponse:
     content: str
     sql_query: Optional[str] = None
     metadata: Optional[Dict[str, Any]] = None
-
-
-@dataclass
-class StreamChunk:
-    """Single chunk of streaming data"""
-
-    content: str
-    is_complete: bool = False
-    metadata: Optional[Dict[str, Any]] = None
+    query_id: Optional[UUID] = None
 
 
 class BaseLLMProvider(ABC):
@@ -55,16 +48,9 @@ class BaseLLMProvider(ABC):
 
     @abstractmethod
     async def chat_completion(
-        self, messages: List[ChatMessage], tools: Optional[List[Dict]] = None, stream: bool = False
-    ) -> Union[ChatResponse, AsyncGenerator[StreamChunk, None]]:
-        """Generate chat completion"""
-        pass
-
-    @abstractmethod
-    async def stream_completion(
         self, messages: List[ChatMessage], tools: Optional[List[Dict]] = None
-    ) -> AsyncGenerator[StreamChunk, None]:
-        """Stream chat completion"""
+    ) -> Union[ChatResponse, AsyncGenerator[None]]:
+        """Generate chat completion"""
         pass
 
 
@@ -75,11 +61,8 @@ class OpenAIProvider(BaseLLMProvider):
         self.client = OpenAI(api_key=decrypt_password(self.llm.api_key))
 
     async def chat_completion(
-        self, messages: List[ChatMessage], tools: Optional[List[Dict]] = None, stream: bool = False
-    ) -> Union[ChatResponse, AsyncGenerator[StreamChunk, None]]:
-        if stream:
-            return self.stream_completion(messages, tools)
-
+        self, messages: List[ChatMessage], tools: Optional[List[Dict]] = None
+    ) -> Union[ChatResponse, AsyncGenerator[None]]:
         openai_messages = [{"role": msg.role, "content": msg.content} for msg in messages]
 
         # Track tool usage for safety
@@ -221,50 +204,6 @@ class OpenAIProvider(BaseLLMProvider):
 
         return ChatResponse(content=response_content, sql_query=sql_query)
 
-    async def stream_completion(
-        self, messages: List[ChatMessage], tools: Optional[List[Dict]] = None
-    ) -> AsyncGenerator[StreamChunk, None]:
-        openai_messages = [{"role": msg.role, "content": msg.content} for msg in messages]
-
-        stream = self.client.chat.completions.create(
-            model=self.llm.model,
-            messages=openai_messages,
-            tools=tools or [],
-            tool_choice="auto" if tools else "none",
-            temperature=1,
-            max_tokens=2048,
-            top_p=1,
-            stream=True,
-            response_format={"type": "json_object"},
-        )
-
-        accumulated_content = ""
-        accumulated_metadata = {}
-
-        for chunk in stream:
-            if chunk.choices[0].delta.content:
-                content = chunk.choices[0].delta.content
-                accumulated_content += content
-
-                if chunk.metadata:
-                    accumulated_metadata.update(chunk.metadata)
-
-                yield StreamChunk(content=content, is_complete=False)
-
-        # Parse final JSON response
-        try:
-            json_response = json.loads(accumulated_content)
-            sql_query = json_response.get("sql_query")
-        except json.JSONDecodeError:
-            # Fallback if JSON parsing fails
-            sql_query = None
-
-        yield StreamChunk(
-            content="",
-            is_complete=True,
-            metadata={"sql_query": sql_query} if sql_query else None,
-        )
-
     async def _execute_query_tool(self, sql_query: str, reasoning: str) -> Dict[str, Any]:
         """Fallback execute SQL query tool - used when no query executor is provided"""
         print(f"LLM is executing query: {sql_query}")
@@ -285,13 +224,8 @@ class AnthropicProvider(BaseLLMProvider):
         raise NotImplementedError("Anthropic provider not yet implemented")
 
     async def chat_completion(
-        self, messages: List[ChatMessage], tools: Optional[List[Dict]] = None, stream: bool = False
-    ) -> Union[ChatResponse, AsyncGenerator[StreamChunk, None]]:
-        raise NotImplementedError("Anthropic provider not yet implemented")
-
-    async def stream_completion(
         self, messages: List[ChatMessage], tools: Optional[List[Dict]] = None
-    ) -> AsyncGenerator[StreamChunk, None]:
+    ) -> Union[ChatResponse, AsyncGenerator[None]]:
         raise NotImplementedError("Anthropic provider not yet implemented")
 
 
@@ -302,13 +236,8 @@ class OllamaProvider(BaseLLMProvider):
         raise NotImplementedError("Ollama provider not yet implemented")
 
     async def chat_completion(
-        self, messages: List[ChatMessage], tools: Optional[List[Dict]] = None, stream: bool = False
-    ) -> Union[ChatResponse, AsyncGenerator[StreamChunk, None]]:
-        raise NotImplementedError("Ollama provider not yet implemented")
-
-    async def stream_completion(
         self, messages: List[ChatMessage], tools: Optional[List[Dict]] = None
-    ) -> AsyncGenerator[StreamChunk, None]:
+    ) -> Union[ChatResponse, AsyncGenerator[None]]:
         raise NotImplementedError("Ollama provider not yet implemented")
 
 
@@ -410,25 +339,15 @@ class ChatService:
 
     def __init__(
         self,
-        llm: LLM,
-        source: Source,
         chat_session: ChatSession,
         db_session: Session,
     ):
-        self.llm = llm
-        self.source = source
         self.chat_session = chat_session
         self.db = db_session
-        self.query_executor = SQLQueryExecutor(source)
         self.message_service = ChatMessageService(db_session, chat_session)
-        self.provider = LLMProviderFactory.create_provider(
-            llm, self.query_executor, self.message_service
-        )
         self.tools = self._get_tools()
 
-    async def chat(
-        self, request: ChatLLMRequest, stream: bool = False
-    ) -> Union[ChatResponse, AsyncGenerator[StreamChunk, None]]:
+    async def chat(self, request: ChatLLMRequest) -> Union[ChatResponse, AsyncGenerator[None]]:
         """Main chat method"""
         schema = await get_source_schema(str(self.source.id))
 
@@ -452,30 +371,19 @@ class ChatService:
         messages.append(ChatMessage(role="user", content=request.message))
 
         # Generate response
-        if stream:
-            return self._handle_streaming_response(messages)
-        else:
-            return await self._handle_regular_response(messages)
+        return await self._handle_regular_response(messages)
 
     async def _handle_regular_response(self, messages: List[ChatMessage]) -> ChatResponse:
         """Handle non-streaming response with database persistence"""
-        response = await self.provider.chat_completion(messages, self.tools, stream=False)
+        response = await self.provider.chat_completion(messages, self.tools)
+        self.message_service.save_message(
+            role="assistant",
+            content=response.content,
+            sql_query=response.sql_query,
+        )
+        return response
 
-        if isinstance(response, ChatResponse):
-            # Save assistant response to database
-            self.message_service.save_message(
-                role="assistant",
-                content=response.content,
-                sql_query=response.sql_query,
-            )
-
-            return response
-        else:
-            raise ValueError("Unexpected response type in non-streaming mode")
-
-    async def _handle_streaming_response(
-        self, messages: List[ChatMessage]
-    ) -> AsyncGenerator[StreamChunk, None]:
+    async def _handle_streaming_response(self, messages: List[ChatMessage]) -> AsyncGenerator[None]:
         """Handle streaming response with database persistence"""
         accumulated_content = ""
         accumulated_metadata = {}
@@ -633,6 +541,5 @@ __all__ = [
     "ChatMessage",
     "LLMProviderFactory",
     "ChatResponse",
-    "StreamChunk",
     "MessageTypeEnum",
 ]

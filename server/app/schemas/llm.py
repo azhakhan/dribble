@@ -55,28 +55,3 @@ class LLMListResponse(BaseModel):
 
     class Config:
         from_attributes = True
-
-
-class ChatLLMRequest(BaseModel):
-    session_id: Optional[UUID]
-    source_id: UUID
-    llm_id: UUID
-    message: str
-    query: Optional[str] = None
-    stream: Optional[bool] = False
-
-
-class ChatLLMResponse(BaseModel):
-    """Structured response for non-streaming chat"""
-
-    content: str
-    sql_query: Optional[str] = None
-    metadata: Optional[Dict[str, Any]] = None
-
-
-class StreamChunkResponse(BaseModel):
-    """Single chunk of streaming data"""
-
-    content: str
-    is_complete: bool = False
-    metadata: Optional[Dict[str, Any]] = None
