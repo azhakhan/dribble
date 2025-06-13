@@ -12,7 +12,7 @@ import {
 import { createSource, testSource } from "@/shared/lib/api";
 import type { PostgresCreds, MysqlCreds, SqliteCreds, CreateSourceRequest } from "@/shared/lib/api";
 import { Button } from "@/components/ui/button";
-import { useQueryClient } from "@tanstack/react-query";
+import { useSourceStore } from "@/shared/store";
 import { toast } from "sonner";
 
 interface AddSourceProps {
@@ -27,7 +27,7 @@ export const AddSource = ({ onSourceAdded }: AddSourceProps) => {
   const [sourceType, setSourceType] = useState<"postgres" | "mysql" | "sqlite" | "">("");
   const [sourceName, setSourceName] = useState("");
   const [formError, setFormError] = useState("");
-  const queryClient = useQueryClient();
+  const { loadSources } = useSourceStore();
 
   // PostgreSQL form state
   const [postgresConfig, setPostgresConfig] = useState<PostgresCreds>({
@@ -129,8 +129,8 @@ export const AddSource = ({ onSourceAdded }: AddSourceProps) => {
       await createSource(createData);
       toast.success(`Source "${sourceName}" created successfully`);
 
-      // Invalidate sources query to refresh the list
-      queryClient.invalidateQueries({ queryKey: ["sources"] });
+      // Reload sources from store to refresh the list
+      await loadSources();
 
       setOpen(false);
 

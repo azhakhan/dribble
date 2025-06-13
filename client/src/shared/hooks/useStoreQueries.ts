@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useSourceStore, useQueryStore } from "@/shared/store";
 import type { ConnectedSource } from "@/shared/lib/api";
 
@@ -8,13 +8,15 @@ import type { ConnectedSource } from "@/shared/lib/api";
  */
 export function useStoreSources() {
   const { allSources, loadingSources, loadSources } = useSourceStore();
+  const hasLoadedRef = useRef(false);
 
   useEffect(() => {
-    // Load sources on mount if not already loaded and not loading
-    if (allSources.length === 0 && !loadingSources) {
+    // Load sources only once on mount if not already loaded and not loading
+    if (!hasLoadedRef.current && allSources.length === 0 && !loadingSources) {
+      hasLoadedRef.current = true;
       loadSources();
     }
-  }, [allSources.length, loadingSources, loadSources]);
+  }, [allSources.length, loadingSources]);
 
   return {
     data: allSources,
@@ -28,13 +30,15 @@ export function useStoreSources() {
  */
 export function useStoreConnectedSources() {
   const { connectedSourcesData, loadingConnectedSources, loadConnectedSources } = useSourceStore();
+  const hasLoadedRef = useRef(false);
 
   useEffect(() => {
-    // Load connected sources on mount if not already loaded and not loading
-    if (connectedSourcesData.length === 0 && !loadingConnectedSources) {
+    // Load connected sources only once on mount if not already loaded and not loading
+    if (!hasLoadedRef.current && connectedSourcesData.length === 0 && !loadingConnectedSources) {
+      hasLoadedRef.current = true;
       loadConnectedSources();
     }
-  }, [connectedSourcesData.length, loadingConnectedSources, loadConnectedSources]);
+  }, [connectedSourcesData.length, loadingConnectedSources]);
 
   return {
     data: connectedSourcesData,
@@ -53,7 +57,7 @@ export function useStoreQuery(queryId: string | null) {
     if (queryId && !queries[queryId] && !loadingQueries.has(queryId)) {
       loadQuery(queryId);
     }
-  }, [queryId, queries, loadingQueries, loadQuery]);
+  }, [queryId, queries, loadingQueries]);
 
   return {
     data: queryId ? queries[queryId] || null : null,
@@ -72,7 +76,7 @@ export function useStoreQueryVersions(queryId: string | null) {
     if (queryId && !queryVersions[queryId] && !loadingVersions.has(queryId)) {
       loadQueryVersions(queryId);
     }
-  }, [queryId, queryVersions, loadingVersions, loadQueryVersions]);
+  }, [queryId, queryVersions, loadingVersions]);
 
   return {
     data: queryId ? queryVersions[queryId] || [] : [],
@@ -132,7 +136,7 @@ export function useStoreSourceSchema(sourceId: string | undefined) {
     if (sourceId && !sourceSchemaMap[sourceId] && !loadingSchemas.has(sourceId)) {
       loadSourceSchema(sourceId);
     }
-  }, [sourceId, sourceSchemaMap, loadingSchemas, loadSourceSchema]);
+  }, [sourceId, sourceSchemaMap, loadingSchemas]);
 
   return {
     data: sourceId ? sourceSchemaMap[sourceId] || null : null,
@@ -151,7 +155,7 @@ export function useStoreConnectedSourcesSchemas(connectedSources: ConnectedSourc
     if (connectedSources && connectedSources.length > 0) {
       loadConnectedSourcesSchemas(connectedSources);
     }
-  }, [connectedSources, loadConnectedSourcesSchemas]);
+  }, [connectedSources]);
 
   // Calculate loading state - true if any connected source is loading
   const isLoading = useMemo(() => {
