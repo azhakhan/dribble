@@ -124,7 +124,7 @@ export const DeleteQuery = ({ open, onOpenChange, query, triggerRef }: DeleteQue
 
           {/* Warning text */}
           <p className="text-xs text-muted-foreground">
-            This will permanently delete the query, all versions, and run history.
+            You will not be able to access this query and all its versions after deletion.
           </p>
 
           {/* Action buttons */}

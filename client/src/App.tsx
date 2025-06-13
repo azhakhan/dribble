@@ -16,11 +16,16 @@ function TopMenu() {
     navigate("/");
   };
 
+  let themeColor = theme;
+  if (theme === "system") {
+    themeColor = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  }
+
   return (
     <div className="h-8 border-b flex items-center justify-between px-3 bg-background">
       <div className="flex items-center gap-2">
         <img
-          src={theme === "dark" ? logoDark : logoLight}
+          src={themeColor === "dark" ? logoDark : logoLight}
           alt="Dribble IDE"
           className="w-5 h-5 cursor-pointer hover:opacity-80 transition-opacity"
           onClick={handleLogoClick}

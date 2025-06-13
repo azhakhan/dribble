@@ -216,7 +216,7 @@ const QueryTreeSource = ({
         <Button
           variant="ghost"
           size="icon"
-          className="h-4 w-4 hover:bg-accent"
+          className="h-4 w-4 hover:bg-accent cursor-pointer"
           onClick={handleCreateQuery}
         >
           <Plus className="h-2 w-2" strokeWidth={1} />
