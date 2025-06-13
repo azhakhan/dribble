@@ -34,15 +34,11 @@ export function MiniMonacoSQL({
   const { selectedSource, sourceSchemaMap } = useSourceStore();
 
   // Get theme from context
-  const { theme } = useTheme();
+  const { resolvedTheme } = useTheme();
 
   // Helper to determine Monaco theme based on app theme
   const getMonacoTheme = (): string => {
-    const isDark =
-      theme === "dark" ||
-      (theme === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
-
-    return isDark ? "vs-dark" : "vs";
+    return resolvedTheme === "dark" ? "vs-dark" : "vs";
   };
 
   // Memoize completions to prevent recalculation
@@ -251,7 +247,7 @@ export function MiniMonacoSQL({
     if (editorRef.current) {
       monaco.editor.setTheme(getMonacoTheme());
     }
-  }, [theme]);
+  }, [resolvedTheme]);
 
   // Handle value changes from outside
   useEffect(() => {
@@ -275,7 +271,7 @@ export function MiniMonacoSQL({
         className
       )}
       style={{
-        height: "24px",
+        height: "26px",
         width: "160px"
       }}
       onClick={() => {
@@ -288,9 +284,9 @@ export function MiniMonacoSQL({
       {/* Monaco editor container */}
       <div
         ref={hostRef}
-        className="absolute inset-0 [&_.monaco-editor]:!border-none [&_.monaco-editor_.monaco-editor-background]:!border-none [&_.monaco-editor_.inputarea]:!border-none [&_.monaco-editor_.inputarea]:!outline-none [&_.monaco-editor_.view-overlays]:!border-none [&_.monaco-editor_.margin]:!border-none"
+        className="absolute border-1 inset-0 [&_.monaco-editor]:!border-none [&_.monaco-editor_.monaco-editor-background]:!border-none [&_.monaco-editor_.inputarea]:!border-none [&_.monaco-editor_.inputarea]:!outline-none [&_.monaco-editor_.view-overlays]:!border-none [&_.monaco-editor_.margin]:!border-none"
         style={{
-          height: "24px"
+          height: "26px"
         }}
       />
     </div>

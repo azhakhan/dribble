@@ -19,15 +19,11 @@ export function MonacoDiffEditor({
   const diffEditorRef = useRef<monaco.editor.IStandaloneDiffEditor | undefined>(undefined);
 
   // Get theme from context
-  const { theme } = useTheme();
+  const { resolvedTheme } = useTheme();
 
   // Helper to determine Monaco theme based on app theme
   const getMonacoTheme = (): string => {
-    const isDark =
-      theme === "dark" ||
-      (theme === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
-
-    return isDark ? "vs-dark" : "vs";
+    return resolvedTheme === "dark" ? "vs-dark" : "vs";
   };
 
   // Initialize diff editor
@@ -85,7 +81,7 @@ export function MonacoDiffEditor({
     if (diffEditorRef.current) {
       monaco.editor.setTheme(getMonacoTheme());
     }
-  }, [theme]);
+  }, [resolvedTheme]);
 
   // Update models when content changes
   useEffect(() => {

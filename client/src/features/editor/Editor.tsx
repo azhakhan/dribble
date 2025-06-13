@@ -20,6 +20,9 @@ export function Editor({ tabId, onQueryExecuted }: EditorProps) {
   const [editingName, setEditingName] = useState(false);
   const [tempName, setTempName] = useState("");
 
+  // Local state for editor content to improve typing performance
+  const [localEditorContent, setLocalEditorContent] = useState("");
+
   // Get all needed state from the store using selectors
   const { openTabs, updateTabContent, executeQuery, saveChanges, hasUnsavedChanges } =
     useTabStore();
@@ -29,6 +32,26 @@ export function Editor({ tabId, onQueryExecuted }: EditorProps) {
 
   // Find current tab - memoized to prevent unnecessary re-computations
   const currentTab = useMemo(() => openTabs.find((tab) => tab.id === tabId), [openTabs, tabId]);
+
+  // Sync local editor content with store content when it changes externally
+  useEffect(() => {
+    if (currentTab?.editorContent !== undefined) {
+      setLocalEditorContent(currentTab.editorContent);
+    }
+  }, [currentTab?.editorContent]);
+
+  // Debounced update for editor content - similar to TableFilterBar pattern
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (currentTab && localEditorContent !== currentTab.editorContent) {
+        updateTabContent(tabId, {
+          editorContent: localEditorContent
+        });
+      }
+    }, 300); // 300ms debounce
+
+    return () => clearTimeout(timer);
+  }, [localEditorContent, currentTab?.editorContent, tabId, updateTabContent]);
 
   // Get source for this tab - memoized
   const tabSource = useMemo(() => {
@@ -63,16 +86,11 @@ export function Editor({ tabId, onQueryExecuted }: EditorProps) {
     }
   }, []);
 
-  // Handle content changes
-  const handleContentChange = useCallback(
-    (content: string) => {
-      // Update tab content - let the store calculate isDirty based on lastSavedContent
-      updateTabContent(tabId, {
-        editorContent: content
-      });
-    },
-    [tabId, updateTabContent]
-  );
+  // Handle content changes - now uses local state for immediate updates
+  const handleContentChange = useCallback((content: string) => {
+    // Update local state immediately for responsive typing
+    setLocalEditorContent(content);
+  }, []);
 
   // Handle saving changes
   const handleSaveChanges = useCallback(async () => {
@@ -98,7 +116,7 @@ export function Editor({ tabId, onQueryExecuted }: EditorProps) {
       }
 
       const queryToRun =
-        sqlToRun || (proposedChanges ? proposedChanges.proposedContent : currentTab.editorContent);
+        sqlToRun || (proposedChanges ? proposedChanges.proposedContent : localEditorContent);
       if (!queryToRun.trim()) return;
 
       try {
@@ -112,7 +130,16 @@ export function Editor({ tabId, onQueryExecuted }: EditorProps) {
         toast.error("Failed to execute query");
       }
     },
-    [canRunQueries, currentTab, proposedChanges, executeQuery, tabId, isSourceConnected, openTabs]
+    [
+      canRunQueries,
+      currentTab,
+      proposedChanges,
+      executeQuery,
+      tabId,
+      isSourceConnected,
+      localEditorContent,
+      onQueryExecuted
+    ]
   );
 
   // Handle name editing
@@ -289,7 +316,7 @@ export function Editor({ tabId, onQueryExecuted }: EditorProps) {
           />
         ) : (
           <MonacoSQLEditor
-            value={currentTab.editorContent}
+            value={localEditorContent}
             onChange={handleContentChange}
             language={getMonacoLanguage(tabSource?.dbtype)}
             readOnly={!isEditorReady}

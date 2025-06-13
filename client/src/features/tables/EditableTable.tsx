@@ -119,7 +119,7 @@ export const EditableTable = ({
   source,
   schema
 }: EditableTableProps) => {
-  const { theme } = useTheme();
+  const { resolvedTheme } = useTheme();
   const initializedRef = useRef(false);
   const storageKey = useMemo(
     () => getStorageKey(tableId, source, schema),
@@ -188,9 +188,7 @@ export const EditableTable = ({
   }, [data, columnSizes, storageKey]);
 
   const getGlideTheme = (): GlideTheme => {
-    const isDark =
-      theme === "dark" ||
-      (theme === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+    const isDark = resolvedTheme === "dark";
 
     return {
       ...dataEditorBaseTheme,

@@ -12,24 +12,16 @@ export function SQLCodeBlock({ code }: SQLCodeBlockProps) {
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | undefined>(undefined);
 
   // Get theme from context
-  const { theme } = useTheme();
+  const { resolvedTheme } = useTheme();
 
   // Helper to determine Monaco theme based on app theme
   const getMonacoTheme = useCallback((): string => {
-    const isDark =
-      theme === "dark" ||
-      (theme === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
-
-    return isDark ? "vs-dark" : "vs";
-  }, [theme]);
+    return resolvedTheme === "dark" ? "vs-dark" : "vs";
+  }, [resolvedTheme]);
 
   // Helper to get background color based on theme
   const getBackgroundColor = (): string => {
-    const isDark =
-      theme === "dark" ||
-      (theme === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
-
-    return isDark ? "#1e1e1e" : "#f8f8f8";
+    return resolvedTheme === "dark" ? "#1e1e1e" : "#f8f8f8";
   };
 
   // Initialize editor once
@@ -78,7 +70,7 @@ export function SQLCodeBlock({ code }: SQLCodeBlockProps) {
     if (editorRef.current) {
       monaco.editor.setTheme(getMonacoTheme());
     }
-  }, [theme, getMonacoTheme]);
+  }, [resolvedTheme, getMonacoTheme]);
 
   // Handle value changes
   useEffect(() => {

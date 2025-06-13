@@ -10,7 +10,7 @@ import { IdePage } from "./pages/IdePage";
 
 function TopMenu() {
   const navigate = useNavigate();
-  const { theme } = useTheme();
+  const { resolvedTheme } = useTheme();
 
   const handleLogoClick = () => {
     navigate("/");
@@ -20,7 +20,7 @@ function TopMenu() {
     <div className="h-8 border-b flex items-center justify-between px-3 bg-background">
       <div className="flex items-center gap-2">
         <img
-          src={theme === "dark" ? logoDark : logoLight}
+          src={resolvedTheme === "dark" ? logoDark : logoLight}
           alt="Dribble IDE"
           className="w-5 h-5 cursor-pointer hover:opacity-80 transition-opacity"
           onClick={handleLogoClick}

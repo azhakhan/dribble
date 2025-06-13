@@ -26,15 +26,11 @@ export function MonacoSQLEditor({
   const { selectedSource, sourceSchemaMap } = useSourceStore();
 
   // Get theme from context
-  const { theme } = useTheme();
+  const { resolvedTheme } = useTheme();
 
   // Helper to determine Monaco theme based on app theme
   const getMonacoTheme = (): string => {
-    const isDark =
-      theme === "dark" ||
-      (theme === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
-
-    return isDark ? "vs-dark" : "vs";
+    return resolvedTheme === "dark" ? "vs-dark" : "vs";
   };
 
   // Memoize schema completions to prevent recalculation
@@ -184,7 +180,7 @@ export function MonacoSQLEditor({
     if (editorRef.current) {
       monaco.editor.setTheme(getMonacoTheme());
     }
-  }, [theme]);
+  }, [resolvedTheme]);
 
   // Handle language changes
   useEffect(() => {

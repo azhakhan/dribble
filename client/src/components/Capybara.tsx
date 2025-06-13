@@ -1,16 +1,19 @@
 import { useRive } from "@rive-app/react-canvas";
+import { useTheme } from "@/components/theme-provider";
 
 export const Capybara = () => {
+  const { resolvedTheme } = useTheme();
+
   const { RiveComponent } = useRive({
     src: "/capybara.riv",
-    artboard: "capybara",
+    artboard: resolvedTheme === "light" ? "capybara-light" : "capybara",
     stateMachines: "State Machine 1",
     autoplay: true
   });
 
   return (
     <div className="w-full h-20 overflow-hidden flex items-center justify-center">
-      <RiveComponent className="w-full h-full" />
+      <RiveComponent key={resolvedTheme} className="w-full h-full" />
     </div>
   );
 };

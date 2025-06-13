@@ -103,8 +103,8 @@ export const useTabStore = create<TabState>()(
         const newTab: QueryTab = {
           ...tab,
           id: newTabId,
-          isLoadingQuery: false,
-          isLoadingVersions: false,
+          isLoadingQuery: tab.isLoadingQuery ?? false,
+          isLoadingVersions: tab.isLoadingVersions ?? false,
           lastSavedContent: tab.lastSavedContent || "",
           originalContent: tab.originalContent || ""
         };
