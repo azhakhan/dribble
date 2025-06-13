@@ -14,6 +14,7 @@ import { useQueryStore, useTreeStore, useSourceStore } from "@/shared/store";
 import type { Query, Source } from "@/shared/lib/api";
 import { RenameQuery } from "../query/dialogs/RenameQuery";
 import { DeleteQuery } from "../query/dialogs/DeleteQuery";
+import { CreateQuery } from "../query/dialogs/CreateQuery";
 
 interface QueryTreeProps {
   onQuerySelect?: (query: Query) => void;
@@ -142,8 +143,12 @@ const QueryTreeSource = ({
 }: QueryTreeSourceProps) => {
   // Use centralized tree state for query source expansion
   const { isQuerySourceExpanded, setQuerySourceExpanded } = useTreeStore();
-  const { createNewQuery } = useQueryStore();
+  const { loadQuery } = useQueryStore();
   const isOpen = isQuerySourceExpanded(source.id);
+
+  // State for create query dialog
+  const [createQueryDialogOpen, setCreateQueryDialogOpen] = useState(false);
+  const createQueryButtonRef = useRef<HTMLButtonElement>(null);
 
   const handleClick = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -151,17 +156,35 @@ const QueryTreeSource = ({
     setQuerySourceExpanded(source.id, !isOpen);
   };
 
-  const handleCreateQuery = async (e: React.MouseEvent) => {
+  const handleCreateQuery = (e: React.MouseEvent) => {
     e.stopPropagation();
-    try {
-      const newQuery = await createNewQuery({ sourceId: source.id });
+    setCreateQueryDialogOpen(true);
+  };
 
-      // Open the newly created query in tabs (double-click behavior)
+  const handleQueryCreated = async (queryId: string) => {
+    try {
+      // Load the newly created query to ensure it's in the store
+      await loadQuery(queryId);
+
+      // Wait a moment for the store to update
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      // Get the query from the store and open it in tabs
+      const { queries } = useQueryStore.getState();
+      const newQuery = queries[queryId];
+
       if (newQuery && onQueryDoubleClick) {
         onQueryDoubleClick(newQuery);
+      } else {
+        console.warn(
+          "Created query not found in store:",
+          queryId,
+          "Available queries:",
+          Object.keys(queries)
+        );
       }
     } catch (error) {
-      console.error("Failed to create query:", error);
+      console.error("Failed to load created query:", error);
     }
   };
 
@@ -214,6 +237,7 @@ const QueryTreeSource = ({
 
         {/* Add query button */}
         <Button
+          ref={createQueryButtonRef}
           variant="ghost"
           size="icon"
           className="h-4 w-4 hover:bg-accent cursor-pointer"
@@ -244,6 +268,15 @@ const QueryTreeSource = ({
           <span className="text-sm font-light">No queries found</span>
         </div>
       )}
+
+      {/* Create Query Dialog */}
+      <CreateQuery
+        open={createQueryDialogOpen}
+        onOpenChange={setCreateQueryDialogOpen}
+        source={source}
+        triggerRef={createQueryButtonRef}
+        onQueryCreated={handleQueryCreated}
+      />
     </div>
   );
 };

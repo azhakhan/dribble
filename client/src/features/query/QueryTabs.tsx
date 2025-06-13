@@ -15,6 +15,7 @@ import {
 import { Query } from "./Query";
 import { useTabStore, useSourceStore } from "@/shared/store";
 import { UnsavedChangesDialog } from "./UnsavedChangesDialog";
+import { generateQueryName } from "@/shared/lib/queryUtils";
 
 // New Query Modal component
 // New Query Modal component
@@ -38,12 +39,6 @@ const NewQueryModal = memo(
     const [selectedSourceId, setSelectedSourceId] = useState("");
     const inputRef = useRef<HTMLInputElement>(null);
 
-    // Generate random suffix for query name
-    const generateQueryName = useCallback(() => {
-      const randomSuffix = Math.random().toString(36).substring(2, 8);
-      return `Query ${randomSuffix}`;
-    }, []);
-
     // Initialize form when modal opens
     useEffect(() => {
       if (isOpen) {
@@ -57,7 +52,7 @@ const NewQueryModal = memo(
           inputRef.current?.select();
         }, 100);
       }
-    }, [isOpen, defaultSourceId, generateQueryName, sources]);
+    }, [isOpen, defaultSourceId, sources]);
 
     // Handle escape key
     useEffect(() => {
