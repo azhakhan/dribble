@@ -29,7 +29,6 @@ class ChatSessionResponse(BaseModel):
 
     id: UUID
     name: Optional[str] = None
-    source_id: UUID
     llm_id: UUID
     created_at: datetime
 
