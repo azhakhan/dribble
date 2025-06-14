@@ -46,6 +46,7 @@ export type SourceSchemaMap = Record<string, Record<string, SchemaObject>>;
 export interface QueryTab {
   id: string;
   queryId: string | null;
+  queryVersionId: string | null;
   sourceId: string;
   title: string;
   isDirty: boolean;

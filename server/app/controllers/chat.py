@@ -122,13 +122,20 @@ class ChatContextService:
     def contexts_are_different(
         self, context1: List[ContextQuery], context2: List[ContextQuery]
     ) -> bool:
-        """Compare two context lists to see if they're different"""
+        """Compare two context lists to see if they're different
+
+        This method compares both the structure (query_id, version_id, active) and the actual
+        SQL content to detect changes. This ensures system prompt is updated when:
+        1. Context structure changes (different queries, versions, or active status)
+        2. SQL content changes (even if version_id appears the same due to caching)
+        """
         if len(context1) != len(context2):
             return True
 
-        # Create comparable sets (query_id, version_id, active)
-        set1 = {(q.query_id, q.query_version_id, q.active) for q in context1}
-        set2 = {(q.query_id, q.query_version_id, q.active) for q in context2}
+        # Create comparable sets with both version_id and SQL content hash
+        # This catches both structural changes and content changes
+        set1 = {(q.query_id, q.query_version_id, q.active, hash(q.sql)) for q in context1}
+        set2 = {(q.query_id, q.query_version_id, q.active, hash(q.sql)) for q in context2}
 
         return set1 != set2
 

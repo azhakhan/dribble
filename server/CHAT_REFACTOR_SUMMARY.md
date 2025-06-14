@@ -327,13 +327,29 @@ request = ChatLLMRequest(
 
 ## File Changes
 
-- **Updated**: `server/app/controllers/chat.py` - Complete refactor with UUID-based approach + database schema integration
+- **Updated**: `server/app/controllers/chat.py` - Complete refactor with UUID-based approach + database schema integration + SQL content change detection fix
 - **Updated**: `server/app/models.py` - Fixed relationships, added sql_query field
 - **Updated**: `server/app/routes/chat.py` - Simplified route with logic moved to service
 - **Updated**: `server/app/schemas/chat.py` - Removed source_id dependencies
 - **Updated**: `server/CHAT_REFACTOR_SUMMARY.md` - This document
 
-### Latest Changes (Database Schema Integration):
+### Latest Changes (SQL Content Change Detection Fix):
+
+**CRITICAL BUG FIX**: Resolved issue where system prompt was not updated when SQL content changed.
+
+**Problem**: When the context structure appeared unchanged (same query IDs, same version IDs, same active status), the system prompt would not be updated even if the actual SQL content had changed. This caused the LLM to work with stale context information.
+
+**Root Cause**: The `contexts_are_different()` method only compared structural elements `(query_id, version_id, active)` but ignored the actual SQL content.
+
+**Solution**:
+
+- **Client Responsibility**: Frontend should send the correct/latest `query_version_id` with each request
+- **Backend Fix**: `ChatContextService.contexts_are_different()` - Now compares both structure AND SQL content hash `(query_id, version_id, active, hash(sql))`
+- **No Caching Issues**: Backend properly detects when SQL content changes, even with same version IDs
+
+**Impact**: System prompt is correctly updated whenever SQL content changes, ensuring LLM always has fresh context information for iterative query development.
+
+### Previous Changes (Database Schema Integration):
 
 - **Modified**: `ChatContextService.load_database_schemas()` - New method to fetch schemas for all unique sources
 - **Modified**: `ChatService.chat()` - Now loads database schemas and passes to system prompt

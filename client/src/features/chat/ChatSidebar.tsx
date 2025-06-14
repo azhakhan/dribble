@@ -109,6 +109,7 @@ export function ChatSidebar() {
     return [
       {
         query_id: activeTab.queryId,
+        query_version_id: activeTab.queryVersionId || undefined,
         active: true
       }
     ];
