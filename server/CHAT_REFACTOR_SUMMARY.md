@@ -95,6 +95,27 @@ System prompts now include:
 - Active query indication with UUID
 - Clear instructions for query update logic using UUIDs
 - Available query UUIDs for tool execution
+- **NEW**: Complete database schema information for all sources in context
+
+### Database Schema Integration (NEW)
+
+The system now automatically includes database schema information in the system prompt when context queries are present:
+
+- **Automatic Schema Loading**: Fetches schema for all unique sources in context queries
+- **Complete Table Information**: Includes tables, columns, data types, primary keys, and foreign keys
+- **Schema-Aware Queries**: LLM can suggest better joins and constraints using actual schema
+- **No Hallucination**: LLM instructed to only use tables/columns shown in the schema
+- **Schema Caching**: Schemas are cached to improve performance (handled by `get_source_schema`)
+
+#### Schema Information Included:
+
+- Source name and ID for each database
+- Database schemas (e.g., `public`, `analytics`)
+- Tables with complete column definitions
+- Data types and nullable information
+- Primary key constraints
+- Foreign key relationships
+- Schema.table format guidance for multi-schema databases
 
 ### 9. Simplified Chat Endpoint
 
@@ -258,6 +279,16 @@ request = ChatLLMRequest(
 }
 ```
 
+#### Schema-Aware Query Suggestions (NEW)
+
+```json
+{
+  "content": "Based on the database schema, I can see that the `users` table has a foreign key relationship with `orders`. Here's an optimized query that properly joins these tables using the available columns:",
+  "sql_query": "SELECT u.id, u.name, u.email, COUNT(o.id) as order_count FROM public.users u LEFT JOIN public.orders o ON u.id = o.user_id GROUP BY u.id, u.name, u.email",
+  "updated_query_id": "550e8400-e29b-41d4-a716-446655440000"
+}
+```
+
 ## Migration Considerations
 
 ### Database Changes
@@ -289,14 +320,25 @@ request = ChatLLMRequest(
 6. **Clear Tracking**: Know exactly which query was updated (by UUID)
 7. **Tool Intelligence**: Automatic source selection for query execution
 8. **Simplified Architecture**: Cleaner separation of concerns
+9. **Schema Awareness**: LLM has complete knowledge of database structure
+10. **No Hallucination**: Only references actual tables and columns that exist
+11. **Better Suggestions**: Can recommend proper joins, constraints, and optimizations
+12. **Multi-Database Support**: Handles different schemas and sources simultaneously
 
 ## File Changes
 
-- **Updated**: `server/app/controllers/chat.py` - Complete refactor with UUID-based approach
+- **Updated**: `server/app/controllers/chat.py` - Complete refactor with UUID-based approach + database schema integration
 - **Updated**: `server/app/models.py` - Fixed relationships, added sql_query field
 - **Updated**: `server/app/routes/chat.py` - Simplified route with logic moved to service
 - **Updated**: `server/app/schemas/chat.py` - Removed source_id dependencies
 - **Updated**: `server/CHAT_REFACTOR_SUMMARY.md` - This document
+
+### Latest Changes (Database Schema Integration):
+
+- **Modified**: `ChatContextService.load_database_schemas()` - New method to fetch schemas for all unique sources
+- **Modified**: `ChatService.chat()` - Now loads database schemas and passes to system prompt
+- **Modified**: `ChatService._compose_system_prompt()` - Enhanced to include complete database schema information
+- **Enhanced**: System prompt with detailed schema information including tables, columns, keys, and relationships
 
 ## Next Steps
 

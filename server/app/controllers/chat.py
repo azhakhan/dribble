@@ -17,6 +17,7 @@ from app.controllers.messages import ChatMessageService, ChatMessage
 from app.core.db_utils import safe_create, get_or_404
 from app.controllers.llm import LLMProviderFactory, BaseLLMProvider
 from app.controllers.chat_types import ChatResponse, ContextQuery
+from app.controllers.sources import get_source_schema
 
 
 class ChatContextService:
@@ -131,6 +132,27 @@ class ChatContextService:
 
         return set1 != set2
 
+    async def load_database_schemas(self, context_queries: List[ContextQuery]) -> Dict[str, Dict]:
+        """Load database schemas for all unique sources in context queries"""
+        schemas = {}
+
+        # Get unique source IDs from context queries
+        unique_source_ids = set()
+        for query in context_queries:
+            unique_source_ids.add(str(query.source_id))
+
+        # Load schema for each unique source
+        for source_id in unique_source_ids:
+            try:
+                schema_data = await get_source_schema(source_id)
+                schemas[source_id] = schema_data
+            except Exception as e:
+                # If schema loading fails, log it but don't break the chat
+                print(f"Warning: Could not load schema for source {source_id}: {e}")
+                schemas[source_id] = None
+
+        return schemas
+
 
 class ChatService:
     """Main service for handling LLM chat functionality with context support"""
@@ -146,6 +168,13 @@ class ChatService:
         current_context_queries = []
         if request.context:
             current_context_queries = self.context_service.load_context_queries(request.context)
+
+        # Load database schemas for context queries
+        database_schemas = {}
+        if current_context_queries:
+            database_schemas = await self.context_service.load_database_schemas(
+                current_context_queries
+            )
 
         # Create or get chat session
         chat_session = await self._get_or_create_session(request)
@@ -172,7 +201,9 @@ class ChatService:
 
         # Update system prompt if needed
         if should_update_system_prompt:
-            new_system_prompt = self._compose_system_prompt(current_context_queries)
+            new_system_prompt = self._compose_system_prompt(
+                current_context_queries, database_schemas
+            )
 
             if messages and messages[0].role == "system":
                 # Update existing system message
@@ -340,7 +371,9 @@ class ChatService:
             }
         ]
 
-    def _compose_system_prompt(self, context_queries: List[ContextQuery]) -> str:
+    def _compose_system_prompt(
+        self, context_queries: List[ContextQuery], database_schemas: Dict[str, Dict]
+    ) -> str:
         """Compose system prompt for the LLM with context information"""
 
         # If no context queries, provide general SQL assistance
@@ -394,6 +427,57 @@ Current SQL:
 ```
 ---"""
 
+        # Build database schemas section
+        schemas_section = ""
+        if database_schemas:
+            schemas_section = "\nDATABASE SCHEMAS:\n"
+            for source_id, schema_data in database_schemas.items():
+                if schema_data is None:
+                    continue
+
+                # Find source name from context queries
+                source_name = "Unknown"
+                for query in context_queries:
+                    if str(query.source_id) == source_id:
+                        source_name = query.source_name
+                        break
+
+                schemas_section += f"\nSource: {source_name} (ID: {source_id})\n"
+
+                # Process each schema in the database
+                for schema_name, schema_info in schema_data.items():
+                    if not isinstance(schema_info, dict) or "tables" not in schema_info:
+                        continue
+
+                    schemas_section += f"\nSchema: {schema_name}\n"
+
+                    # List tables and their columns
+                    for table_name, table_info in schema_info["tables"].items():
+                        schemas_section += f"  Table: {table_name}\n"
+
+                        # Add columns
+                        if "columns" in table_info:
+                            for column in table_info["columns"]:
+                                nullable = " (nullable)" if column.get("nullable", False) else ""
+                                schemas_section += (
+                                    f"    - {column['name']}: {column['type']}{nullable}\n"
+                                )
+
+                        # Add primary keys
+                        if "primary_keys" in table_info and table_info["primary_keys"]:
+                            pk_list = ", ".join(table_info["primary_keys"])
+                            schemas_section += f"    Primary Keys: {pk_list}\n"
+
+                        # Add foreign keys
+                        if "foreign_keys" in table_info and table_info["foreign_keys"]:
+                            for fk in table_info["foreign_keys"]:
+                                if isinstance(fk, dict):
+                                    schemas_section += f"    Foreign Key: {fk.get('column')} -> {fk.get('referenced_table')}.{fk.get('referenced_column')}\n"
+
+                        schemas_section += "\n"
+
+                schemas_section += "---\n"
+
         system_prompt = f"""
 You are a senior SQL expert assisting a user in writing and editing SQL queries with access to multiple query contexts.
 
@@ -405,6 +489,8 @@ Your job is to help users:
 - Ensure that queries are syntactically correct and valid for their respective databases
 
 {context_section}
+
+{schemas_section}
 
 IMPORTANT RULES:
 1. You have access to tools that allow you to execute SQL queries against the databases. Use these tools to:
@@ -438,12 +524,14 @@ IMPORTANT RULES:
    - Use query IDs (UUIDs) for precise identification, not names (names may not be unique)
 
 6. For each query context, follow the syntax for its target database type
-7. Refer only to available tables, columns, and relationships in each database
-8. Never hallucinate table or column names
-9. Avoid destructive commands (DROP, DELETE, TRUNCATE) unless explicitly asked
-10. When comparing queries, explain similarities and differences clearly
-11. Use the execute_sql_query tool to run queries before suggesting updates
-12. When using tools, specify query_id (UUID) to ensure you're working with the correct database
+7. Database schemas are provided above - refer ONLY to the available tables and columns shown in the schema
+8. Never hallucinate table or column names - use only what's shown in the database schemas
+9. When suggesting queries, ensure they reference the correct schema.table format when needed
+10. Avoid destructive commands (DROP, DELETE, TRUNCATE) unless explicitly asked
+11. When comparing queries, explain similarities and differences clearly
+12. Use the execute_sql_query tool to run queries before suggesting updates
+13. When using tools, specify query_id (UUID) to ensure you're working with the correct database
+14. Use the database schema information to suggest better joins, constraints, and optimizations
 
 CURRENT ACTIVE QUERY: {active_query.name + " (" + str(active_query.query_id) + ")" if active_query else "None"}
 
