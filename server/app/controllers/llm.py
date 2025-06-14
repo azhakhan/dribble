@@ -14,7 +14,8 @@ from openai import OpenAI
 from app.core.encryption import decrypt_password
 from app.controllers.query import execute_in_worker, get_query_results
 from app.controllers.messages import ChatMessageService, ChatMessage
-from app.controllers.chat import ContextQuery, ChatResponse
+from app.controllers.chat_types import ContextQuery, ChatResponse
+from datetime import datetime
 
 
 class BaseLLMProvider(ABC):
@@ -55,6 +56,11 @@ class OpenAIProvider(BaseLLMProvider):
         self, messages: List[ChatMessage], tools: Optional[List[Dict]] = None
     ) -> Union[ChatResponse, AsyncGenerator[None]]:
         openai_messages = [{"role": msg.role, "content": msg.content} for msg in messages]
+
+        # todo: remove this
+        # write the messages to a file
+        with open(f"messages_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json", "w") as f:
+            json.dump(openai_messages, f, indent=4)
 
         # Track tool usage for safety
         tool_call_count = 0

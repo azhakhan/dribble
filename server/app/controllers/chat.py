@@ -1,5 +1,4 @@
-from typing import Dict, Any, List, Optional
-from dataclasses import dataclass
+from typing import Dict, List, Optional
 from sqlalchemy.orm import Session
 from uuid import UUID
 from app.schemas.chat import ChatLLMRequest, ChatContext as ChatContextSchema
@@ -17,30 +16,7 @@ from app.models import (
 from app.controllers.messages import ChatMessageService, ChatMessage
 from app.core.db_utils import safe_create, get_or_404
 from app.controllers.llm import LLMProviderFactory, BaseLLMProvider
-
-
-@dataclass
-class ChatResponse:
-    """Structured response from LLM chat"""
-
-    content: str
-    sql_query: Optional[str] = None
-    metadata: Optional[Dict[str, Any]] = None
-    query_id: Optional[UUID] = None
-    updated_query_id: Optional[UUID] = None
-
-
-@dataclass
-class ContextQuery:
-    """Context query with metadata"""
-
-    query_id: UUID
-    query_version_id: Optional[UUID]
-    name: str
-    sql: str
-    source_id: UUID
-    source_name: str
-    active: bool = False
+from app.controllers.chat_types import ChatResponse, ContextQuery
 
 
 class ChatContextService:
@@ -262,15 +238,14 @@ class ChatService:
         self, request: ChatLLMRequest, chat_session: ChatSession
     ):
         """Save user message and associated context to database"""
-        # Create user message
-        chat_message = safe_create(
-            self.db,
-            ChatMessageModel(
-                role=ChatRoleEnum.user,
-                content=request.message,
-                chat_session_id=chat_session.id,
-                message_type=MessageTypeEnum.message,
-            ),
+        # Create message service for this session
+        message_service = ChatMessageService(self.db, chat_session)
+
+        # Create user message using message service (which handles position)
+        chat_message = message_service.save_message(
+            role="user",
+            content=request.message,
+            message_type=MessageTypeEnum.message,
         )
 
         # Save context for this message
