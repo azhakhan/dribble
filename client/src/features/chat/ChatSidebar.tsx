@@ -81,6 +81,7 @@ export function ChatSidebar() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const { openTabs, activeTabId } = useTabStore();
+  const { queryVersions, loadQueryVersions } = useQueryStore();
   const {
     selectedLLM: selectedLLMId,
     setSelectedLLM,
@@ -100,16 +101,30 @@ export function ChatSidebar() {
   const activeTab = activeTabId ? openTabs.find((tab) => tab.id === activeTabId) : null;
   const editorContent = activeTab?.editorContent || "";
 
+  // Load query versions for the active tab if not already loaded
+  useEffect(() => {
+    if (activeTab?.queryId && !queryVersions[activeTab.queryId]) {
+      loadQueryVersions(activeTab.queryId);
+    }
+  }, [activeTab?.queryId, queryVersions, loadQueryVersions]);
+
   // Get the current context based on active tab
   const getCurrentContext = (): ChatContext[] => {
     if (!activeTab || !activeTab.queryId) {
       return [];
     }
 
+    // If queryVersionId is not set on the tab, try to get the latest version from the store
+    let versionId = activeTab.queryVersionId || undefined;
+    if (!versionId) {
+      const versions = queryVersions[activeTab.queryId] || [];
+      versionId = versions.length > 0 ? versions[0].id : undefined;
+    }
+
     return [
       {
         query_id: activeTab.queryId,
-        query_version_id: activeTab.queryVersionId || undefined,
+        query_version_id: versionId,
         active: true
       }
     ];
