@@ -15,13 +15,14 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger
 } from "@/components/ui/dropdown-menu";
-import { ChevronUp, Database, History, Plus } from "lucide-react";
-import { useSourceStore, useTabStore, useChatStore } from "@/shared/store";
+import { ChevronUp, History, Plus, FileText } from "lucide-react";
+import { useTabStore, useChatStore, useQueryStore } from "@/shared/store";
 import { useChatLLMQuery } from "@/shared/hooks/useChatLLMQuery";
 import { useLLMsQuery, useLLMQuery } from "@/shared/hooks/useLLMsQuery";
 import { useChatSessionsQuery, useChatMessagesQuery } from "@/shared/hooks/useChatQuery";
 import { toast } from "sonner";
 import { SQLCodeBlock } from "./SQLCodeBlock";
+import type { ChatContext } from "@/shared/lib/api";
 
 // Utility function to extract SQL code blocks from a message
 const extractSQLBlocks = (content: string): { sql: string; index: number }[] => {
@@ -39,11 +40,46 @@ const extractSQLBlocks = (content: string): { sql: string; index: number }[] => 
   return blocks;
 };
 
+// Component to display context queries for a message
+const MessageContext = ({ context }: { context: ChatContext[] | undefined }) => {
+  const { queries } = useQueryStore();
+
+  if (!context || context.length === 0) {
+    return null;
+  }
+
+  return (
+    <div className="mt-2 mb-1">
+      <div className="text-xs text-muted-foreground mb-1">Context:</div>
+      <div className="flex flex-wrap gap-1">
+        {context.map((ctx) => {
+          const query = queries[ctx.query_id];
+          const queryName = query?.name || `Query ${ctx.query_id.slice(0, 8)}`;
+
+          return (
+            <div
+              key={ctx.query_id}
+              className={`inline-flex items-center px-2 py-1 rounded text-xs ${
+                ctx.active
+                  ? "bg-primary/20 text-primary border border-primary/30"
+                  : "bg-muted/50 text-muted-foreground"
+              }`}
+            >
+              <FileText className="h-3 w-3 mr-1" />
+              {queryName}
+              {ctx.active && <span className="ml-1 text-xs">•</span>}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
 export function ChatSidebar() {
   const [input, setInput] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const { selectedSource } = useSourceStore();
   const { openTabs, activeTabId } = useTabStore();
   const {
     selectedLLM: selectedLLMId,
@@ -60,9 +96,23 @@ export function ChatSidebar() {
     loadMessagesFromServer
   } = useChatStore();
 
-  // Get active tab's content instead of global editorContent
+  // Get active tab's content and query info
   const activeTab = activeTabId ? openTabs.find((tab) => tab.id === activeTabId) : null;
   const editorContent = activeTab?.editorContent || "";
+
+  // Get the current context based on active tab
+  const getCurrentContext = (): ChatContext[] => {
+    if (!activeTab || !activeTab.queryId) {
+      return [];
+    }
+
+    return [
+      {
+        query_id: activeTab.queryId,
+        active: true
+      }
+    ];
+  };
 
   const { data: llms = [] } = useLLMsQuery();
   const { data: selectedLLM } = useLLMQuery(selectedLLMId || undefined);
@@ -82,7 +132,8 @@ export function ChatSidebar() {
         chatMessagesData.messages.map((msg) => ({
           role: msg.role as "user" | "assistant",
           content: msg.content,
-          sql_query: msg.sql_query
+          sql_query: msg.sql_query,
+          context: msg.context
         }))
       );
     }
@@ -155,10 +206,6 @@ export function ChatSidebar() {
 
   const handleSend = async () => {
     if (!input.trim()) return;
-    if (!selectedSource) {
-      toast.error("Please select a source first");
-      return;
-    }
     if (!selectedLLM) {
       toast.error("Please select an LLM first");
       return;
@@ -168,20 +215,26 @@ export function ChatSidebar() {
       return;
     }
 
+    // Get current context
+    const context = getCurrentContext();
+
     // Add user message to chat
-    const userMessage = { role: "user" as const, content: input };
+    const userMessage = {
+      role: "user" as const,
+      content: input,
+      context: context.length > 0 ? context : undefined
+    };
     addMessage(userMessage);
     setInput("");
     setChatLoading(true);
 
     try {
-      // Send chat request with editor content as query if not empty
+      // Send chat request with context
       const response = await chatMutation.mutateAsync({
-        source_id: selectedSource.id,
         llm_id: selectedLLM.id,
         message: input,
         session_id: sessionId!,
-        query: editorContent ? editorContent : undefined
+        context: context.length > 0 ? context : undefined
       });
 
       // Handle response based on sql_query presence
@@ -197,7 +250,8 @@ export function ChatSidebar() {
         const aiMessage = {
           role: "assistant" as const,
           content: response.content,
-          sql_query: response.sql_query
+          sql_query: response.sql_query,
+          context: context.length > 0 ? context : undefined
         };
         addMessage(aiMessage);
       } else {
@@ -205,14 +259,19 @@ export function ChatSidebar() {
         const aiMessage = {
           role: "assistant" as const,
           content: response.content,
-          sql_query: response.sql_query
+          sql_query: response.sql_query,
+          context: context.length > 0 ? context : undefined
         };
         addMessage(aiMessage);
       }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Failed to send message";
       toast.error(errorMessage);
-      const errorResponse = { role: "assistant" as const, content: `Error: ${errorMessage}` };
+      const errorResponse = {
+        role: "assistant" as const,
+        content: `Error: ${errorMessage}`,
+        context: context.length > 0 ? context : undefined
+      };
       addMessage(errorResponse);
     } finally {
       setChatLoading(false);
@@ -304,11 +363,9 @@ export function ChatSidebar() {
       <div className="flex-1 overflow-y-auto p-3 space-y-3 min-h-0">
         {messages.length === 0 && (
           <div className="text-center text-muted-foreground text-xs py-8">
-            {!selectedSource
-              ? "Select a source to start chatting"
-              : !selectedLLM
-                ? "Select an LLM to start chatting"
-                : "Start a conversation with your AI assistant"}
+            {!selectedLLM
+              ? "Select an LLM to start chatting"
+              : "Start a conversation with your AI assistant"}
           </div>
         )}
         {messages.map((message, index) => {
@@ -331,6 +388,7 @@ export function ChatSidebar() {
                   message.role === "user" ? "ml-auto max-w-[85%]" : "mr-auto"
                 } flex flex-col`}
               >
+                <MessageContext context={message.context} />
                 {messageContentElement}
                 <div className="w-full overflow-hidden mt-2 mb-2">
                   <SQLCodeBlock code={message.sql_query!} />
@@ -348,6 +406,7 @@ export function ChatSidebar() {
                   message.role === "user" ? "ml-auto max-w-[85%]" : "mr-auto w-full"
                 } text-xs`}
               >
+                <MessageContext context={message.context} />
                 {messageContentElement}
               </div>
             );
@@ -396,6 +455,7 @@ export function ChatSidebar() {
                 message.role === "user" ? "ml-auto max-w-[85%]" : "mr-auto"
               } flex flex-col`}
             >
+              <MessageContext context={message.context} />
               {contentParts}
             </div>
           );
@@ -413,11 +473,13 @@ export function ChatSidebar() {
       </div>
 
       {/* Context indicator */}
-      {selectedSource && (
+      {activeTab && activeTab.queryId && (
         <div className="px-3 py-2 border-t border-border/50 bg-muted/20">
           <div className="text-xs text-muted-foreground flex items-center gap-1">
-            <Database className="h-3 w-3" strokeWidth={1} />
-            <span className="text-foreground font-medium">{selectedSource.name}</span>
+            <FileText className="h-3 w-3" strokeWidth={1} />
+            <span className="text-foreground font-medium">
+              {activeTab.title || `Query ${activeTab.queryId.slice(0, 8)}`}
+            </span>
           </div>
         </div>
       )}
@@ -428,13 +490,9 @@ export function ChatSidebar() {
           value={input}
           onChange={handleInputChange}
           onKeyDown={handleKeyDown}
-          placeholder={
-            selectedSource && selectedLLM
-              ? "Type your message..."
-              : "Select a source and LLM to start chatting"
-          }
+          placeholder={selectedLLM ? "Type your message..." : "Select an LLM to start chatting"}
           className="min-h-[40px] max-h-[120px] resize-none text-sm border-0 bg-muted/30 hover:bg-muted/50 focus:bg-muted/50 transition-colors px-3 py-2 rounded-xs w-full overflow-hidden"
-          disabled={!selectedSource || !selectedLLM || !sessionId || chatLoading}
+          disabled={!selectedLLM || !sessionId || chatLoading}
           style={{ height: "40px" }}
         />
       </div>
@@ -469,9 +527,7 @@ export function ChatSidebar() {
               onClick={handleSend}
               size="sm"
               className="h-8 w-8 p-0 rounded-md bg-primary/90 hover:bg-primary transition-colors"
-              disabled={
-                !selectedSource || !selectedLLM || !sessionId || chatLoading || !input.trim()
-              }
+              disabled={!selectedLLM || !sessionId || chatLoading || !input.trim()}
             >
               <ChevronUp className="h-3 w-3" />
             </Button>

@@ -65,11 +65,24 @@ async def get_messages(
     client_messages = []
 
     for db_message in db_messages:
+        # Transform context data
+        context_data = None
+        if db_message.context:
+            context_data = [
+                {
+                    "query_id": str(ctx.query_id),
+                    "query_version_id": str(ctx.query_version_id) if ctx.query_version_id else None,
+                    "active": ctx.active,
+                }
+                for ctx in db_message.context
+            ]
+
         client_messages.append(
             ChatMessageResponse(
                 role=db_message.role.value,
                 content=db_message.content,
                 sql_query=db_message.sql_query,
+                context=context_data,
                 created_at=db_message.created_at,
             )
         )

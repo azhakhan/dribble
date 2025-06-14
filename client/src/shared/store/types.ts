@@ -92,9 +92,12 @@ export interface ProposedChanges {
   message: string;
 }
 
+import type { ChatContext } from "@/shared/lib/api";
+
 // Chat message interface
 export interface ChatMessage {
   role: "user" | "assistant";
   content: string;
   sql_query?: string;
+  context?: ChatContext[];
 }

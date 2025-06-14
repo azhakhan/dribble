@@ -2,6 +2,7 @@ from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 from uuid import UUID
+from app.schemas.query import ChatContext
 
 
 class ChatMessageResponse(BaseModel):
@@ -10,6 +11,7 @@ class ChatMessageResponse(BaseModel):
     role: str  # "user" | "assistant"
     content: str
     sql_query: Optional[str] = None  # SQL query if message contains one
+    context: Optional[List[ChatContext]] = None  # Context queries for this message
     created_at: datetime
 
     class Config:
