@@ -30,6 +30,7 @@ export const EditSource = ({ open, onOpenChange, sourceId }: EditSourceProps) =>
   const [loading, setLoading] = useState(false);
   const [loadingCreds, setLoadingCreds] = useState(false);
   const [testing, setTesting] = useState(false);
+  const [connectionTested, setConnectionTested] = useState(false);
   const [sourceType, setSourceType] = useState<"postgres" | "mysql" | "sqlite" | "">("");
   const [formError, setFormError] = useState("");
   const queryClient = useQueryClient();
@@ -119,6 +120,7 @@ export const EditSource = ({ open, onOpenChange, sourceId }: EditSourceProps) =>
   const resetForm = () => {
     setSourceType("");
     setFormError("");
+    setConnectionTested(false);
     setPostgresConfig({
       host: "",
       port: 5432,
@@ -183,12 +185,15 @@ export const EditSource = ({ open, onOpenChange, sourceId }: EditSourceProps) =>
       const testResult = await testSource(sourceData);
 
       if (testResult.status === "success") {
+        setConnectionTested(true);
         toast.success("Connection test successful");
       } else {
+        setConnectionTested(false);
         throw new Error(testResult.message);
       }
     } catch (error) {
       console.error("Failed to test source:", error);
+      setConnectionTested(false);
       toast.error("Connection test failed. Please check your connection details.");
     } finally {
       setTesting(false);
@@ -198,6 +203,11 @@ export const EditSource = ({ open, onOpenChange, sourceId }: EditSourceProps) =>
   const handleSave = async () => {
     if (!sourceType) {
       setFormError("Database type not found");
+      return;
+    }
+
+    if (!connectionTested) {
+      setFormError("Please test the connection before saving");
       return;
     }
 
@@ -266,6 +276,13 @@ export const EditSource = ({ open, onOpenChange, sourceId }: EditSourceProps) =>
     }
   };
 
+  // Helper function to reset connection test when form changes
+  const resetConnectionTest = () => {
+    if (connectionTested) {
+      setConnectionTested(false);
+    }
+  };
+
   const isFormDisabled = loading || testing;
 
   return (
@@ -305,12 +322,13 @@ export const EditSource = ({ open, onOpenChange, sourceId }: EditSourceProps) =>
                       id="host"
                       className="col-span-3 flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                       value={postgresConfig.host}
-                      onChange={(e) =>
+                      onChange={(e) => {
                         setPostgresConfig({
                           ...postgresConfig,
                           host: e.target.value
-                        })
-                      }
+                        });
+                        resetConnectionTest();
+                      }}
                       placeholder="localhost"
                       disabled={isFormDisabled}
                     />
@@ -324,12 +342,13 @@ export const EditSource = ({ open, onOpenChange, sourceId }: EditSourceProps) =>
                       type="number"
                       className="col-span-3 flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                       value={postgresConfig.port}
-                      onChange={(e) =>
+                      onChange={(e) => {
                         setPostgresConfig({
                           ...postgresConfig,
                           port: parseInt(e.target.value, 10) || 5432
-                        })
-                      }
+                        });
+                        resetConnectionTest();
+                      }}
                       disabled={isFormDisabled}
                     />
                   </div>
@@ -341,12 +360,13 @@ export const EditSource = ({ open, onOpenChange, sourceId }: EditSourceProps) =>
                       id="username"
                       className="col-span-3 flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                       value={postgresConfig.user}
-                      onChange={(e) =>
+                      onChange={(e) => {
                         setPostgresConfig({
                           ...postgresConfig,
                           user: e.target.value
-                        })
-                      }
+                        });
+                        resetConnectionTest();
+                      }}
                       placeholder="postgres"
                       disabled={isFormDisabled}
                     />
@@ -360,12 +380,13 @@ export const EditSource = ({ open, onOpenChange, sourceId }: EditSourceProps) =>
                       type="password"
                       className="col-span-3 flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                       value={postgresConfig.password}
-                      onChange={(e) =>
+                      onChange={(e) => {
                         setPostgresConfig({
                           ...postgresConfig,
                           password: e.target.value
-                        })
-                      }
+                        });
+                        resetConnectionTest();
+                      }}
                       disabled={isFormDisabled}
                     />
                   </div>
@@ -377,12 +398,13 @@ export const EditSource = ({ open, onOpenChange, sourceId }: EditSourceProps) =>
                       id="database"
                       className="col-span-3 flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                       value={postgresConfig.dbname}
-                      onChange={(e) =>
+                      onChange={(e) => {
                         setPostgresConfig({
                           ...postgresConfig,
                           dbname: e.target.value
-                        })
-                      }
+                        });
+                        resetConnectionTest();
+                      }}
                       disabled={isFormDisabled}
                     />
                   </div>
@@ -399,7 +421,10 @@ export const EditSource = ({ open, onOpenChange, sourceId }: EditSourceProps) =>
                       id="host"
                       className="col-span-3 flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                       value={mysqlConfig.host}
-                      onChange={(e) => setMysqlConfig({ ...mysqlConfig, host: e.target.value })}
+                      onChange={(e) => {
+                        setMysqlConfig({ ...mysqlConfig, host: e.target.value });
+                        resetConnectionTest();
+                      }}
                       placeholder="localhost"
                       disabled={isFormDisabled}
                     />
@@ -413,12 +438,13 @@ export const EditSource = ({ open, onOpenChange, sourceId }: EditSourceProps) =>
                       type="number"
                       className="col-span-3 flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                       value={mysqlConfig.port}
-                      onChange={(e) =>
+                      onChange={(e) => {
                         setMysqlConfig({
                           ...mysqlConfig,
                           port: parseInt(e.target.value, 10) || 3306
-                        })
-                      }
+                        });
+                        resetConnectionTest();
+                      }}
                       disabled={isFormDisabled}
                     />
                   </div>
@@ -430,7 +456,10 @@ export const EditSource = ({ open, onOpenChange, sourceId }: EditSourceProps) =>
                       id="username"
                       className="col-span-3 flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                       value={mysqlConfig.user}
-                      onChange={(e) => setMysqlConfig({ ...mysqlConfig, user: e.target.value })}
+                      onChange={(e) => {
+                        setMysqlConfig({ ...mysqlConfig, user: e.target.value });
+                        resetConnectionTest();
+                      }}
                       placeholder="root"
                       disabled={isFormDisabled}
                     />
@@ -444,7 +473,10 @@ export const EditSource = ({ open, onOpenChange, sourceId }: EditSourceProps) =>
                       type="password"
                       className="col-span-3 flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                       value={mysqlConfig.password}
-                      onChange={(e) => setMysqlConfig({ ...mysqlConfig, password: e.target.value })}
+                      onChange={(e) => {
+                        setMysqlConfig({ ...mysqlConfig, password: e.target.value });
+                        resetConnectionTest();
+                      }}
                       disabled={isFormDisabled}
                     />
                   </div>
@@ -456,7 +488,10 @@ export const EditSource = ({ open, onOpenChange, sourceId }: EditSourceProps) =>
                       id="database"
                       className="col-span-3 flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                       value={mysqlConfig.dbname}
-                      onChange={(e) => setMysqlConfig({ ...mysqlConfig, dbname: e.target.value })}
+                      onChange={(e) => {
+                        setMysqlConfig({ ...mysqlConfig, dbname: e.target.value });
+                        resetConnectionTest();
+                      }}
                       disabled={isFormDisabled}
                     />
                   </div>
@@ -472,7 +507,10 @@ export const EditSource = ({ open, onOpenChange, sourceId }: EditSourceProps) =>
                     id="path"
                     className="col-span-3 flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                     value={sqliteConfig.path}
-                    onChange={(e) => setSqliteConfig({ path: e.target.value })}
+                    onChange={(e) => {
+                      setSqliteConfig({ path: e.target.value });
+                      resetConnectionTest();
+                    }}
                     placeholder="/path/to/database.db"
                     disabled={isFormDisabled}
                   />
@@ -503,7 +541,7 @@ export const EditSource = ({ open, onOpenChange, sourceId }: EditSourceProps) =>
                   "Test Connection"
                 )}
               </Button>
-              <Button onClick={handleSave} disabled={isFormDisabled} size="sm">
+              <Button onClick={handleSave} disabled={isFormDisabled || !connectionTested} size="sm">
                 {loading ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin mr-2" />
