@@ -211,8 +211,6 @@ class OpenAIProvider(BaseLLMProvider):
         self, sql_query: str, reasoning: str, query_id_str: Optional[str] = None
     ) -> Dict[str, Any]:
         """Execute SQL query tool - determines source from query context using query ID"""
-        print(f"LLM is executing query: {sql_query}")
-        print(f"Reasoning: {reasoning}")
 
         # Determine source from query ID or use active query
         source_id = None

@@ -98,8 +98,6 @@ async def run_query_version(request: QueryVersionRequest):
 
     # Build SQL with modifiers using SQLBuilder
     sql_to_run = SQLBuilder.build_query_with_modifiers(request.sql, request.modifiers)
-    print("SQL_TO_RUN")
-    print(sql_to_run)
 
     try:
         logger.info(f"Setting initial status to running for query {request.query_run_id}")

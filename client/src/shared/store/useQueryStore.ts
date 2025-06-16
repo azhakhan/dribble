@@ -358,8 +358,6 @@ export const useQueryStore = create<QueryState>((set, get) => ({
     try {
       const query = await getOrCreateEphemeralQuery(sourceId, schema, table, nodeType);
 
-      console.log("Created/retrieved ephemeral query:", query);
-
       // Update the query in the store
       set((state) => ({
         queries: { ...state.queries, [query.id]: query }
@@ -375,11 +373,7 @@ export const useQueryStore = create<QueryState>((set, get) => ({
   // Convert ephemeral to regular
   convertEphemeralToRegular: async (queryId, name) => {
     try {
-      console.log("Converting ephemeral query to regular:", { queryId, name });
-
       const updatedQuery = await convertEphemeralToRegular(queryId, name);
-
-      console.log("Query after conversion:", updatedQuery);
 
       // Update the query in the store
       set((state) => ({

@@ -2,6 +2,8 @@
 
 AI-powered, open source IDE for Databases
 
+![DribbleSQL](./image.png)
+
 ## Getting Started
 
 ```bash
