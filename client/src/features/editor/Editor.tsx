@@ -140,11 +140,13 @@ export function Editor({ tabId, onQueryExecuted }: EditorProps) {
         // executeQuery now handles saving the version automatically
         await executeQuery(tabId, queryToRun);
         toast.success("Query executed successfully");
-        // Notify parent component that query was executed successfully
-        onQueryExecuted?.();
       } catch (error) {
         console.error("Failed to execute query:", error);
         toast.error("Failed to execute query");
+      } finally {
+        // Notify parent component that query execution completed (success or failure)
+        // This ensures the query runs are refreshed to show the latest status
+        onQueryExecuted?.();
       }
     },
     [

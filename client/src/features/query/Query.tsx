@@ -21,6 +21,7 @@ interface QueryProps {
 function QueryComponent({ tabId }: QueryProps) {
   const [showRuns, setShowRuns] = useState(false);
   const [selectedVersionId, setSelectedVersionId] = useState<string | null>(null);
+  const [userSelectedVersion, setUserSelectedVersion] = useState(false);
 
   // Use store selectors to get data for this specific tab
   const { openTabs, updateTabContent } = useTabStore();
@@ -56,6 +57,7 @@ function QueryComponent({ tabId }: QueryProps) {
     if (currentTab?.queryId) {
       // Reset state when query changes
       setSelectedVersionId(null);
+      setUserSelectedVersion(false);
       setShowRuns(false);
 
       // Load fresh data from store (with caching)
@@ -64,12 +66,26 @@ function QueryComponent({ tabId }: QueryProps) {
     }
   }, [currentTab?.queryId, loadQueryVersions, loadQueryRuns]);
 
-  // Set default selected version to latest when versions load
+  // Set selected version to latest when versions change
   useEffect(() => {
-    if (versions.length > 0 && !selectedVersionId) {
-      setSelectedVersionId(versions[0].id);
+    if (versions.length > 0) {
+      const latestVersionId = versions[0].id;
+      // Auto-select the latest version when no version is selected yet
+      // OR when the latest version changes and user hasn't manually selected one
+      const shouldSelectLatest =
+        !selectedVersionId || (!userSelectedVersion && selectedVersionId !== latestVersionId);
+      if (shouldSelectLatest) {
+        setSelectedVersionId(latestVersionId);
+        // Update tab content with the latest version
+        if (currentTab) {
+          updateTabContent(tabId, {
+            queryVersionId: latestVersionId,
+            editorContent: versions[0].sql
+          });
+        }
+      }
     }
-  }, [versions, selectedVersionId]);
+  }, [versions, selectedVersionId, userSelectedVersion, currentTab, tabId, updateTabContent]);
 
   // Sync selectedVersionId with tab's queryVersionId
   useEffect(() => {
@@ -95,14 +111,16 @@ function QueryComponent({ tabId }: QueryProps) {
   // Get the latest run for status display
   const latestRun = useMemo(() => {
     if (!runs || !Array.isArray(runs) || runs.length === 0) return null;
-    return runs.reduce((latest, current) =>
+    const latest = runs.reduce((latest, current) =>
       new Date(current.created_at) > new Date(latest.created_at) ? current : latest
     );
+    return latest;
   }, [runs]);
 
   // Handle version change
   const handleVersionChange = (versionId: string) => {
     setSelectedVersionId(versionId);
+    setUserSelectedVersion(true);
     const selectedVersion = versions.find((v) => v.id === versionId);
     if (selectedVersion && currentTab) {
       updateTabContent(tabId, {
@@ -159,9 +177,12 @@ function QueryComponent({ tabId }: QueryProps) {
                 <Editor
                   tabId={tabId}
                   onQueryExecuted={() => {
-                    // Reload versions and runs after successful execution
-                    // The store handles this automatically now, but we can trigger manual refresh if needed
+                    // Reload versions and runs after query execution (success or failure)
+                    // This ensures the latest run status is displayed in the footer
                     if (currentTab?.queryId) {
+                      // Reset user selection flag so the latest version gets auto-selected
+                      // when a new version is created during query execution
+                      setUserSelectedVersion(false);
                       loadQueryVersions(currentTab.queryId);
                       loadQueryRuns(currentTab.queryId, true); // Force refresh
                     }
@@ -232,7 +253,7 @@ function QueryComponent({ tabId }: QueryProps) {
                       disabled={!currentTab.queryId}
                       className="h-7 px-2 text-xs gap-1 underline cursor-pointer"
                     >
-                      All Runs ({runs?.length ?? 0})
+                      All Runs
                     </Button>
                   </div>
                 </div>
