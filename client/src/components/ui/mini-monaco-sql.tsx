@@ -203,7 +203,6 @@ export function MiniMonacoSQL({
         suggestOnTriggerCharacters: true,
         acceptSuggestionOnCommitCharacter: true,
         acceptSuggestionOnEnter: "on",
-        wordBasedSuggestions: false,
         suggest: {
           showKeywords: true,
           showSnippets: false,
@@ -221,7 +220,6 @@ export function MiniMonacoSQL({
 
           // Execute the query
           if (onEnterPress) {
-            console.log("Enter pressed, calling onEnterPress");
             onEnterPress();
           }
         }

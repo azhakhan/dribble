@@ -534,7 +534,6 @@ export const useTabStore = create<TabState>()(
             where: overrideFilters?.where ?? (tabFilters.whereInput.trim() || undefined),
             order_by: overrideFilters?.order_by ?? (tabFilters.orderByInput.trim() || undefined)
           };
-          console.log("executeQuery - finalFilters:", finalFilters);
 
           const runRequest: CreateQueryRunRequest = {
             query_version_id: versionId,

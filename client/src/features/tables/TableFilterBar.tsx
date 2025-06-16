@@ -62,14 +62,12 @@ export const TableFilterBar = ({ data, isLoading, columns }: TableFilterBarProps
   const handleWhereEnterPress = async () => {
     // Get fresh value from store at execution time
     const freshState = getTabFilterState(tabId);
-    console.log("WHERE Enter pressed - fresh value:", freshState.whereInput);
     await updateFilterAndExecuteQuery("where", freshState.whereInput, tabId);
   };
 
   const handleOrderByEnterPress = async () => {
     // Get fresh value from store at execution time
     const freshState = getTabFilterState(tabId);
-    console.log("ORDER BY Enter pressed - fresh value:", freshState.orderByInput);
     await updateFilterAndExecuteQuery("orderBy", freshState.orderByInput, tabId);
   };
 

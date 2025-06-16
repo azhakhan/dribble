@@ -330,8 +330,6 @@ export const QueryTree = ({
         // Don't remove ephemeral queries as they're not returned by the API
         const query = queries[queryId];
         if (!query.is_ephemeral && !apiQueryIds.has(queryId)) {
-          // This query was deleted, remove it from store
-          console.log(`Removing deleted query ${queryId} from store`);
           // We need to add a removeQuery method to the store
           removeQuery(queryId);
         }

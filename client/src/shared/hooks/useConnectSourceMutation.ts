@@ -9,20 +9,17 @@ export function useConnectSourceMutation() {
 
   return useMutation({
     mutationFn: (sourceId: string) => {
-      console.log("🔌 Connecting to source:", sourceId);
       // Set loading state when connection starts
       addLoadingSourceId(sourceId);
       return connectSource(sourceId);
     },
     onSuccess: async (_, sourceId) => {
-      console.log("✅ Connection successful for source:", sourceId);
       try {
         // Immediately invalidate and refetch connected sources to update UI
         await queryClient.invalidateQueries({ queryKey: ["connectedSources"] });
 
         // Update the store's connected sources immediately
         await loadConnectedSources();
-        console.log("🔄 Updated connected sources in store");
 
         // Wait a moment for the UI to update
         await new Promise((resolve) => setTimeout(resolve, 100));
@@ -30,7 +27,6 @@ export function useConnectSourceMutation() {
         // Set initial status to "starting"
         setSourceStatus(sourceId, "starting");
         queryClient.setQueryData(["sourceStatus", sourceId], "starting");
-        console.log("⏳ Set status to 'starting' for source:", sourceId);
 
         // Start polling for source status
         let isHealthy = false;
@@ -44,7 +40,6 @@ export function useConnectSourceMutation() {
 
             // Check source status
             const status = await getSourceStatus(sourceId);
-            console.log(`📊 Status check ${attempts + 1} for source ${sourceId}:`, status);
 
             // Update the status in both the cache and app store
             queryClient.setQueryData(["sourceStatus", sourceId], status);
@@ -53,12 +48,10 @@ export function useConnectSourceMutation() {
             // If the source is healthy, stop polling and load schemas
             if (status === "running") {
               isHealthy = true;
-              console.log("🎉 Source is healthy, loading schemas:", sourceId);
 
               try {
                 // Use the store's integrated schema loading
                 await loadSourceSchema(sourceId);
-                console.log("📊 Schemas loaded successfully for source:", sourceId);
               } catch (error) {
                 console.error("❌ Error fetching source schemas:", error);
               }
@@ -77,7 +70,6 @@ export function useConnectSourceMutation() {
       } finally {
         // Clear loading state when done, regardless of outcome
         removeLoadingSourceId(sourceId);
-        console.log("🏁 Cleared loading state for source:", sourceId);
       }
     },
     onError: (error, sourceId) => {
@@ -101,12 +93,9 @@ export function useDisconnectSourceMutation() {
 
   return useMutation({
     mutationFn: (sourceId: string) => {
-      console.log("🔌 Disconnecting from source:", sourceId);
       return disconnectSource(sourceId);
     },
     onSuccess: async (_, sourceId) => {
-      console.log("✅ Disconnection successful for source:", sourceId);
-
       // Cancel any in-flight queries for this source to prevent race conditions
       await queryClient.cancelQueries({ queryKey: ["sourceSchemas", sourceId] });
 
@@ -118,7 +107,6 @@ export function useDisconnectSourceMutation() {
 
       // Update the store's connected sources immediately
       await loadConnectedSources();
-      console.log("🔄 Updated connected sources in store after disconnect");
 
       // Remove the old connectedSourcesSchemas query completely before invalidating
       queryClient.removeQueries({ queryKey: ["connectedSourcesSchemas"] });
@@ -126,7 +114,6 @@ export function useDisconnectSourceMutation() {
       // Clear source status from cache and app store
       queryClient.removeQueries({ queryKey: ["sourceStatus", sourceId] });
       removeSourceStatus(sourceId);
-      console.log("🗑️ Removed source status for:", sourceId);
 
       // Clear schema data from cache and app store - PROPERLY REMOVE IT
       queryClient.removeQueries({ queryKey: ["sourceSchemas", sourceId] });
@@ -147,7 +134,6 @@ export function useDisconnectSourceMutation() {
       // Clear generated children and error state
       setSourceGeneratedChildren(sourceId, []);
       setSourceSchemaError(sourceId, null);
-      console.log("🧹 Cleaned up source data for:", sourceId);
     },
     onError: (error, sourceId) => {
       console.error("❌ Disconnection failed for source:", sourceId, error);
