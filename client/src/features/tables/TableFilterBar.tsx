@@ -1,7 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
 import { useTabStore } from "@/shared/store";
-import { useState, useEffect } from "react";
 import { MiniMonacoSQL } from "@/components/ui/mini-monaco-sql";
 import { usePagination } from "./hooks/usePagination";
 import { PageSizeSelector } from "./components/PageSizeSelector";
@@ -18,6 +17,7 @@ export const TableFilterBar = ({ data, isLoading, columns }: TableFilterBarProps
     getTabFilterState,
     setTableFilterWhere,
     setTableFilterOrderBy,
+    updateFilterAndExecuteQuery,
     clearTableFilters,
     executeQuery
   } = useTabStore();
@@ -32,94 +32,54 @@ export const TableFilterBar = ({ data, isLoading, columns }: TableFilterBarProps
     pageSize: displaySize
   } = usePagination({ data, isLoading });
 
-  // Local state for input fields to improve typing performance
-  const [localWhereInput, setLocalWhereInput] = useState(whereInput);
-  const [localOrderByInput, setLocalOrderByInput] = useState(orderByInput);
-
-  // Sync local state with store state when it changes externally
-  useEffect(() => {
-    setLocalWhereInput(whereInput);
-  }, [whereInput]);
-
-  useEffect(() => {
-    setLocalOrderByInput(orderByInput);
-  }, [orderByInput]);
-
-  // Debounced update for WHERE input
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      if (localWhereInput !== whereInput) {
-        setTableFilterWhere(localWhereInput);
-      }
-    }, 300);
-
-    return () => clearTimeout(timer);
-  }, [localWhereInput, whereInput, setTableFilterWhere]);
-
-  // Debounced update for ORDER BY input
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      if (localOrderByInput !== orderByInput) {
-        setTableFilterOrderBy(localOrderByInput);
-      }
-    }, 300);
-
-    return () => clearTimeout(timer);
-  }, [localOrderByInput, orderByInput, setTableFilterOrderBy]);
-
-  // Check if any filters are active (use store values for this check)
+  // Check if any filters are active
   const hasActiveFilters = whereInput.trim() || orderByInput.trim();
+
+  const handleWhereChange = (value: string) => {
+    // Update store immediately
+    setTableFilterWhere(value, tabId);
+  };
+
+  const handleOrderByChange = (value: string) => {
+    // Update store immediately
+    setTableFilterOrderBy(value, tabId);
+  };
 
   const handleWhereSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
-    // Immediately sync local state to store state
-    if (localWhereInput !== whereInput) {
-      setTableFilterWhere(localWhereInput);
-    }
-
-    // Get fresh activeTabId and execute query with updated filters
-    const currentActiveTabId = useTabStore.getState().activeTabId;
-    if (currentActiveTabId) {
-      try {
-        await executeQuery(currentActiveTabId);
-      } catch (error) {
-        console.error("Failed to execute query for WHERE filter:", error);
-      }
-    }
+    // Get fresh value from store at execution time
+    const freshState = getTabFilterState(tabId);
+    await updateFilterAndExecuteQuery("where", freshState.whereInput, tabId);
   };
 
   const handleOrderBySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    // Get fresh value from store at execution time
+    const freshState = getTabFilterState(tabId);
+    await updateFilterAndExecuteQuery("orderBy", freshState.orderByInput, tabId);
+  };
 
-    // Immediately sync local state to store state
-    if (localOrderByInput !== orderByInput) {
-      setTableFilterOrderBy(localOrderByInput);
-    }
+  const handleWhereEnterPress = async () => {
+    // Get fresh value from store at execution time
+    const freshState = getTabFilterState(tabId);
+    console.log("WHERE Enter pressed - fresh value:", freshState.whereInput);
+    await updateFilterAndExecuteQuery("where", freshState.whereInput, tabId);
+  };
 
-    // Get fresh activeTabId and execute query with updated filters
-    const currentActiveTabId = useTabStore.getState().activeTabId;
-    if (currentActiveTabId) {
-      try {
-        await executeQuery(currentActiveTabId);
-      } catch (error) {
-        console.error("Failed to execute query for ORDER BY filter:", error);
-      }
-    }
+  const handleOrderByEnterPress = async () => {
+    // Get fresh value from store at execution time
+    const freshState = getTabFilterState(tabId);
+    console.log("ORDER BY Enter pressed - fresh value:", freshState.orderByInput);
+    await updateFilterAndExecuteQuery("orderBy", freshState.orderByInput, tabId);
   };
 
   const handleClearFilters = async () => {
     clearTableFilters();
 
-    // Also clear local state
-    setLocalWhereInput("");
-    setLocalOrderByInput("");
-
-    // Get fresh activeTabId and execute query with cleared filters
-    const currentActiveTabId = useTabStore.getState().activeTabId;
-    if (currentActiveTabId) {
+    // Execute query with cleared filters
+    if (activeTabId) {
       try {
-        await executeQuery(currentActiveTabId);
+        await executeQuery(activeTabId);
       } catch (error) {
         console.error("Failed to execute query after clearing filters:", error);
       }
@@ -134,27 +94,13 @@ export const TableFilterBar = ({ data, isLoading, columns }: TableFilterBarProps
         <form onSubmit={handleWhereSubmit} className="flex items-center gap-1">
           <span className="text-muted-foreground">WHERE:</span>
           <MiniMonacoSQL
-            value={localWhereInput}
-            onChange={(value: string) => setLocalWhereInput(value)}
+            value={whereInput}
+            onChange={handleWhereChange}
             className="h-6 text-xs w-32"
             disabled={isLoading}
             mode="where"
             columns={columns}
-            onEnterPress={async () => {
-              // Immediately sync local state to store state
-              if (localWhereInput !== whereInput) {
-                setTableFilterWhere(localWhereInput);
-              }
-              // Get fresh activeTabId and execute query with updated filters
-              const currentActiveTabId = useTabStore.getState().activeTabId;
-              if (currentActiveTabId) {
-                try {
-                  await executeQuery(currentActiveTabId);
-                } catch (error) {
-                  console.error("Failed to execute query for WHERE filter:", error);
-                }
-              }
-            }}
+            onEnterPress={handleWhereEnterPress}
           />
         </form>
 
@@ -162,27 +108,13 @@ export const TableFilterBar = ({ data, isLoading, columns }: TableFilterBarProps
         <form onSubmit={handleOrderBySubmit} className="flex items-center gap-1">
           <span className="text-muted-foreground">ORDER BY:</span>
           <MiniMonacoSQL
-            value={localOrderByInput}
-            onChange={(value: string) => setLocalOrderByInput(value)}
+            value={orderByInput}
+            onChange={handleOrderByChange}
             className="h-6 text-xs w-32"
             disabled={isLoading}
             mode="orderby"
             columns={columns}
-            onEnterPress={async () => {
-              // Immediately sync local state to store state
-              if (localOrderByInput !== orderByInput) {
-                setTableFilterOrderBy(localOrderByInput);
-              }
-              // Get fresh activeTabId and execute query with updated filters
-              const currentActiveTabId = useTabStore.getState().activeTabId;
-              if (currentActiveTabId) {
-                try {
-                  await executeQuery(currentActiveTabId);
-                } catch (error) {
-                  console.error("Failed to execute query for ORDER BY filter:", error);
-                }
-              }
-            }}
+            onEnterPress={handleOrderByEnterPress}
           />
         </form>
 

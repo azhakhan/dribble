@@ -57,16 +57,27 @@ interface TabState {
   setEditorContent: (content: string) => void;
 
   // Query execution
-  executeQuery: (tabId: string, sql?: string) => Promise<void>;
+  executeQuery: (
+    tabId: string,
+    sql?: string,
+    overrideFilters?: { where?: string; order_by?: string }
+  ) => Promise<void>;
 
   // Table filter actions
   setTableFilterOffset: (offset: number) => void;
-  setTableFilterWhere: (where: string) => void;
-  setTableFilterOrderBy: (orderBy: string) => void;
+  setTableFilterWhere: (where: string, tabId?: string) => void;
+  setTableFilterOrderBy: (orderBy: string, tabId?: string) => void;
   setTableFilterPageSize: (displaySize: number) => void;
   clearTableFilters: () => void;
   getTableFilters: () => { limit: number; offset: number; where?: string; order_by?: string };
   getTabFilterState: (tabId: string) => TableFilterState;
+
+  // New method to update filters and execute query atomically
+  updateFilterAndExecuteQuery: (
+    filterType: "where" | "orderBy",
+    value: string,
+    tabId?: string
+  ) => Promise<void>;
 
   // Helper functions
   shouldAutoExecuteQuery: (tab: QueryTab) => boolean;
@@ -379,7 +390,7 @@ export const useTabStore = create<TabState>()(
       setEditorContent: (content) => set({ editorContent: content }),
 
       // Execute query
-      executeQuery: async (tabId, sql) => {
+      executeQuery: async (tabId, sql, overrideFilters) => {
         // Helper function to get the most current tab state
         const getCurrentTab = () => {
           const state = get();
@@ -504,15 +515,29 @@ export const useTabStore = create<TabState>()(
           }
 
           // Step 2: Create a query run and execute
-          const tabFilters = get().getTableFilters();
+          // Get the tab-specific filters (now that we're using tab-aware filters)
+          const currentTab = getCurrentTab();
+          const tabFilters = currentTab
+            ? get().getTabFilterState(currentTab.id)
+            : {
+                currentOffset: 0,
+                whereInput: "",
+                orderByInput: "",
+                pageSize: 501,
+                displaySize: 500
+              };
+
+          const finalFilters = {
+            limit: tabFilters.pageSize,
+            offset: tabFilters.currentOffset,
+            where: overrideFilters?.where ?? (tabFilters.whereInput.trim() || undefined),
+            order_by: overrideFilters?.order_by ?? (tabFilters.orderByInput.trim() || undefined)
+          };
+          console.log("executeQuery - finalFilters:", finalFilters);
+
           const runRequest: CreateQueryRunRequest = {
             query_version_id: versionId,
-            modifiers: {
-              limit: tabFilters.limit,
-              offset: tabFilters.offset,
-              where: tabFilters.where,
-              order_by: tabFilters.order_by
-            }
+            modifiers: finalFilters
           };
 
           const runId = await executeQueryVersionRun(runRequest);
@@ -623,10 +648,10 @@ export const useTabStore = create<TabState>()(
           };
         }),
 
-      setTableFilterWhere: (where: string) =>
+      setTableFilterWhere: (where: string, tabId?: string) =>
         set((state) => {
-          const tabId = state.activeTabId || "default";
-          const currentFilter = state.tableFilters[tabId] || {
+          const targetTabId = tabId || state.activeTabId || "default";
+          const currentFilter = state.tableFilters[targetTabId] || {
             currentOffset: 0,
             whereInput: "",
             orderByInput: "",
@@ -636,15 +661,15 @@ export const useTabStore = create<TabState>()(
           return {
             tableFilters: {
               ...state.tableFilters,
-              [tabId]: { ...currentFilter, whereInput: where, currentOffset: 0 }
+              [targetTabId]: { ...currentFilter, whereInput: where, currentOffset: 0 }
             }
           };
         }),
 
-      setTableFilterOrderBy: (orderBy: string) =>
+      setTableFilterOrderBy: (orderBy: string, tabId?: string) =>
         set((state) => {
-          const tabId = state.activeTabId || "default";
-          const currentFilter = state.tableFilters[tabId] || {
+          const targetTabId = tabId || state.activeTabId || "default";
+          const currentFilter = state.tableFilters[targetTabId] || {
             currentOffset: 0,
             whereInput: "",
             orderByInput: "",
@@ -654,10 +679,54 @@ export const useTabStore = create<TabState>()(
           return {
             tableFilters: {
               ...state.tableFilters,
-              [tabId]: { ...currentFilter, orderByInput: orderBy, currentOffset: 0 }
+              [targetTabId]: { ...currentFilter, orderByInput: orderBy, currentOffset: 0 }
             }
           };
         }),
+
+      // New method to update filters and execute query atomically
+      updateFilterAndExecuteQuery: async (
+        filterType: "where" | "orderBy",
+        value: string,
+        tabId?: string
+      ) => {
+        const state = get();
+        const targetTabId = tabId || state.activeTabId;
+
+        if (!targetTabId) {
+          console.error("No active tab to update filter for");
+          return;
+        }
+
+        // Get current filters before updating
+        const currentFilters = state.getTabFilterState(targetTabId);
+
+        // Prepare the override filters with the new value
+        const overrideFilters = {
+          where:
+            filterType === "where"
+              ? value.trim() || undefined
+              : currentFilters.whereInput.trim() || undefined,
+          order_by:
+            filterType === "orderBy"
+              ? value.trim() || undefined
+              : currentFilters.orderByInput.trim() || undefined
+        };
+
+        // Update the store with the new value
+        if (filterType === "where") {
+          state.setTableFilterWhere(value, targetTabId);
+        } else {
+          state.setTableFilterOrderBy(value, targetTabId);
+        }
+
+        // Execute query with explicit filter values
+        try {
+          await state.executeQuery(targetTabId, undefined, overrideFilters);
+        } catch (error) {
+          console.error(`Failed to execute query after updating ${filterType} filter:`, error);
+        }
+      },
 
       clearTableFilters: () =>
         set((state) => {
