@@ -4,14 +4,16 @@ from app.schemas.sources import (
     UpdateCredentialsRequest,
     TestSourceRequest,
     RenameSourceRequest,
+    PostgresCreds,
+    MysqlCreds,
+    SqliteCreds,
 )
 from app.controllers.sources import get_source_schema, invalidate_source_schema_cache
 from app.core.db import get_db
 from sqlalchemy.orm import Session
 from app.models import Source
 from uuid import UUID
-from app.core.spawn_worker import WorkerContainer, stop_worker
-from app.schemas.sources import PostgresCreds
+from app.core.spawn_worker import create_worker_container, stop_worker
 from uuid import uuid4
 from app.models import Worker
 from app.core.db_utils import get_or_404, safe_delete, get_all_active
@@ -40,33 +42,82 @@ async def add_source(
 async def test(request: TestSourceRequest):
     try:
         source_id = str(uuid4())
-        worker = WorkerContainer(source_id, request.creds)
+        worker = create_worker_container(source_id, request.dbtype, request.creds)
         return worker.test()
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
+# get all sources
+@router.get("/")
+async def get_sources(db: Session = Depends(get_db)):
+    sources = get_all_active(db, Source)
+    return sources
+
+
+@router.get("/connected/")
+async def get_connected_sources(
+    db: Session = Depends(get_db),
+):
+    # get all workers that are running, starting, or healthy
+    workers = (
+        db.query(Worker)
+        .filter(
+            Worker.status.in_(["healthy", "running", "starting"]),
+        )
+        .all()
+    )
+    return [{"id": worker.source_id, "source_id": worker.source_id} for worker in workers]
+
+
+# get a specific source
+@router.get("/{source_id}/")
+async def get_source(source_id: UUID, db: Session = Depends(get_db)):
+    source = get_or_404(db, Source, source_id)
+    return source
+
+
+# update source credentials
+@router.put("/{source_id}/")
+async def update_source_credentials(
+    source_id: UUID,
+    request: UpdateCredentialsRequest,
+    db: Session = Depends(get_db),
+):
+    source = get_or_404(db, Source, source_id)
+
+    if request.creds:
+        source.creds = request.creds.model_dump()
+
+    db.commit()
+    db.refresh(source)
+
+    # Invalidate the schema cache for this source
+    invalidate_source_schema_cache(source_id)
+
+    return source
+
+
+# rename source
 @router.put("/rename/{source_id}/")
 async def rename_source(
     source_id: UUID,
     request: RenameSourceRequest,
     db: Session = Depends(get_db),
 ):
-    source = get_or_404(db, Source, source_id, "Source not found")
+    source = get_or_404(db, Source, source_id)
+
     source.name = request.name
     db.commit()
     db.refresh(source)
+
     return source
 
 
-# delete a source
-@router.delete("/{source_id}/")
-async def delete_source(
-    source_id: UUID,
-    db: Session = Depends(get_db),
-):
-    source = get_or_404(db, Source, source_id, "Source not found")
-    return safe_delete(db, source)
+# get schema for a source
+@router.get("/{source_id}/schema/")
+async def get_schema(source_id: UUID, db: Session = Depends(get_db)):
+    return await get_source_schema(str(source_id), db)
 
 
 @router.get("/connect/{source_id}")
@@ -77,11 +128,20 @@ async def connect(
     source = get_or_404(db, Source, source_id, "Source not found")
 
     try:
-        creds = PostgresCreds(**source.creds)
+        # Parse credentials based on database type
+        if source.dbtype == "postgres":
+            creds = PostgresCreds(**source.creds)
+        elif source.dbtype == "mysql":
+            creds = MysqlCreds(**source.creds)
+        elif source.dbtype == "sqlite":
+            creds = SqliteCreds(**source.creds)
+        else:
+            raise ValueError(f"Unsupported database type: {source.dbtype}")
+
         worker = None
 
         try:
-            worker = WorkerContainer(source.id, creds)
+            worker = create_worker_container(source.id, source.dbtype, creds)
             container_exists = worker.already_exists()
 
             # Check if worker record exists in the database
@@ -124,6 +184,31 @@ async def connect(
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
+# delete a source
+@router.delete("/{source_id}/")
+async def delete_source(source_id: UUID, db: Session = Depends(get_db)):
+    source = get_or_404(db, Source, source_id)
+
+    # Stop any running workers for this source
+    workers = db.query(Worker).filter_by(source_id=source_id).all()
+    for worker in workers:
+        try:
+            stop_worker(worker.container_id)
+        except Exception:
+            # Log the error but don't fail the deletion
+            pass
+        # Remove worker from database
+        db.delete(worker)
+
+    # Invalidate the schema cache for this source
+    invalidate_source_schema_cache(source_id)
+
+    # Delete the source using soft delete
+    safe_delete(db, source)
+
+    return {"message": "Source deleted"}
+
+
 @router.get("/status/{source_id}")
 async def get_status(
     source_id: UUID,
@@ -148,34 +233,9 @@ async def get_schemas(
         raise HTTPException(status_code=400, detail="Source is not connected")
 
     try:
-        return await get_source_schema(str(source.id))
+        return await get_source_schema(str(source.id), db)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
-
-
-# get all sources
-@router.get("/")
-async def get_sources(
-    db: Session = Depends(get_db),
-):
-    # only return name and id
-    sources = get_all_active(db, Source)
-    return [{"id": source.id, "name": source.name, "dbtype": source.dbtype} for source in sources]
-
-
-@router.get("/connected/")
-async def get_connected_sources(
-    db: Session = Depends(get_db),
-):
-    # get all workers that are running, starting, or healthy
-    workers = (
-        db.query(Worker)
-        .filter(
-            Worker.status.in_(["healthy", "running", "starting"]),
-        )
-        .all()
-    )
-    return [{"id": worker.source_id, "source_id": worker.source_id} for worker in workers]
 
 
 # add disconnect source

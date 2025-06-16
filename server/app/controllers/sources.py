@@ -2,9 +2,12 @@ import httpx
 import orjson
 import asyncio
 from app.core._redis import REDIS
+from sqlalchemy.orm import Session
+from app.models import Source
+from uuid import UUID
 
 
-async def get_source_schema(source_id: str):
+async def get_source_schema(source_id: str, db: Session = None):
     # Try to get from cache first
     cache_key = f"source_schema:{source_id}"
     cached_result = await REDIS.get(cache_key)
@@ -12,8 +15,22 @@ async def get_source_schema(source_id: str):
     if cached_result:
         return orjson.loads(cached_result)
 
-    # If not in cache, fetch from the worker with retry logic
-    container_name = f"dribble-worker-postgres-{source_id}"
+    # If no database session provided, we can't determine the container type
+    if db is None:
+        raise Exception("Database session required to determine source type")
+
+    # Get the source to determine the database type
+    source = db.query(Source).filter(Source.id == UUID(source_id)).first()
+    if not source:
+        raise Exception(f"Source {source_id} not found")
+
+    # Determine the correct container name based on database type
+    if source.dbtype == "postgres":
+        container_name = f"dribble-worker-postgres-{source_id}"
+    elif source.dbtype == "mysql":
+        container_name = f"dribble-worker-mysql-{source_id}"
+    else:
+        raise Exception(f"Unsupported database type: {source.dbtype}")
 
     max_retries = 3
     base_delay = 1.0  # seconds
