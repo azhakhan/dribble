@@ -1,10 +1,11 @@
 import { useState, useEffect } from "react";
-import { getSourceCredentials, updateSourceCredentials } from "@/shared/lib/api";
+import { getSourceCredentials, updateSourceCredentials, testSource } from "@/shared/lib/api";
 import type {
   PostgresCreds,
   MysqlCreds,
   SqliteCreds,
-  UpdateCredentialsRequest
+  UpdateCredentialsRequest,
+  CreateSourceRequest
 } from "@/shared/lib/api";
 import {
   Dialog,
@@ -138,10 +139,57 @@ export const EditSource = ({ open, onOpenChange, sourceId }: EditSourceProps) =>
   };
 
   const handleTest = async () => {
-    setTesting(true);
+    if (!sourceType) {
+      setFormError("Database type not found");
+      return;
+    }
+
+    let credentials: PostgresCreds | MysqlCreds | SqliteCreds;
+
+    // Validate and prepare credentials based on source type
+    if (sourceType === "postgres") {
+      const { host, user, dbname } = postgresConfig;
+      if (!host || !user || !dbname) {
+        setFormError("All PostgreSQL fields except password are required");
+        return;
+      }
+      credentials = postgresConfig;
+    } else if (sourceType === "mysql") {
+      const { host, user, dbname } = mysqlConfig;
+      if (!host || !user || !dbname) {
+        setFormError("All MySQL fields except password are required");
+        return;
+      }
+      credentials = mysqlConfig;
+    } else {
+      // SQLite
+      if (!sqliteConfig.path) {
+        setFormError("SQLite file path is required");
+        return;
+      }
+      credentials = sqliteConfig;
+    }
+
     try {
-      // Test function implementation would go here
-      toast.info("Test functionality not implemented in this dialog");
+      setTesting(true);
+      setFormError("");
+
+      const sourceData: CreateSourceRequest = {
+        name: "Test Connection",
+        dbtype: sourceType,
+        creds: credentials!
+      };
+
+      const testResult = await testSource(sourceData);
+
+      if (testResult.status === "success") {
+        toast.success("Connection test successful");
+      } else {
+        throw new Error(testResult.message);
+      }
+    } catch (error) {
+      console.error("Failed to test source:", error);
+      toast.error("Connection test failed. Please check your connection details.");
     } finally {
       setTesting(false);
     }

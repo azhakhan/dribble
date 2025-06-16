@@ -99,6 +99,7 @@ export const createSource = async (sourceData: CreateSourceRequest): Promise<Sou
 };
 
 export interface TestSourceResponse {
+  status: "success" | "error";
   message: string;
 }
 

@@ -173,9 +173,13 @@ export const AddSource = ({ onSourceAdded }: AddSourceProps) => {
         creds: credentials!
       };
 
-      await testSource(sourceData);
+      const testResult = await testSource(sourceData);
 
-      toast.success("Connection test successful");
+      if (testResult.status === "success") {
+        toast.success("Connection test successful");
+      } else {
+        throw new Error(testResult.message);
+      }
     } catch (error) {
       console.error("Failed to test source:", error);
       toast.error("Connection test failed. Please check your connection details.");
