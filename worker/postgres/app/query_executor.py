@@ -114,6 +114,7 @@ def execute_query(query: str, engine):
                             processed_row[key] = value
                     processed_rows.append(processed_row)
 
+                logger.info(f"[{datetime.datetime.now()}] Processed rows: {processed_rows}")
                 return {
                     "data": processed_rows,
                     "row_count": len(processed_rows),
