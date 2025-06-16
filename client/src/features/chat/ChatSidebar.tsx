@@ -256,7 +256,8 @@ export function ChatSidebar() {
       // Handle response based on sql_query presence
       if (response.sql_query) {
         // Instead of directly updating the editor, set proposed changes for diff view
-        setProposedChanges({
+        // This will now automatically save the LLM changes as the latest version
+        await setProposedChanges({
           originalContent: editorContent,
           proposedContent: response.sql_query,
           message: response.content || "AI generated SQL query"

@@ -3,7 +3,7 @@ import { CheckIcon, XIcon } from "lucide-react";
 
 interface ProposedChangesBarProps {
   onAccept: () => void;
-  onReject: () => void;
+  onReject: () => void | Promise<void>;
 }
 
 export function ProposedChangesBar({ onAccept, onReject }: ProposedChangesBarProps) {
