@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { deleteSource } from "@/shared/lib/api";
+import { deleteSource, disconnectSource } from "@/shared/lib/api";
 import {
   Dialog,
   DialogContent,
@@ -27,7 +27,7 @@ export const DeleteSource = ({ open, onOpenChange, sourceId, sourceName }: Delet
   const [confirmName, setConfirmName] = useState("");
   const [loading, setLoading] = useState(false);
   const queryClient = useQueryClient();
-  const { loadSources } = useSourceStore();
+  const { loadSources, connectedSources } = useSourceStore();
 
   // Reset confirmation when dialog opens
   useEffect(() => {
@@ -44,6 +44,23 @@ export const DeleteSource = ({ open, onOpenChange, sourceId, sourceName }: Delet
 
     try {
       setLoading(true);
+
+      // Check if source is connected and disconnect it first
+      if (connectedSources.has(sourceId)) {
+        toast.info("Disconnecting source...");
+        try {
+          await disconnectSource(sourceId);
+          // Update connected sources cache
+          queryClient.invalidateQueries({ queryKey: ["connectedSources"] });
+          toast.success("Source disconnected successfully");
+        } catch (disconnectError) {
+          console.error("Failed to disconnect source:", disconnectError);
+          toast.error("Failed to disconnect source, but continuing with deletion...");
+          // Continue with deletion even if disconnect fails
+        }
+      }
+
+      // Now delete the source
       await deleteSource(sourceId);
       queryClient.invalidateQueries({ queryKey: ["sources"] });
       await loadSources();

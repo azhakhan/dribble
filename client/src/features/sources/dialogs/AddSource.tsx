@@ -24,6 +24,7 @@ export const AddSource = ({ onSourceAdded }: AddSourceProps) => {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [testing, setTesting] = useState(false);
+  const [connectionTested, setConnectionTested] = useState(false);
   const [sourceType, setSourceType] = useState<"postgres" | "mysql" | "sqlite" | "">("");
   const [sourceName, setSourceName] = useState("");
   const [formError, setFormError] = useState("");
@@ -56,6 +57,7 @@ export const AddSource = ({ onSourceAdded }: AddSourceProps) => {
     setSourceType("");
     setSourceName("");
     setFormError("");
+    setConnectionTested(false);
     setPostgresConfig({
       host: "",
       port: 5432,
@@ -83,6 +85,11 @@ export const AddSource = ({ onSourceAdded }: AddSourceProps) => {
 
     if (!sourceType) {
       setFormError("Please select a database type");
+      return;
+    }
+
+    if (!connectionTested) {
+      setFormError("Please test the connection before saving");
       return;
     }
 
@@ -173,14 +180,28 @@ export const AddSource = ({ onSourceAdded }: AddSourceProps) => {
         creds: credentials!
       };
 
-      await testSource(sourceData);
+      const testResult = await testSource(sourceData);
 
-      toast.success("Connection test successful");
+      if (testResult.status === "success") {
+        setConnectionTested(true);
+        toast.success("Connection test successful");
+      } else {
+        setConnectionTested(false);
+        throw new Error(testResult.message);
+      }
     } catch (error) {
       console.error("Failed to test source:", error);
+      setConnectionTested(false);
       toast.error("Connection test failed. Please check your connection details.");
     } finally {
       setTesting(false);
+    }
+  };
+
+  // Helper function to reset connection test when form changes
+  const resetConnectionTest = () => {
+    if (connectionTested) {
+      setConnectionTested(false);
     }
   };
 
@@ -224,7 +245,10 @@ export const AddSource = ({ onSourceAdded }: AddSourceProps) => {
               id="name"
               className="col-span-3 flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
               value={sourceName}
-              onChange={(e) => setSourceName(e.target.value)}
+              onChange={(e) => {
+                setSourceName(e.target.value);
+                resetConnectionTest();
+              }}
               placeholder="My Database"
               disabled={isFormDisabled}
             />
@@ -238,9 +262,10 @@ export const AddSource = ({ onSourceAdded }: AddSourceProps) => {
               id="type"
               className="col-span-3 flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
               value={sourceType}
-              onChange={(e) =>
-                setSourceType(e.target.value as "postgres" | "mysql" | "sqlite" | "")
-              }
+              onChange={(e) => {
+                setSourceType(e.target.value as "postgres" | "mysql" | "sqlite" | "");
+                resetConnectionTest();
+              }}
               disabled={isFormDisabled}
             >
               <option value="">Select database type</option>
@@ -260,12 +285,13 @@ export const AddSource = ({ onSourceAdded }: AddSourceProps) => {
                   id="host"
                   className="col-span-3 flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                   value={postgresConfig.host}
-                  onChange={(e) =>
+                  onChange={(e) => {
                     setPostgresConfig({
                       ...postgresConfig,
                       host: e.target.value
-                    })
-                  }
+                    });
+                    resetConnectionTest();
+                  }}
                   placeholder="localhost"
                   disabled={isFormDisabled}
                 />
@@ -279,12 +305,13 @@ export const AddSource = ({ onSourceAdded }: AddSourceProps) => {
                   type="number"
                   className="col-span-3 flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                   value={postgresConfig.port}
-                  onChange={(e) =>
+                  onChange={(e) => {
                     setPostgresConfig({
                       ...postgresConfig,
                       port: parseInt(e.target.value, 10) || 5432
-                    })
-                  }
+                    });
+                    resetConnectionTest();
+                  }}
                   disabled={isFormDisabled}
                 />
               </div>
@@ -296,12 +323,13 @@ export const AddSource = ({ onSourceAdded }: AddSourceProps) => {
                   id="username"
                   className="col-span-3 flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                   value={postgresConfig.user}
-                  onChange={(e) =>
+                  onChange={(e) => {
                     setPostgresConfig({
                       ...postgresConfig,
                       user: e.target.value
-                    })
-                  }
+                    });
+                    resetConnectionTest();
+                  }}
                   placeholder="postgres"
                   disabled={isFormDisabled}
                 />
@@ -315,12 +343,13 @@ export const AddSource = ({ onSourceAdded }: AddSourceProps) => {
                   type="password"
                   className="col-span-3 flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                   value={postgresConfig.password}
-                  onChange={(e) =>
+                  onChange={(e) => {
                     setPostgresConfig({
                       ...postgresConfig,
                       password: e.target.value
-                    })
-                  }
+                    });
+                    resetConnectionTest();
+                  }}
                   disabled={isFormDisabled}
                 />
               </div>
@@ -332,12 +361,13 @@ export const AddSource = ({ onSourceAdded }: AddSourceProps) => {
                   id="database"
                   className="col-span-3 flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                   value={postgresConfig.dbname}
-                  onChange={(e) =>
+                  onChange={(e) => {
                     setPostgresConfig({
                       ...postgresConfig,
                       dbname: e.target.value
-                    })
-                  }
+                    });
+                    resetConnectionTest();
+                  }}
                   disabled={isFormDisabled}
                 />
               </div>
@@ -354,7 +384,10 @@ export const AddSource = ({ onSourceAdded }: AddSourceProps) => {
                   id="host"
                   className="col-span-3 flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                   value={mysqlConfig.host}
-                  onChange={(e) => setMysqlConfig({ ...mysqlConfig, host: e.target.value })}
+                  onChange={(e) => {
+                    setMysqlConfig({ ...mysqlConfig, host: e.target.value });
+                    resetConnectionTest();
+                  }}
                   placeholder="localhost"
                   disabled={isFormDisabled}
                 />
@@ -368,12 +401,13 @@ export const AddSource = ({ onSourceAdded }: AddSourceProps) => {
                   type="number"
                   className="col-span-3 flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                   value={mysqlConfig.port}
-                  onChange={(e) =>
+                  onChange={(e) => {
                     setMysqlConfig({
                       ...mysqlConfig,
                       port: parseInt(e.target.value, 10) || 3306
-                    })
-                  }
+                    });
+                    resetConnectionTest();
+                  }}
                   disabled={isFormDisabled}
                 />
               </div>
@@ -385,7 +419,10 @@ export const AddSource = ({ onSourceAdded }: AddSourceProps) => {
                   id="username"
                   className="col-span-3 flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                   value={mysqlConfig.user}
-                  onChange={(e) => setMysqlConfig({ ...mysqlConfig, user: e.target.value })}
+                  onChange={(e) => {
+                    setMysqlConfig({ ...mysqlConfig, user: e.target.value });
+                    resetConnectionTest();
+                  }}
                   placeholder="root"
                   disabled={isFormDisabled}
                 />
@@ -399,7 +436,10 @@ export const AddSource = ({ onSourceAdded }: AddSourceProps) => {
                   type="password"
                   className="col-span-3 flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                   value={mysqlConfig.password}
-                  onChange={(e) => setMysqlConfig({ ...mysqlConfig, password: e.target.value })}
+                  onChange={(e) => {
+                    setMysqlConfig({ ...mysqlConfig, password: e.target.value });
+                    resetConnectionTest();
+                  }}
                   disabled={isFormDisabled}
                 />
               </div>
@@ -411,7 +451,10 @@ export const AddSource = ({ onSourceAdded }: AddSourceProps) => {
                   id="database"
                   className="col-span-3 flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                   value={mysqlConfig.dbname}
-                  onChange={(e) => setMysqlConfig({ ...mysqlConfig, dbname: e.target.value })}
+                  onChange={(e) => {
+                    setMysqlConfig({ ...mysqlConfig, dbname: e.target.value });
+                    resetConnectionTest();
+                  }}
                   disabled={isFormDisabled}
                 />
               </div>
@@ -427,7 +470,10 @@ export const AddSource = ({ onSourceAdded }: AddSourceProps) => {
                 id="path"
                 className="col-span-3 flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                 value={sqliteConfig.path}
-                onChange={(e) => setSquliteConfig({ path: e.target.value })}
+                onChange={(e) => {
+                  setSquliteConfig({ path: e.target.value });
+                  resetConnectionTest();
+                }}
                 placeholder="/path/to/database.db"
                 disabled={isFormDisabled}
               />
@@ -457,7 +503,7 @@ export const AddSource = ({ onSourceAdded }: AddSourceProps) => {
               "Test Connection"
             )}
           </Button>
-          <Button onClick={handleSave} disabled={isFormDisabled}>
+          <Button onClick={handleSave} disabled={isFormDisabled || !connectionTested}>
             {loading ? "Saving..." : "Save"}
           </Button>
         </DialogFooter>
