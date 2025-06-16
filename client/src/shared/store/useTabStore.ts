@@ -88,7 +88,8 @@ interface TabState {
   openTableFromTree: (
     sourceId: string,
     tableName: string,
-    nodeType: "table" | "view"
+    nodeType: "table" | "view",
+    schemaName?: string
   ) => Promise<void>;
 }
 
@@ -919,7 +920,8 @@ export const useTabStore = create<TabState>()(
       openTableFromTree: async (
         sourceId: string,
         tableName: string,
-        nodeType: "table" | "view"
+        nodeType: "table" | "view",
+        schemaName?: string
       ) => {
         const currentState = get();
         const queryStore = useQueryStore.getState();
@@ -927,8 +929,39 @@ export const useTabStore = create<TabState>()(
         try {
           // Parse table name to get schema and table
           const parts = tableName.split(".");
-          const schema = parts.length > 1 ? parts[0] : "public";
-          const table = parts.length > 1 ? parts[1] : parts[0];
+
+          // If schema is provided explicitly, use it
+          let schema: string;
+          let table: string;
+
+          if (schemaName) {
+            // Use the provided schema name
+            schema = schemaName;
+            table = parts.length > 1 ? parts[1] : parts[0];
+          } else if (parts.length > 1) {
+            // Schema was included in table name
+            schema = parts[0];
+            table = parts[1];
+          } else {
+            // No schema provided, need to determine default based on database type
+            table = parts[0];
+
+            // Get source information to determine database type
+            const sourceStore = useSourceStore.getState();
+            const source = sourceStore.sources[sourceId];
+
+            if (source?.dbtype === "mysql") {
+              // MySQL doesn't use schemas in the same way, use the database name as schema
+              // For now, we'll use just the table name without schema prefix
+              schema = "";
+            } else if (source?.dbtype === "sqlite") {
+              // SQLite doesn't use schemas, use just table name
+              schema = "";
+            } else {
+              // PostgreSQL and unknown types default to "public"
+              schema = "public";
+            }
+          }
 
           // Get or create ephemeral query for this table/view
           const ephemeralQuery = await queryStore.getOrCreateEphemeralQuery(
@@ -941,7 +974,9 @@ export const useTabStore = create<TabState>()(
           // Load the latest version to get the SQL - wait for it to complete
           const latestVersion = await queryStore.loadLatestQueryVersion(ephemeralQuery.id);
 
-          const sql = latestVersion?.sql || `SELECT * FROM ${schema}.${table} LIMIT 101`;
+          // Generate SQL based on whether schema should be included
+          const sqlTableRef = schema ? `${schema}.${table}` : table;
+          const sql = latestVersion?.sql || `SELECT * FROM ${sqlTableRef} LIMIT 101`;
 
           // Check if this ephemeral query is already open in a tab
           const existingTab = currentState.openTabs.find(
@@ -974,7 +1009,7 @@ export const useTabStore = create<TabState>()(
               queryId: ephemeralQuery.id,
               queryVersionId: latestVersion?.id || null,
               sourceId,
-              title: `${schema}.${table}`,
+              title: schema ? `${schema}.${table}` : table,
               isDirty: false,
               editorContent: sql,
               queryResults: null,
