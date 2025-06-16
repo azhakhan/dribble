@@ -206,7 +206,7 @@ async def get_credentials(
     creds = source.creds.copy()
     if "password" in creds:
         creds["password"] = "***"
-    return creds
+    return {"name": source.name, "dbtype": source.dbtype, "creds": creds}
 
 
 @router.put("/credentials/{source_id}/")
