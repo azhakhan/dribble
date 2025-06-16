@@ -248,7 +248,9 @@ class ChatService:
         if not llm:
             return ChatResponse(content="LLM not found", metadata={"error": "invalid_llm_id"})
 
-        provider = LLMProviderFactory.create_provider(llm, current_context_queries, message_service)
+        provider = LLMProviderFactory.create_provider(
+            llm, current_context_queries, self.db, message_service
+        )
 
         tools = self._get_tools(current_context_queries)
 

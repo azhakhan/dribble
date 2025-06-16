@@ -40,7 +40,7 @@ async def execute_query_version_run(
             sql=version.sql,
             modifiers=request.modifiers,
         )
-        return execute_in_worker_version(query_run_request)
+        return execute_in_worker_version(query_run_request, db)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
 

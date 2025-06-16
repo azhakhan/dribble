@@ -16,6 +16,7 @@ from app.controllers.query import execute_in_worker, get_query_results
 from app.controllers.messages import ChatMessageService, ChatMessage
 from app.controllers.chat_types import ContextQuery, ChatResponse
 from datetime import datetime
+from sqlalchemy.orm import Session
 
 
 class BaseLLMProvider(ABC):
@@ -25,10 +26,12 @@ class BaseLLMProvider(ABC):
         self,
         llm: LLM,
         context_queries: List[ContextQuery],
+        db_session: Session,
         message_service: Optional[ChatMessageService] = None,
     ):
         self.llm = llm
         self.context_queries = context_queries
+        self.db_session = db_session
         self.message_service = message_service
         self.client = None
         self._initialize_client()
@@ -252,7 +255,7 @@ class OpenAIProvider(BaseLLMProvider):
 
         try:
             # Execute query using the determined source
-            result = execute_in_worker(source_id, sql_query)
+            result = execute_in_worker(source_id, sql_query, self.db_session)
             query_id = result.get("query_id")
 
             if query_id:
@@ -319,14 +322,15 @@ class LLMProviderFactory:
     def create_provider(
         llm: LLM,
         context_queries: List[ContextQuery],
+        db_session: Session,
         message_service: Optional[ChatMessageService] = None,
     ) -> BaseLLMProvider:
         if llm.name == LLMName.openai:
-            return OpenAIProvider(llm, context_queries, message_service)
+            return OpenAIProvider(llm, context_queries, db_session, message_service)
         elif llm.name == LLMName.anthropic:
-            return AnthropicProvider(llm, context_queries, message_service)
+            return AnthropicProvider(llm, context_queries, db_session, message_service)
         elif llm.name == LLMName.ollama:
-            return OllamaProvider(llm, context_queries, message_service)
+            return OllamaProvider(llm, context_queries, db_session, message_service)
         else:
             raise ValueError(f"Unsupported LLM provider: {llm.name}")
 
