@@ -35,6 +35,12 @@ start:
         docker build -t dribble-worker-postgres:latest ./worker/postgres
     fi
 
+    # Check and build dribble-worker-mysql image if missing
+    if ! docker image ls --format '{{"{{"}}.Repository{{"}}"}}:{{"{{"}}.Tag{{"}}"}}' | grep -q '^dribble-worker-mysql:latest$'; then
+        echo "Building dribble-worker-mysql..."
+        docker build -t dribble-worker-mysql:latest ./worker/mysql
+    fi
+
     # Check and build client if image is missing
     if ! docker image ls --format '{{"{{"}}.Repository{{"}}"}}:{{"{{"}}.Tag{{"}}"}}' | grep -q '^dribble-client:latest$'; then
         echo "Building dribble-client..."

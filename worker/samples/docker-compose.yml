@@ -17,12 +17,30 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+  user-mysql:
+    image: mysql:8.0
+    environment:
+      - MYSQL_ROOT_PASSWORD=mysql
+      - MYSQL_DATABASE=mysql
+    ports:
+      - "3307:3306"
+    volumes:
+      - ./mysql/sakila-schema.sql:/docker-entrypoint-initdb.d/1-schema.sql
+      - ./mysql/sakila-data.sql:/docker-entrypoint-initdb.d/2-data.sql
+      - user_mysql_data:/var/lib/mysql
+    networks:
+      - dribble-network
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -u mysql -pmysql"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
 networks:
   dribble-network:
     external: true
     name: dribble-network
-  
+
 volumes:
   user_postgres_data:
-  
+  user_mysql_data:

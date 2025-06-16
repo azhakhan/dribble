@@ -151,7 +151,7 @@ class ChatContextService:
         # Load schema for each unique source
         for source_id in unique_source_ids:
             try:
-                schema_data = await get_source_schema(source_id)
+                schema_data = await get_source_schema(source_id, self.db)
                 schemas[source_id] = schema_data
             except Exception as e:
                 # If schema loading fails, log it but don't break the chat
@@ -248,7 +248,9 @@ class ChatService:
         if not llm:
             return ChatResponse(content="LLM not found", metadata={"error": "invalid_llm_id"})
 
-        provider = LLMProviderFactory.create_provider(llm, current_context_queries, message_service)
+        provider = LLMProviderFactory.create_provider(
+            llm, current_context_queries, self.db, message_service
+        )
 
         tools = self._get_tools(current_context_queries)
 

@@ -3,13 +3,20 @@ import requests
 import logging
 from app.core._redis import get_result
 from app.schemas.query_execute import ExecuteQueryVersionRequest
+from sqlalchemy.orm import Session
+from app.models import Source
 
 # Set up logging
 logger = logging.getLogger(__name__)
 
 
-def execute_in_worker(source_id: UUID, query: str):
-    container_name = f"dribble-worker-postgres-{source_id}"
+def execute_in_worker(source_id: UUID, query: str, db: Session):
+    # Get the source to determine the database type
+    source = db.query(Source).filter(Source.id == source_id).first()
+    if not source:
+        raise Exception(f"Source {source_id} not found")
+
+    container_name = f"dribble-worker-{source.dbtype}-{source_id}"
     response = requests.post(
         f"http://{container_name}:8000/execute/",
         json={"query": query, "query_id": str(source_id)},
@@ -18,8 +25,13 @@ def execute_in_worker(source_id: UUID, query: str):
     return response.json()
 
 
-def execute_in_worker_version(request: ExecuteQueryVersionRequest):
-    container_name = f"dribble-worker-postgres-{request.source_id}"
+def execute_in_worker_version(request: ExecuteQueryVersionRequest, db: Session):
+    # Get the source to determine the database type
+    source = db.query(Source).filter(Source.id == request.source_id).first()
+    if not source:
+        raise Exception(f"Source {request.source_id} not found")
+
+    container_name = f"dribble-worker-{source.dbtype}-{request.source_id}"
     response = requests.post(
         f"http://{container_name}:8000/execute/version",
         json={

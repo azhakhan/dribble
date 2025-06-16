@@ -40,14 +40,24 @@ import type { ConnectedSource } from "@/shared/lib/api";
 interface FileTreeProps {
   data: FileNode[];
   onSourceSelect?: (source: { id: string; name: string; dbtype: string }) => void;
-  onTableDoubleClick?: (sourceId: string, tableName: string, nodeType: "table" | "view") => void;
+  onTableDoubleClick?: (
+    sourceId: string,
+    tableName: string,
+    nodeType: "table" | "view",
+    schemaName?: string
+  ) => void;
 }
 
 interface FileTreeItemProps {
   node: FileNode;
   level?: number;
   onSourceSelect?: (source: { id: string; name: string; dbtype: string }) => void;
-  onTableDoubleClick?: (sourceId: string, tableName: string, nodeType: "table" | "view") => void;
+  onTableDoubleClick?: (
+    sourceId: string,
+    tableName: string,
+    nodeType: "table" | "view",
+    schemaName?: string
+  ) => void;
   connectedSourceIds: Set<string>;
   parentContext?: { sourceId?: string; schemaName?: string };
 }
@@ -248,7 +258,7 @@ const FileTreeItem = ({
       if (onTableDoubleClick && node.sourceId) {
         // Open and run ephemeral query on double click
         const nodeType = node.type === "view" ? "view" : "table";
-        onTableDoubleClick(node.sourceId, node.name, nodeType);
+        onTableDoubleClick(node.sourceId, node.name, nodeType, parentContext?.schemaName);
       }
     }
   };
