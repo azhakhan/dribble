@@ -30,6 +30,23 @@ export function Editor({ tabId, onQueryExecuted }: EditorProps) {
   const { proposedChanges, acceptProposedChanges, rejectProposedChanges } = useChatStore();
   const { updateQueryName } = useQueryStore();
 
+  // Handle accept proposed changes with user feedback
+  const handleAcceptProposedChanges = useCallback(() => {
+    acceptProposedChanges();
+    toast.success("Changes accepted");
+  }, [acceptProposedChanges]);
+
+  // Handle reject proposed changes with async support
+  const handleRejectProposedChanges = useCallback(async () => {
+    try {
+      await rejectProposedChanges();
+      toast.success("Changes rejected and reverted");
+    } catch (error) {
+      console.error("Failed to reject proposed changes:", error);
+      toast.error("Failed to reject changes");
+    }
+  }, [rejectProposedChanges]);
+
   // Find current tab - memoized to prevent unnecessary re-computations
   const currentTab = useMemo(() => openTabs.find((tab) => tab.id === tabId), [openTabs, tabId]);
 
@@ -327,7 +344,10 @@ export function Editor({ tabId, onQueryExecuted }: EditorProps) {
 
       {/* Show accept/reject bar when there are proposed changes */}
       {proposedChanges && (
-        <ProposedChangesBar onAccept={acceptProposedChanges} onReject={rejectProposedChanges} />
+        <ProposedChangesBar
+          onAccept={handleAcceptProposedChanges}
+          onReject={handleRejectProposedChanges}
+        />
       )}
     </div>
   );
