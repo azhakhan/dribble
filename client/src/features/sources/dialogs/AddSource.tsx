@@ -271,7 +271,6 @@ export const AddSource = ({ onSourceAdded }: AddSourceProps) => {
               <option value="">Select database type</option>
               <option value="postgres">PostgreSQL</option>
               <option value="mysql">MySQL</option>
-              <option value="sqlite">SQLite</option>
             </select>
           </div>
 
