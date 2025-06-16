@@ -205,5 +205,5 @@ async def health_check():
 
 
 if __name__ == "__main__":
-    if len(sys.argv) > 1 and sys.argv[1] == "test_connection":
+    if len(sys.argv) > 1 and sys.argv[1] == "test-connection":
         test_connection_cli()
