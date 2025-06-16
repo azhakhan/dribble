@@ -71,6 +71,13 @@ function QueryComponent({ tabId }: QueryProps) {
     }
   }, [versions, selectedVersionId]);
 
+  // Sync selectedVersionId with tab's queryVersionId
+  useEffect(() => {
+    if (currentTab?.queryVersionId && currentTab.queryVersionId !== selectedVersionId) {
+      setSelectedVersionId(currentTab.queryVersionId);
+    }
+  }, [currentTab?.queryVersionId, selectedVersionId]);
+
   // Format version display text
   const formatVersionDisplay = (version: QueryVersion, index: number) => {
     const shortId = version.id.substring(0, 4);
@@ -99,6 +106,7 @@ function QueryComponent({ tabId }: QueryProps) {
     const selectedVersion = versions.find((v) => v.id === versionId);
     if (selectedVersion && currentTab) {
       updateTabContent(tabId, {
+        queryVersionId: versionId,
         editorContent: selectedVersion.sql
       });
     }

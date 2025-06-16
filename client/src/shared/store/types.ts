@@ -46,6 +46,7 @@ export type SourceSchemaMap = Record<string, Record<string, SchemaObject>>;
 export interface QueryTab {
   id: string;
   queryId: string | null;
+  queryVersionId: string | null;
   sourceId: string;
   title: string;
   isDirty: boolean;
@@ -92,9 +93,12 @@ export interface ProposedChanges {
   message: string;
 }
 
+import type { ChatContext } from "@/shared/lib/api";
+
 // Chat message interface
 export interface ChatMessage {
   role: "user" | "assistant";
   content: string;
   sql_query?: string;
+  context?: ChatContext[];
 }

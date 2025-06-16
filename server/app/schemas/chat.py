@@ -1,7 +1,31 @@
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from datetime import datetime
 from uuid import UUID
+
+
+class ChatContext(BaseModel):
+    """Chat context"""
+
+    query_id: Optional[UUID] = None
+    query_version_id: Optional[UUID] = None
+    active: bool = False
+
+
+class ChatLLMRequest(BaseModel):
+    session_id: Optional[UUID]
+    context: Optional[List[ChatContext]] = None
+    llm_id: UUID
+    message: str
+
+
+class ChatLLMResponse(BaseModel):
+    """Structured response for non-streaming chat"""
+
+    content: str
+    sql_query: Optional[str] = None
+    metadata: Optional[Dict[str, Any]] = None
+    query_id: Optional[UUID] = None
 
 
 class ChatMessageResponse(BaseModel):
@@ -10,6 +34,7 @@ class ChatMessageResponse(BaseModel):
     role: str  # "user" | "assistant"
     content: str
     sql_query: Optional[str] = None  # SQL query if message contains one
+    context: Optional[List[ChatContext]] = None  # Context queries for this message
     created_at: datetime
 
     class Config:
@@ -29,7 +54,6 @@ class ChatSessionResponse(BaseModel):
 
     id: UUID
     name: Optional[str] = None
-    source_id: UUID
     llm_id: UUID
     created_at: datetime
 

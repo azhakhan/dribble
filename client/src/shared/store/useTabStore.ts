@@ -207,6 +207,7 @@ export const useTabStore = create<TabState>()(
                   tab.id === tabId
                     ? {
                         ...tab,
+                        queryVersionId: latestVersion?.id || tab.queryVersionId,
                         editorContent: latestVersion?.sql || tab.editorContent,
                         lastSavedContent: latestVersion?.sql || tab.lastSavedContent,
                         originalContent: latestVersion?.sql || tab.originalContent
@@ -337,6 +338,7 @@ export const useTabStore = create<TabState>()(
                 ? {
                     ...t,
                     queryId,
+                    queryVersionId: latestVersion?.id || null,
                     title: query?.name || `Query ${queryId.slice(0, 8)}`,
                     editorContent: latestVersion?.sql || "",
                     originalContent: latestVersion?.sql || "",
@@ -819,6 +821,7 @@ export const useTabStore = create<TabState>()(
           // Open new tab for this query - auto-execution will handle running automatically
           await currentState.openQueryTab({
             queryId: query.id,
+            queryVersionId: null,
             sourceId: query.source_id,
             title: query.name || `Query ${query.id.slice(0, 8)}`,
             isDirty: false,
@@ -900,6 +903,7 @@ export const useTabStore = create<TabState>()(
             // Create a new tab for this ephemeral query
             await currentState.openQueryTab({
               queryId: ephemeralQuery.id,
+              queryVersionId: latestVersion?.id || null,
               sourceId,
               title: `${schema}.${table}`,
               isDirty: false,
@@ -924,6 +928,7 @@ export const useTabStore = create<TabState>()(
           const query = `SELECT * FROM ${tableName} LIMIT 101`;
           await currentState.openQueryTab({
             queryId: null,
+            queryVersionId: null,
             sourceId,
             title: tableName,
             isDirty: false,

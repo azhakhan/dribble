@@ -218,22 +218,29 @@ export const deleteLLM = async (llmId: string): Promise<void> => {
 };
 
 // Chat LLM types and functions
+export interface ChatContext {
+  query_id: string;
+  query_version_id?: string;
+  active?: boolean;
+}
+
 export interface ChatLLMRequest {
-  source_id: string;
   llm_id: string;
   message: string;
   session_id: string;
-  query?: string;
+  context?: ChatContext[];
 }
 
 export interface ChatLLMResponse {
   content: string;
   sql_query?: string;
   metadata?: Record<string, unknown>;
+  query_id?: string;
+  updated_query_id?: string;
 }
 
 export const chatLLM = async (data: ChatLLMRequest): Promise<ChatLLMResponse> => {
-  const response = await api.post<ChatLLMResponse>("/llms/chat", data);
+  const response = await api.post<ChatLLMResponse>("/chat/", data);
   return response.data;
 };
 
@@ -243,6 +250,7 @@ export interface ChatMessageResponse {
   content: string;
   sql_query?: string;
   created_at: string;
+  context?: ChatContext[];
 }
 
 export interface ChatMessagesResponse {
@@ -254,7 +262,6 @@ export interface ChatMessagesResponse {
 export interface ChatSessionResponse {
   id: string;
   name?: string;
-  source_id: string;
   llm_id: string;
   created_at: string;
 }
