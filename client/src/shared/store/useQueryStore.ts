@@ -309,6 +309,18 @@ export const useQueryStore = create<QueryState>((set, get) => ({
         queries: { ...state.queries, [queryId]: updatedQuery }
       }));
 
+      // Update any open tabs that reference this query
+      const { useTabStore } = await import("./useTabStore");
+      const tabStore = useTabStore.getState();
+      const openTabs = tabStore.openTabs;
+
+      // Find tabs that have this queryId and update their titles
+      for (const tab of openTabs) {
+        if (tab.queryId === queryId) {
+          tabStore.updateTabTitle(tab.id, updatedQuery.name || newName);
+        }
+      }
+
       return updatedQuery;
     } catch (error) {
       console.error("Failed to update query name:", error);
