@@ -4,7 +4,7 @@ from fastapi.testclient import TestClient
 from app.main import app
 from app.models import LLM
 from app.core.db import SessionLocal
-from app.controllers.chat import is_safe_query
+from app.controllers.llm import is_safe_query
 
 client = TestClient(app)
 
