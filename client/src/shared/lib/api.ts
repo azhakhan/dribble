@@ -2,7 +2,7 @@ import axios from "axios";
 
 // Create axios instance with base URL
 const api = axios.create({
-  baseURL: "/api", // We'll use the Vite proxy which will route to the correct server
+  baseURL: "/api", // Use the Vite proxy which will route to the correct server
   headers: {
     "Content-Type": "application/json"
   }

@@ -97,7 +97,6 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - VITE_API_URL=http://server:8000
       - NODE_ENV=development
     depends_on:
       - server
