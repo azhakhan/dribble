@@ -72,6 +72,7 @@ Brief layout:
   - Use browser MCP to inspect the client
   - Both the client and server are already running in Docker containers at port 3000 and 8000 respectively, so you can access them directly
 - Formatting is done with ruff. I also have pre-commit installed (.pre-commit-config.yaml).
+- To run tests, use just command "just test"
 
 ## What You Should Do
 
@@ -83,5 +84,5 @@ Brief layout:
 
 ## What You Should Avoid
 
-- Don’t invent APIs or libraries not used in the project
-- Don’t generate production credentials or secrets
+- Don't invent APIs or libraries not used in the project
+- Don't generate production credentials or secrets

@@ -1,5 +1,6 @@
 from fastapi import HTTPException
 from sqlalchemy.orm import Session, Query
+from sqlalchemy.exc import IntegrityError
 from typing import Type, TypeVar, Any
 from uuid import UUID
 
@@ -74,15 +75,24 @@ def safe_delete(db: Session, obj: Any) -> dict:
 
     Returns:
         Success message dictionary
+
+    Raises:
+        HTTPException: 500 if there's a database constraint violation
     """
-    if hasattr(obj, "soft_delete"):
-        obj.soft_delete()
-        db.commit()
-        db.refresh(obj)
-    else:
-        db.delete(obj)
-        db.commit()
-    return {"message": f"{obj.__class__.__name__} deleted successfully"}
+    try:
+        if hasattr(obj, "soft_delete"):
+            obj.soft_delete()
+            db.commit()
+            db.refresh(obj)
+        else:
+            db.delete(obj)
+            db.commit()
+        return {"message": f"{obj.__class__.__name__} deleted successfully"}
+    except IntegrityError as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=500, detail=f"Database constraint violation: {str(e)}"
+        ) from e
 
 
 def safe_create(db: Session, obj: Any) -> Any:
@@ -95,11 +105,20 @@ def safe_create(db: Session, obj: Any) -> Any:
 
     Returns:
         The created object (refreshed)
+
+    Raises:
+        HTTPException: 500 if there's a database constraint violation
     """
-    db.add(obj)
-    db.commit()
-    db.refresh(obj)
-    return obj
+    try:
+        db.add(obj)
+        db.commit()
+        db.refresh(obj)
+        return obj
+    except IntegrityError as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=500, detail=f"Database constraint violation: {str(e)}"
+        ) from e
 
 
 def safe_update(db: Session, obj: Any) -> Any:
@@ -112,10 +131,19 @@ def safe_update(db: Session, obj: Any) -> Any:
 
     Returns:
         The updated object (refreshed)
+
+    Raises:
+        HTTPException: 500 if there's a database constraint violation
     """
-    db.commit()
-    db.refresh(obj)
-    return obj
+    try:
+        db.commit()
+        db.refresh(obj)
+        return obj
+    except IntegrityError as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=500, detail=f"Database constraint violation: {str(e)}"
+        ) from e
 
 
 def filter_soft_deleted(query: Query) -> Query:
