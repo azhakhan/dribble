@@ -468,8 +468,4 @@ export const getQueryRunById = async (runId: string): Promise<QueryRun> => {
   return response.data;
 };
 
-export const deleteQueryRun = async (runId: string): Promise<void> => {
-  await api.delete(`/runs/${runId}`);
-};
-
 export default api;

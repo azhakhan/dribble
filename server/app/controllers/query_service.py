@@ -267,9 +267,3 @@ class QueryRunService:
     def get_run_by_id(db: Session, run_id: UUID) -> QueryRun:
         """Get a specific query run by ID"""
         return get_or_404(db, QueryRun, run_id, "Query run not found")
-
-    @staticmethod
-    def delete_run(db: Session, run_id: UUID) -> dict:
-        """Delete a query run"""
-        run = get_or_404(db, QueryRun, run_id, "Query run not found")
-        return safe_delete(db, run)
