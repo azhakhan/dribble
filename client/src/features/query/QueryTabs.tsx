@@ -19,6 +19,7 @@ import { useSourceStore } from "@/shared/store";
 import { UnsavedChangesDialog } from "./UnsavedChangesDialog";
 import { generateQueryName } from "@/shared/lib/queryUtils";
 import { useCreateQuery } from "@/shared/hooks/useCreateQuery";
+import { Capybara } from "@/components/Capybara";
 
 // New Query Modal component
 // New Query Modal component
@@ -456,6 +457,7 @@ function QueryTabsComponent() {
         {/* Empty state */}
         <div className="flex-1 flex items-center justify-center text-muted-foreground">
           <div className="text-center">
+            <Capybara />
             <p className="text-lg mb-2">No queries open</p>
             <p className="text-sm">
               {sources.length === 0

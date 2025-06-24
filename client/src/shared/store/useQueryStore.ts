@@ -47,7 +47,11 @@ interface QueryState {
 
   // Query creation and management
   createNewQuery: ({ sourceId, name }: { sourceId: string; name?: string }) => Promise<Query>;
-  saveQueryVersion: (queryId: string, sql: string, saveTrigger: "run" | "ai") => Promise<void>;
+  saveQueryVersion: (
+    queryId: string,
+    sql: string,
+    saveTrigger: "run" | "ai"
+  ) => Promise<QueryVersion>;
   updateQueryName: (queryId: string, newName: string) => Promise<Query>;
   deleteQuery: (queryId: string) => Promise<void>;
 
@@ -284,15 +288,24 @@ export const useQueryStore = create<QueryState>((set, get) => ({
   // Save query version
   saveQueryVersion: async (queryId, sql, saveTrigger) => {
     try {
-      await createQueryVersion({
+      const newVersion = await createQueryVersion({
         query_id: queryId,
         sql,
         save_trigger: saveTrigger
       });
 
-      // Reload versions to get the latest
-      const currentState = get();
-      await currentState.loadQueryVersions(queryId);
+      // Update the queryVersions cache with the new version
+      set((state) => {
+        const existingVersions = state.queryVersions[queryId] || [];
+        return {
+          queryVersions: {
+            ...state.queryVersions,
+            [queryId]: [newVersion, ...existingVersions] // Add new version at the beginning (latest first)
+          }
+        };
+      });
+
+      return newVersion;
     } catch (error) {
       console.error("Failed to save query version:", error);
       throw error;

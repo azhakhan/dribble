@@ -49,7 +49,10 @@ export const useTabManagerStore = create<TabManagerState>()(
           isLoadingQuery: tab.isLoadingQuery ?? false,
           isLoadingVersions: tab.isLoadingVersions ?? false,
           lastSavedContent: tab.lastSavedContent || "",
-          originalContent: tab.originalContent || ""
+          originalContent: tab.originalContent || "",
+          // Initialize isDirty based on whether content differs from saved content
+          isDirty:
+            tab.isDirty ?? (tab.editorContent || "").trim() !== (tab.lastSavedContent || "").trim()
         };
 
         set((state) => ({
@@ -232,9 +235,24 @@ export const useTabManagerStore = create<TabManagerState>()(
 
       // Update tab content
       updateTabContent: (tabId, content) =>
-        set((state) => ({
-          openTabs: state.openTabs.map((tab) => (tab.id === tabId ? { ...tab, ...content } : tab))
-        })),
+        set((state) => {
+          const updatedTabs = state.openTabs.map((tab) => {
+            if (tab.id === tabId) {
+              const updatedTab = { ...tab, ...content };
+
+              // If editor content is being updated and isDirty wasn't explicitly provided, calculate it
+              if (content.editorContent !== undefined && content.isDirty === undefined) {
+                updatedTab.isDirty =
+                  content.editorContent.trim() !== (tab.lastSavedContent || "").trim();
+              }
+
+              return updatedTab;
+            }
+            return tab;
+          });
+
+          return { openTabs: updatedTabs };
+        }),
 
       // Load query in tab
       loadQueryInTab: async (tabId, queryId) => {

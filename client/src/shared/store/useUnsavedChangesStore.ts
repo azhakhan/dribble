@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import type { QueryTab } from "./types";
 
 interface UnsavedChangesState {
   // Unsaved changes dialog state
@@ -36,11 +37,21 @@ export const useUnsavedChangesStore = create<UnsavedChangesState>()((set, get) =
   },
 
   // Helper functions for unsaved changes
-  hasUnsavedChanges: () => {
+  hasUnsavedChanges: (tabId) => {
     // Import tab manager to access tabs - this will be resolved with better store architecture
     try {
-      // This is a temporary solution until we have proper store composition
-      return false; // Placeholder for now
+      // Use dynamic import to avoid circular dependencies
+      const getTabManagerStore = () => {
+        const module = globalThis.require ? globalThis.require("./useTabManagerStore") : null;
+        return module?.useTabManagerStore;
+      };
+
+      const useTabManagerStore = getTabManagerStore();
+      if (!useTabManagerStore) return false;
+
+      const tabManager = useTabManagerStore.getState();
+      const tab = tabManager.openTabs.find((t: QueryTab) => t.id === tabId);
+      return tab?.isDirty || false;
     } catch {
       return false;
     }

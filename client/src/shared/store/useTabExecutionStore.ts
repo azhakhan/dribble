@@ -72,14 +72,16 @@ export const useTabExecutionStore = create<TabExecutionState>()(() => ({
           useTabManagerStore.setState({ openTabs: updatedTabsWithTitle });
         }
 
-        // We have an existing query
-        if (tab.isDirty) {
-          // Create a new version with the current content
-          await queryStore.saveQueryVersion(tab.queryId, queryToRun, "run");
-          const newVersion = await queryStore.loadLatestQueryVersion(tab.queryId);
-          if (!newVersion) {
-            throw new Error("Failed to create query version");
-          }
+        // Get the latest version to compare against
+        const currentLatestVersion = await queryStore.loadLatestQueryVersion(tab.queryId);
+
+        // Check if what user wants to execute is different from the latest saved version
+        const shouldSaveNewVersion =
+          !currentLatestVersion || queryToRun.trim() !== currentLatestVersion.sql.trim();
+
+        if (shouldSaveNewVersion) {
+          // Save the current editor content as a new version
+          const newVersion = await queryStore.saveQueryVersion(tab.queryId, queryToRun, "run");
           versionId = newVersion.id;
 
           // Update the tab's saved content tracking
@@ -89,25 +91,31 @@ export const useTabExecutionStore = create<TabExecutionState>()(() => ({
               ? {
                   ...t,
                   lastSavedContent: queryToRun,
-                  isDirty: false // Mark as clean since we just saved
+                  isDirty: false, // Mark as clean since we just saved
+                  queryVersionId: newVersion.id // Ensure we track the version ID
                 }
               : t
           );
           useTabManagerStore.setState({ openTabs: updatedTabsWithSave });
         } else {
-          // Use existing version
-          versionId = tab.queryVersionId!;
+          // Content is the same as latest version, use existing version
+          versionId = currentLatestVersion.id;
         }
       } else {
         // Create a new ephemeral query and save the version
         const newQuery = await queryStore.createNewQuery({
           sourceId: tab.sourceId
         });
-        await queryStore.saveQueryVersion(newQuery.id, queryToRun, "run");
-        const newVersion = await queryStore.loadLatestQueryVersion(newQuery.id);
-        if (!newVersion) {
-          throw new Error("Failed to create query version");
-        }
+
+        // Update the tab to reference the new query
+        const currentTabsBeforeVersion = useTabManagerStore.getState().openTabs;
+        const updatedTabsWithQuery = currentTabsBeforeVersion.map((t) =>
+          t.id === tabId ? { ...t, queryId: newQuery.id } : t
+        );
+        useTabManagerStore.setState({ openTabs: updatedTabsWithQuery });
+
+        // Save the current editor content as the first version
+        const newVersion = await queryStore.saveQueryVersion(newQuery.id, queryToRun, "run");
         versionId = newVersion.id;
 
         // Update the tab's saved content tracking
@@ -116,8 +124,10 @@ export const useTabExecutionStore = create<TabExecutionState>()(() => ({
           t.id === tabId
             ? {
                 ...t,
+                queryId: newQuery.id, // Set the query ID
+                queryVersionId: newVersion.id, // Set the version ID
                 lastSavedContent: queryToRun,
-                isDirty: false // Mark as clean since we just saved
+                isDirty: false
               }
             : t
         );
@@ -125,6 +135,13 @@ export const useTabExecutionStore = create<TabExecutionState>()(() => ({
       }
 
       // Step 2: Create a query run and execute
+      // Safety check - ensure we have a valid version ID
+      if (!versionId) {
+        throw new Error("No valid query version ID available. Cannot execute query.");
+      }
+
+      console.log("Executing query with version ID:", versionId);
+
       // Get the tab-specific filters (now that we're using tab-aware filters)
       const currentTab = getCurrentTab();
       // Import filter store dynamically
@@ -151,6 +168,8 @@ export const useTabExecutionStore = create<TabExecutionState>()(() => ({
         query_version_id: versionId,
         modifiers: finalFilters
       };
+
+      console.log("Query run request:", runRequest);
 
       const runId = await executeQueryVersionRun(runRequest);
 
