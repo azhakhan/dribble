@@ -81,6 +81,7 @@ export class QueryVersionService {
 
   /**
    * Update query name and synchronize across all references
+   * If the query is ephemeral, convert it to regular query first
    */
   static async updateQueryName(queryId: string, newName: string): Promise<QueryVersionResult> {
     try {
@@ -90,8 +91,17 @@ export class QueryVersionService {
       const queryStore = useQueryStore.getState();
       const tabManagerStore = useTabManagerStore.getState();
 
-      // Update the query name in the store
-      const updatedQuery = await queryStore.updateQueryName(queryId, newName);
+      // Check if this is an ephemeral query and convert it to regular if so
+      const isEphemeral = await this.isEphemeralQuery(queryId);
+      let updatedQuery;
+
+      if (isEphemeral) {
+        // Convert ephemeral query to regular query using the provided name
+        updatedQuery = await queryStore.convertEphemeralToRegular(queryId, newName);
+      } else {
+        // Update the query name in the store
+        updatedQuery = await queryStore.updateQueryName(queryId, newName);
+      }
 
       // Update any open tabs that reference this query
       const updatedTabs = tabManagerStore.openTabs.map((tab) =>
