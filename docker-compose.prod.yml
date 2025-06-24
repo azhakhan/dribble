@@ -38,8 +38,6 @@ services:
     build:
       context: ./server
       dockerfile: Dockerfile.migrations
-    volumes:
-      - ./server/app/alembic:/app/app/alembic:cached
     environment:
       - DATABASE_URL=postgresql+psycopg://postgres:postgres@postgres:5432/postgres
     depends_on:
@@ -54,17 +52,12 @@ services:
     build:
       context: ./server
       dockerfile: Dockerfile
-    volumes:
-      - ./server/app:/app/app:cached
-      - ./server/pyproject.toml:/app/pyproject.toml:cached
-      - /var/run/docker.sock:/var/run/docker.sock
     ports:
       - "8000:8000"
     environment:
       - IN_DOCKER=1
       - PYTHONPATH=/app
-      - ENVIRONMENT=development
-      - WATCHFILES_FORCE_POLLING=1
+      - ENVIRONMENT=production
       - DATABASE_URL=postgresql+psycopg://postgres:postgres@postgres:5432/postgres
       - REDIS_URL=redis://redis:6379/0
       - DOCKER_NETWORK=dribble-network
@@ -79,7 +72,6 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 10s
@@ -90,14 +82,9 @@ services:
   client:
     build:
       context: ./client
-      dockerfile: Dockerfile.dev
-    volumes:
-      - ./client:/app
-      - /app/node_modules # Anonymous volume to preserve container's node_modules
+      dockerfile: Dockerfile
     ports:
-      - "3000:3000"
-    environment:
-      - NODE_ENV=development
+      - "3000:80"
     depends_on:
       - server
     networks:

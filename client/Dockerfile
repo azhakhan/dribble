@@ -3,10 +3,10 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-# Copy package files
+# Copy package files first for better layer caching
 COPY package.json yarn.lock ./
 
-# Install dependencies
+# Install dependencies (this layer will be cached if package files don't change)
 RUN yarn install --frozen-lockfile
 
 # Copy the rest of the application
@@ -29,23 +29,3 @@ EXPOSE 80
 
 # Start nginx
 CMD ["nginx", "-g", "daemon off;"]
-
-# Development stage
-FROM node:20-alpine
-
-WORKDIR /app
-
-# Copy package files
-COPY package.json yarn.lock ./
-
-# Install dependencies
-RUN yarn install
-
-# Copy the rest of the application
-COPY . .
-
-# Expose Vite dev server port
-EXPOSE 3000
-
-# Start Vite dev server with host flag to allow external connections
-CMD ["yarn", "dev", "--host", "0.0.0.0"]
