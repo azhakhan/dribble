@@ -29,6 +29,8 @@ export function MiniMonacoSQL({
 }: MiniMonacoSQLProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | undefined>(undefined);
+  // Add flag to prevent setValue feedback loop
+  const isInternalChangeRef = useRef(false);
 
   // Get schema data from the store
   const { selectedSource, sourceSchemaMap } = useSourceStore();
@@ -228,7 +230,13 @@ export function MiniMonacoSQL({
       // Listen for content changes
       editorRef.current.onDidChangeModelContent(() => {
         const newValue = editorRef.current?.getValue() || "";
+        // Set flag to indicate this is an internal change
+        isInternalChangeRef.current = true;
         onChange(newValue);
+        // Reset flag after change is processed
+        setTimeout(() => {
+          isInternalChangeRef.current = false;
+        }, 0);
       });
     }
 
@@ -249,7 +257,11 @@ export function MiniMonacoSQL({
 
   // Handle value changes from outside
   useEffect(() => {
-    if (editorRef.current && editorRef.current.getValue() !== value) {
+    if (
+      editorRef.current &&
+      editorRef.current.getValue() !== value &&
+      !isInternalChangeRef.current
+    ) {
       editorRef.current.setValue(value);
     }
   }, [value]);
