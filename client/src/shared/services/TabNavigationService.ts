@@ -490,41 +490,118 @@ export class TabNavigationService {
   ): Promise<void> {
     try {
       const { useQueryStore } = await import("@/shared/store/useQueryStore");
+      const { useTabManagerStore } = await import("@/shared/store/useTabManagerStore");
+      const { useSourceStore } = await import("@/shared/store/useSourceStore");
+
       const queryStore = useQueryStore.getState();
+      const tabManagerStore = useTabManagerStore.getState();
+      const sourceStore = useSourceStore.getState();
+
+      // Parse table name and determine schema
+      const parts = tableName.split(".");
+      let schema: string;
+      let table: string;
+
+      if (schemaName) {
+        // Use the provided schema name
+        schema = schemaName;
+        table = parts.length > 1 ? parts[1] : parts[0];
+      } else if (parts.length > 1) {
+        // Schema was included in table name
+        schema = parts[0];
+        table = parts[1];
+      } else {
+        // No schema provided, need to determine default based on database type
+        table = parts[0];
+
+        // Get source information to determine database type
+        const source = sourceStore.sources[sourceId];
+
+        if (source?.dbtype === "mysql") {
+          // MySQL doesn't use schemas in the same way, use the database name as schema
+          // For now, we'll use just the table name without schema prefix
+          schema = "";
+        } else if (source?.dbtype === "sqlite") {
+          // SQLite doesn't use schemas, use just table name
+          schema = "";
+        } else {
+          // PostgreSQL and unknown types default to "public"
+          schema = "public";
+        }
+      }
 
       // Get or create ephemeral query for this table
       const ephemeralQuery = await queryStore.getOrCreateEphemeralQuery(
         sourceId,
-        schemaName || "public",
-        tableName,
+        schema,
+        table,
         nodeType
       );
 
       // Load the latest version
       const latestVersion = await queryStore.loadLatestQueryVersion(ephemeralQuery.id);
 
-      // Open new tab for this table query
-      await this.openQueryTab({
-        queryId: ephemeralQuery.id,
-        queryVersionId: latestVersion?.id || null,
-        sourceId: sourceId,
-        title: `${tableName} (${nodeType})`,
-        editorContent:
-          latestVersion?.sql ||
-          `SELECT * FROM ${schemaName ? `${schemaName}.` : ""}${tableName} LIMIT 100;`,
-        lastSavedContent: latestVersion?.sql || "",
-        originalContent: latestVersion?.sql || "",
-        selectedTableData: {
-          sourceId,
-          tableName,
-          query:
-            latestVersion?.sql ||
-            `SELECT * FROM ${schemaName ? `${schemaName}.` : ""}${tableName} LIMIT 100;`
-        },
-        isDirty: false
-      });
+      // Generate SQL based on whether schema should be included
+      const sqlTableRef = schema ? `${schema}.${table}` : table;
+      const sql = latestVersion?.sql || `SELECT * FROM ${sqlTableRef} LIMIT 101`;
+
+      // Check if this ephemeral query is already open in a tab
+      const existingTab = tabManagerStore.openTabs.find((tab) => tab.queryId === ephemeralQuery.id);
+
+      if (existingTab) {
+        // Switch to existing tab and ensure it has the latest SQL
+        await this.setActiveTab(existingTab.id);
+
+        // Update the tab content with the latest SQL and ensure it's not dirty
+        await this.updateTabContent(existingTab.id, {
+          editorContent: sql,
+          lastSavedContent: sql,
+          originalContent: sql,
+          isDirty: false
+        });
+
+        // Wait a bit for state to settle before auto-execution
+        await new Promise((resolve) => setTimeout(resolve, 100));
+
+        // Auto-execute if conditions are met
+        const updatedTab = tabManagerStore.openTabs.find((tab) => tab.id === existingTab.id);
+        if (updatedTab && (await this.shouldAutoExecuteQuery(updatedTab))) {
+          await this.executeQueryForTab(existingTab.id);
+        }
+      } else {
+        // Create a new tab for this ephemeral query
+        await this.openQueryTab({
+          queryId: ephemeralQuery.id,
+          queryVersionId: latestVersion?.id || null,
+          sourceId: sourceId,
+          title: schema ? `${schema}.${table}` : table,
+          editorContent: sql,
+          lastSavedContent: sql,
+          originalContent: sql,
+          selectedTableData: {
+            sourceId,
+            tableName,
+            query: sql
+          },
+          isDirty: false
+        });
+      }
     } catch (error) {
       console.error("Failed to open table from tree:", error);
+
+      // Fallback to simple query - auto-execution will handle running
+      const query = `SELECT * FROM ${tableName} LIMIT 101`;
+      await this.openQueryTab({
+        queryId: null,
+        queryVersionId: null,
+        sourceId,
+        title: tableName,
+        editorContent: query,
+        lastSavedContent: "",
+        originalContent: "",
+        selectedTableData: { sourceId, tableName, query },
+        isDirty: false
+      });
     }
   }
 }
