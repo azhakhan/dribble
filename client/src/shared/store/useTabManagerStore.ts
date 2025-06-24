@@ -16,6 +16,7 @@ interface TabManagerState {
   closeTabsByQueryId: (queryId: string) => void;
   setActiveTab: (tabId: string | null) => Promise<void>;
   updateTabTitle: (tabId: string, title: string) => void;
+  updateTabContent: (tabId: string, content: Partial<QueryTab>) => void;
   loadQueryInTab: (tabId: string, queryId: string) => Promise<void>;
 
   // Helper functions
@@ -227,6 +228,12 @@ export const useTabManagerStore = create<TabManagerState>()(
       updateTabTitle: (tabId, title) =>
         set((state) => ({
           openTabs: state.openTabs.map((tab) => (tab.id === tabId ? { ...tab, title } : tab))
+        })),
+
+      // Update tab content
+      updateTabContent: (tabId, content) =>
+        set((state) => ({
+          openTabs: state.openTabs.map((tab) => (tab.id === tabId ? { ...tab, ...content } : tab))
         })),
 
       // Load query in tab

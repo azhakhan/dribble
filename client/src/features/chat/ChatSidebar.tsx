@@ -16,7 +16,8 @@ import {
   DropdownMenuTrigger
 } from "@/components/ui/dropdown-menu";
 import { ChevronUp, History, Plus, FileText } from "lucide-react";
-import { useTabStore, useChatStore, useQueryStore } from "@/shared/store";
+import { useTabManagerStore } from "@/shared/store/useTabManagerStore";
+import { useChatStore, useQueryStore } from "@/shared/store";
 import { useChatLLMQuery } from "@/shared/hooks/useChatLLMQuery";
 import { useLLMsQuery, useLLMQuery } from "@/shared/hooks/useLLMsQuery";
 import { useChatSessionsQuery, useChatMessagesQuery } from "@/shared/hooks/useChatQuery";
@@ -80,7 +81,7 @@ export function ChatSidebar() {
   const [input, setInput] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const { openTabs, activeTabId } = useTabStore();
+  const { openTabs, activeTabId } = useTabManagerStore();
   const { queryVersions, loadQueryVersions } = useQueryStore();
   const {
     selectedLLM: selectedLLMId,

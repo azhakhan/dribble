@@ -2,7 +2,10 @@ import { useRef, useCallback, useMemo, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { PlayIcon, PencilIcon, CheckIcon, XIcon, Database, SaveIcon } from "lucide-react";
 import { toast } from "sonner";
-import { useTabStore, useSourceStore, useChatStore, useQueryStore } from "@/shared/store";
+import { useTabManagerStore } from "@/shared/store/useTabManagerStore";
+import { useTabExecutionStore } from "@/shared/store/useTabExecutionStore";
+import { useUnsavedChangesStore } from "@/shared/store/useUnsavedChangesStore";
+import { useSourceStore, useChatStore, useQueryStore } from "@/shared/store";
 import { LanguageIdEnum } from "@/shared/lib/monaco-setup";
 import { MonacoSQLEditor } from "./MonacoSQLEditor";
 import { MonacoDiffEditor } from "./MonacoDiffEditor";
@@ -24,8 +27,9 @@ export function Editor({ tabId, onQueryExecuted }: EditorProps) {
   const [localEditorContent, setLocalEditorContent] = useState("");
 
   // Get all needed state from the store using selectors
-  const { openTabs, updateTabContent, executeQuery, saveChanges, hasUnsavedChanges } =
-    useTabStore();
+  const { openTabs, updateTabContent } = useTabManagerStore();
+  const { executeQuery } = useTabExecutionStore();
+  const { saveChanges, hasUnsavedChanges } = useUnsavedChangesStore();
   const { sources, connectedSources } = useSourceStore();
   const { proposedChanges, acceptProposedChanges, rejectProposedChanges } = useChatStore();
   const { updateQueryName } = useQueryStore();

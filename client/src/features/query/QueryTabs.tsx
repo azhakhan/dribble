@@ -13,7 +13,9 @@ import {
 } from "@/components/ui/select";
 
 import { Query } from "./Query";
-import { useTabStore, useSourceStore } from "@/shared/store";
+import { useTabManagerStore } from "@/shared/store/useTabManagerStore";
+import { useUnsavedChangesStore } from "@/shared/store/useUnsavedChangesStore";
+import { useSourceStore } from "@/shared/store";
 import { UnsavedChangesDialog } from "./UnsavedChangesDialog";
 import { generateQueryName } from "@/shared/lib/queryUtils";
 import { useCreateQuery } from "@/shared/hooks/useCreateQuery";
@@ -266,22 +268,19 @@ const TabButton = memo(
 
 function QueryTabsComponent() {
   // Use selective subscriptions to prevent unnecessary re-renders
-  const openTabs = useTabStore((state) => state.openTabs);
-  const activeTabId = useTabStore((state) => state.activeTabId);
+  const openTabs = useTabManagerStore((state) => state.openTabs);
+  const activeTabId = useTabManagerStore((state) => state.activeTabId);
   const selectedSource = useSourceStore((state) => state.selectedSource);
   const sources = useSourceStore((state) => state.allSources);
 
   // Dialog state
-  const unsavedChangesDialog = useTabStore((state) => state.unsavedChangesDialog);
+  const unsavedChangesDialog = useUnsavedChangesStore((state) => state.unsavedChangesDialog);
 
   // Get actions from store
-  const {
-    closeQueryTabWithConfirmation,
-    setActiveTab,
-    hideUnsavedChangesDialog,
-    handleDialogSave,
-    handleDialogDiscard
-  } = useTabStore();
+  const { closeQueryTabWithConfirmation, setActiveTab } = useTabManagerStore();
+
+  const { hideUnsavedChangesDialog, handleDialogSave, handleDialogDiscard } =
+    useUnsavedChangesStore();
 
   // Get reusable query creation hook
   const { createQueryAndOpenInTab } = useCreateQuery();
@@ -380,7 +379,8 @@ function QueryTabsComponent() {
   // Handle closing other tabs
   const handleCloseOthers = useCallback(
     async (exceptTabId: string) => {
-      const { showUnsavedChangesDialog, closeQueryTab } = useTabStore.getState();
+      const { showUnsavedChangesDialog } = useUnsavedChangesStore.getState();
+      const { closeQueryTab } = useTabManagerStore.getState();
 
       // Check if any other tabs have unsaved changes
       const otherTabs = openTabs.filter((tab) => tab.id !== exceptTabId);
@@ -403,7 +403,8 @@ function QueryTabsComponent() {
   // Handle closing tabs to the right
   const handleCloseToRight = useCallback(
     async (fromTabId: string) => {
-      const { showUnsavedChangesDialog, closeQueryTab } = useTabStore.getState();
+      const { showUnsavedChangesDialog } = useUnsavedChangesStore.getState();
+      const { closeQueryTab } = useTabManagerStore.getState();
       const fromIndex = openTabs.findIndex((tab) => tab.id === fromTabId);
       if (fromIndex === -1) return;
 

@@ -310,8 +310,8 @@ export const useQueryStore = create<QueryState>((set, get) => ({
       }));
 
       // Update any open tabs that reference this query
-      const { useTabStore } = await import("./useTabStore");
-      const tabStore = useTabStore.getState();
+      const { useTabManagerStore } = await import("./useTabManagerStore");
+      const tabStore = useTabManagerStore.getState();
       const openTabs = tabStore.openTabs;
 
       // Find tabs that have this queryId and update their titles
@@ -334,8 +334,8 @@ export const useQueryStore = create<QueryState>((set, get) => ({
       await deleteQuery(queryId);
 
       // Close any open tabs for this query
-      const { useTabStore } = await import("./useTabStore");
-      const { closeTabsByQueryId } = useTabStore.getState();
+      const { useTabManagerStore } = await import("./useTabManagerStore");
+      const { closeTabsByQueryId } = useTabManagerStore.getState();
       closeTabsByQueryId(queryId);
 
       // Remove the query from the store

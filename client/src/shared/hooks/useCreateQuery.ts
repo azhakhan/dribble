@@ -1,11 +1,12 @@
 import { useCallback } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { useQueryStore, useTabStore } from "@/shared/store";
+import { useQueryStore } from "@/shared/store";
+import { useTabManagerStore } from "@/shared/store/useTabManagerStore";
 import { toast } from "sonner";
 
 export function useCreateQuery() {
   const { createNewQuery, loadQuery } = useQueryStore();
-  const { openQueryFromTree } = useTabStore();
+  const { openQueryFromTree } = useTabManagerStore();
   const queryClient = useQueryClient();
 
   const createQueryAndOpenInTab = useCallback(

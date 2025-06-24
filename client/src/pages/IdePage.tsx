@@ -1,6 +1,7 @@
 import { useMemo, useCallback, useEffect, useState } from "react";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
-import { useUIStore, useSourceStore, useTabStore } from "@/shared/store";
+import { useUIStore, useSourceStore } from "@/shared/store";
+import { useTabManagerStore } from "@/shared/store/useTabManagerStore";
 import { SidebarTabs } from "@/features/sources/SidebarTabs";
 import { QueryTabs } from "@/features/query/QueryTabs";
 import { ChatSidebar } from "@/features/chat/ChatSidebar";
@@ -32,7 +33,7 @@ export function IdePage() {
     initializeQueryTabsRuntimeStates,
     openQueryFromTree,
     openTableFromTree
-  } = useTabStore();
+  } = useTabManagerStore();
 
   // Initialize runtime states for query tabs on app load
   useEffect(() => {
