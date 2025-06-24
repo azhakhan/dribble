@@ -3,6 +3,7 @@ import { persist } from "zustand/middleware";
 import type { QueryTab } from "./types";
 import { useQueryStore } from "./useQueryStore";
 import { useSourceStore } from "./useSourceStore";
+import { TabNavigationService } from "@/shared/services";
 
 interface TabManagerState {
   // Tab state
@@ -65,7 +66,6 @@ export const useTabManagerStore = create<TabManagerState>()(
         if (currentState.shouldAutoExecuteQuery(newTab)) {
           try {
             // Import the execution store dynamically to avoid circular dependency
-            // @ts-expect-error - Dynamic import to avoid circular dependency
             const { useTabExecutionStore } = await import("./useTabExecutionStore");
             await useTabExecutionStore.getState().executeQuery(newTabId);
           } catch (error) {
@@ -127,104 +127,8 @@ export const useTabManagerStore = create<TabManagerState>()(
 
       // Set active tab
       setActiveTab: async (tabId) => {
-        // Set the active tab immediately for UI responsiveness
-        set(() => ({ activeTabId: tabId }));
-
-        if (!tabId) return;
-
-        const currentState = get();
-        const activeTab = currentState.openTabs.find((tab) => tab.id === tabId);
-
-        if (!activeTab) return;
-
-        // Import content store dynamically to avoid circular dependency
-        const { useTabContentStore } = await import("@/shared/store/useTabContentStore");
-        const contentStore = useTabContentStore.getState();
-
-        // If the tab has a query, only load from server if tab doesn't have unsaved changes
-        if (activeTab.queryId) {
-          try {
-            const queryStore = useQueryStore.getState();
-            const sourceStore = useSourceStore.getState();
-
-            // Get the query and its source
-            await queryStore.loadQuery(activeTab.queryId);
-            const query = queryStore.queries[activeTab.queryId];
-            const querySource = query?.source_id ? sourceStore.sources[query.source_id] : null;
-
-            // Only load latest version from server if tab is not dirty (has no unsaved changes)
-            if (!activeTab.isDirty) {
-              // Load the latest version of the query
-              const latestVersion = await queryStore.loadLatestQueryVersion(activeTab.queryId);
-
-              // Update the tab with the latest content only if not dirty
-              set((state) => ({
-                openTabs: state.openTabs.map((tab) =>
-                  tab.id === tabId
-                    ? {
-                        ...tab,
-                        queryVersionId: latestVersion?.id || tab.queryVersionId,
-                        editorContent: latestVersion?.sql || tab.editorContent,
-                        lastSavedContent: latestVersion?.sql || tab.lastSavedContent,
-                        originalContent: latestVersion?.sql || tab.originalContent
-                      }
-                    : tab
-                )
-              }));
-
-              // Update global editorContent for backward compatibility
-              contentStore.setEditorContent(latestVersion?.sql || activeTab.editorContent);
-            } else {
-              // Tab has unsaved changes, just update global editorContent without overwriting tab content
-              contentStore.setEditorContent(activeTab.editorContent);
-            }
-
-            // Set the selected source
-            if (querySource) {
-              sourceStore.setSelectedSource(querySource);
-            }
-
-            // Auto-execute if conditions are met (only if not dirty to avoid losing unsaved changes)
-            if (!activeTab.isDirty) {
-              const updatedState = get();
-              const updatedTab = updatedState.openTabs.find((tab) => tab.id === tabId);
-              if (updatedTab && currentState.shouldAutoExecuteQuery(updatedTab)) {
-                // @ts-expect-error - Dynamic import to avoid circular dependency
-                const { useTabExecutionStore } = await import("./useTabExecutionStore");
-                await useTabExecutionStore.getState().executeQuery(tabId);
-              }
-            }
-          } catch (error) {
-            console.error("Failed to load latest query version when switching tabs:", error);
-            // Still set the source even if loading fails
-            const queryStore = useQueryStore.getState();
-            const sourceStore = useSourceStore.getState();
-            const query = queryStore.queries[activeTab.queryId];
-            const querySource = query?.source_id ? sourceStore.sources[query.source_id] : null;
-            if (querySource) {
-              sourceStore.setSelectedSource(querySource);
-            }
-            // Update global editorContent with tab content
-            contentStore.setEditorContent(activeTab.editorContent);
-          }
-        } else {
-          // For tabs without a queryId, just update the global editorContent
-          const sourceStore = useSourceStore.getState();
-          contentStore.setEditorContent(activeTab.editorContent);
-
-          // Set the source for the tab
-          const tabSource = sourceStore.sources[activeTab.sourceId];
-          if (tabSource) {
-            sourceStore.setSelectedSource(tabSource);
-          }
-
-          // Auto-execute if conditions are met for tabs without queryId
-          if (currentState.shouldAutoExecuteQuery(activeTab)) {
-            // @ts-expect-error - Dynamic import to avoid circular dependency
-            const { useTabExecutionStore } = await import("./useTabExecutionStore");
-            await useTabExecutionStore.getState().executeQuery(tabId);
-          }
-        }
+        // Delegate to the TabNavigationService
+        await TabNavigationService.setActiveTab(tabId);
       },
 
       // Update tab title
@@ -313,7 +217,6 @@ export const useTabManagerStore = create<TabManagerState>()(
           const updatedState = get();
           const updatedTab = updatedState.openTabs.find((t) => t.id === tabId);
           if (updatedTab && updatedState.shouldAutoExecuteQuery(updatedTab)) {
-            // @ts-expect-error - Dynamic import to avoid circular dependency
             const { useTabExecutionStore } = await import("./useTabExecutionStore");
             await useTabExecutionStore.getState().executeQuery(tabId);
           }
@@ -386,7 +289,6 @@ export const useTabManagerStore = create<TabManagerState>()(
             );
             if (activeTab && currentState.shouldAutoExecuteQuery(activeTab)) {
               try {
-                // @ts-expect-error - Dynamic import to avoid circular dependency
                 const { useTabExecutionStore } = await import("./useTabExecutionStore");
                 await useTabExecutionStore.getState().executeQuery(currentState.activeTabId!);
               } catch (error) {
@@ -538,7 +440,6 @@ export const useTabManagerStore = create<TabManagerState>()(
             // Auto-execute if conditions are met
             const updatedTab = get().openTabs.find((tab) => tab.id === existingTab.id);
             if (updatedTab && currentState.shouldAutoExecuteQuery(updatedTab)) {
-              // @ts-expect-error - Dynamic import to avoid circular dependency
               const { useTabExecutionStore } = await import("./useTabExecutionStore");
               await useTabExecutionStore.getState().executeQuery(existingTab.id);
             }

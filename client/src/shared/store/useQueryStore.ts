@@ -322,17 +322,9 @@ export const useQueryStore = create<QueryState>((set, get) => ({
         queries: { ...state.queries, [queryId]: updatedQuery }
       }));
 
-      // Update any open tabs that reference this query
-      const { useTabManagerStore } = await import("./useTabManagerStore");
-      const tabStore = useTabManagerStore.getState();
-      const openTabs = tabStore.openTabs;
-
-      // Find tabs that have this queryId and update their titles
-      for (const tab of openTabs) {
-        if (tab.queryId === queryId) {
-          tabStore.updateTabTitle(tab.id, updatedQuery.name || newName);
-        }
-      }
+      // Use QueryVersionService to handle tab synchronization
+      const { QueryVersionService } = await import("@/shared/services");
+      await QueryVersionService.updateQueryName(queryId, newName);
 
       return updatedQuery;
     } catch (error) {
