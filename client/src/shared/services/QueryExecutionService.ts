@@ -142,7 +142,17 @@ export class QueryExecutionService {
       const queryName = `${sourceName} query ${date.toISOString().split("T")[0]}`;
 
       // Convert to regular query
-      await queryStore.convertEphemeralToRegular(tab.queryId, queryName);
+      const updatedQuery = await queryStore.convertEphemeralToRegular(tab.queryId, queryName);
+
+      // Update the tab title to match the converted query name
+      const { useTabManagerStore } = await import("@/shared/store/useTabManagerStore");
+      const tabManagerStore = useTabManagerStore.getState();
+
+      const updatedTabs = tabManagerStore.openTabs.map((t) =>
+        t.id === tab.id ? { ...t, title: updatedQuery.name || queryName } : t
+      );
+
+      useTabManagerStore.setState({ openTabs: updatedTabs });
     }
   }
 
