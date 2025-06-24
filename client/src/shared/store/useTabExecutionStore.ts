@@ -140,8 +140,6 @@ export const useTabExecutionStore = create<TabExecutionState>()(() => ({
         throw new Error("No valid query version ID available. Cannot execute query.");
       }
 
-      console.log("Executing query with version ID:", versionId);
-
       // Get the tab-specific filters (now that we're using tab-aware filters)
       const currentTab = getCurrentTab();
       // Import filter store dynamically
@@ -168,8 +166,6 @@ export const useTabExecutionStore = create<TabExecutionState>()(() => ({
         query_version_id: versionId,
         modifiers: finalFilters
       };
-
-      console.log("Query run request:", runRequest);
 
       const runId = await executeQueryVersionRun(runRequest);
 

@@ -294,9 +294,7 @@ export const EditableTable = ({
     [dataIndexes, data]
   );
 
-  const handleColumnResize = (column: GridColumn, newSize: number, colIndex: number) => {
-    console.log("Column resized:", column.title, newSize, colIndex);
-
+  const handleColumnResize = (column: GridColumn, newSize: number) => {
     // Update the column size in state
     const newColumnSizes = {
       ...columnSizes,

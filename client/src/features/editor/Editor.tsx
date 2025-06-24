@@ -29,7 +29,7 @@ export function Editor({ tabId, onQueryExecuted }: EditorProps) {
   // Get all needed state from the store using selectors
   const { openTabs, updateTabContent } = useTabManagerStore();
   const { executeQuery } = useTabExecutionStore();
-  const { saveChanges, hasUnsavedChanges } = useUnsavedChangesStore();
+  const { saveChanges } = useUnsavedChangesStore();
   const { sources, connectedSources } = useSourceStore();
   const { proposedChanges, acceptProposedChanges, rejectProposedChanges } = useChatStore();
   const { updateQueryName } = useQueryStore();
@@ -115,7 +115,7 @@ export function Editor({ tabId, onQueryExecuted }: EditorProps) {
 
   // Handle saving changes
   const handleSaveChanges = useCallback(async () => {
-    if (!currentTab || !hasUnsavedChanges(tabId)) return;
+    if (!currentTab || !currentTab.isDirty) return;
 
     try {
       await saveChanges(tabId);
@@ -124,7 +124,7 @@ export function Editor({ tabId, onQueryExecuted }: EditorProps) {
       console.error("Failed to save changes:", error);
       toast.error("Failed to save changes");
     }
-  }, [currentTab, tabId, saveChanges, hasUnsavedChanges]);
+  }, [currentTab, tabId, saveChanges]);
 
   // Handle query execution
   const handleRunQuery = useCallback(
