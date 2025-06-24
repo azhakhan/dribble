@@ -198,13 +198,20 @@ export class TabNavigationService {
    */
   static async closeQueryTabWithConfirmation(tabId: string): Promise<boolean> {
     const { useTabManagerStore } = await import("@/shared/store/useTabManagerStore");
+    const { useUnsavedChangesStore } = await import("@/shared/store/useUnsavedChangesStore");
+
     const tabManagerStore = useTabManagerStore.getState();
     const tab = tabManagerStore.openTabs.find((t) => t.id === tabId);
 
     // Check if tab has unsaved changes
     if (tab && tab.isDirty) {
-      // Return false to prevent closing - this will be handled by the UI
-      return false;
+      // Show unsaved changes dialog
+      const unsavedChangesStore = useUnsavedChangesStore.getState();
+      const shouldClose = await unsavedChangesStore.showUnsavedChangesDialog(tabId, "close");
+
+      if (!shouldClose) {
+        return false;
+      }
     }
 
     await this.closeQueryTab(tabId);

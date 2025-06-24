@@ -55,17 +55,8 @@ export const useTabManagerStore = create<TabManagerState>()(
 
       // Close a query tab with confirmation if there are unsaved changes
       closeQueryTabWithConfirmation: async (tabId) => {
-        const state = get();
-        const tab = state.openTabs.find((t) => t.id === tabId);
-
-        // Check if tab has unsaved changes
-        if (tab && tab.isDirty) {
-          // For now, return false to prevent closing - this will be handled by the UI
-          return false;
-        }
-
-        await get().closeQueryTab(tabId);
-        return true;
+        // Delegate to the TabNavigationService which handles the confirmation logic
+        return await TabNavigationService.closeQueryTabWithConfirmation(tabId);
       },
 
       // Close all tabs with a specific query ID

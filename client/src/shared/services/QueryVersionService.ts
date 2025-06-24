@@ -291,25 +291,46 @@ export class QueryVersionService {
    * Update tab content after saving a version
    */
   static async updateTabAfterVersionSave(
-    tabId: string,
+    tabIdOrQueryId: string,
     version: QueryVersion,
     sql: string
   ): Promise<void> {
     try {
       const { TabNavigationService } = await import("./TabNavigationService");
+      const { useTabManagerStore } = await import("@/shared/store/useTabManagerStore");
 
-      // Update the tab's saved content tracking
-      await TabNavigationService.updateTabContent(tabId, {
-        lastSavedContent: sql,
-        isDirty: false, // Mark as clean since we just saved
-        queryVersionId: version.id // Ensure we track the version ID
-      });
+      const tabManagerStore = useTabManagerStore.getState();
 
-      // If this was a new query, also update the queryId
-      if (version.query_id) {
-        await TabNavigationService.updateTabContent(tabId, {
-          queryId: version.query_id
+      // Determine if we're dealing with a tabId or queryId
+      const isTabId = tabManagerStore.openTabs.some((tab) => tab.id === tabIdOrQueryId);
+
+      if (isTabId) {
+        // Direct tab update
+        await TabNavigationService.updateTabContent(tabIdOrQueryId, {
+          lastSavedContent: sql,
+          isDirty: false, // Mark as clean since we just saved
+          queryVersionId: version.id // Ensure we track the version ID
         });
+
+        // If this was a new query, also update the queryId
+        if (version.query_id) {
+          await TabNavigationService.updateTabContent(tabIdOrQueryId, {
+            queryId: version.query_id
+          });
+        }
+      } else {
+        // Update all tabs that reference this query
+        const tabsToUpdate = tabManagerStore.openTabs.filter(
+          (tab) => tab.queryId === tabIdOrQueryId
+        );
+
+        for (const tab of tabsToUpdate) {
+          await TabNavigationService.updateTabContent(tab.id, {
+            lastSavedContent: sql,
+            isDirty: false, // Mark as clean since we just saved
+            queryVersionId: version.id // Ensure we track the version ID
+          });
+        }
       }
     } catch (error) {
       console.error("Failed to update tab after version save:", error);

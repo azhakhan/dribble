@@ -100,7 +100,7 @@ export class QueryExecutionService {
 
         // Update tab to mark it as clean
         const { QueryVersionService } = await import("./QueryVersionService");
-        await QueryVersionService.updateTabAfterVersionSave(tab.queryId, newVersion, queryToRun);
+        await QueryVersionService.updateTabAfterVersionSave(tab.id, newVersion, queryToRun);
 
         return newVersion.id;
       } else {
@@ -118,7 +118,7 @@ export class QueryExecutionService {
 
       // Update tab to mark it as clean
       const { QueryVersionService } = await import("./QueryVersionService");
-      await QueryVersionService.updateTabAfterVersionSave(newQuery.id, newVersion, queryToRun);
+      await QueryVersionService.updateTabAfterVersionSave(tab.id, newVersion, queryToRun);
 
       return newVersion.id;
     }
