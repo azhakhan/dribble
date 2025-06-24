@@ -394,9 +394,7 @@ function QueryTabsComponent() {
       }
 
       // Close all other tabs
-      otherTabs.forEach((tab) => {
-        closeQueryTab(tab.id);
-      });
+      await Promise.all(otherTabs.map((tab) => closeQueryTab(tab.id)));
     },
     [openTabs]
   );
@@ -420,9 +418,7 @@ function QueryTabsComponent() {
       }
 
       // Close all tabs to the right
-      tabsToClose.forEach((tab) => {
-        closeQueryTab(tab.id);
-      });
+      await Promise.all(tabsToClose.map((tab) => closeQueryTab(tab.id)));
     },
     [openTabs]
   );

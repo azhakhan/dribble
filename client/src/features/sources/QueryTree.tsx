@@ -118,12 +118,7 @@ const QueryTreeItem = ({
       </div>
 
       {/* Dialogs */}
-      <RenameQuery
-        query={query}
-        open={renameDialogOpen}
-        onOpenChange={setRenameDialogOpen}
-        triggerRef={triggerRef}
-      />
+      <RenameQuery query={query} open={renameDialogOpen} onOpenChange={setRenameDialogOpen} />
       <DeleteQuery
         query={query}
         open={deleteDialogOpen}

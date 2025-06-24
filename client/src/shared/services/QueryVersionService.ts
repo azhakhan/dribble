@@ -40,6 +40,9 @@ export class QueryVersionService {
         options.saveTrigger
       );
 
+      // Update any tabs referencing this query to mark them as clean
+      await this.updateTabAfterVersionSave(queryId, newVersion, options.sql);
+
       return {
         success: true,
         version: newVersion

@@ -1,147 +1,95 @@
-import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Check, X, Loader2 } from "lucide-react";
-import { toast } from "sonner";
-import { useQueryStore } from "@/shared/store";
+import { Label } from "@/components/ui/label";
+import { QueryVersionService } from "@/shared/services";
 import type { Query } from "@/shared/lib/api";
+import { useEffect, useState } from "react";
 
 interface RenameQueryProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   query: Query;
-  triggerRef: React.RefObject<HTMLButtonElement | null>;
 }
 
-export const RenameQuery = ({ open, onOpenChange, query, triggerRef }: RenameQueryProps) => {
-  const [newName, setNewName] = useState(query.name || `Query ${query.id.slice(0, 8)}`);
-  const [loading, setLoading] = useState(false);
-  const [position, setPosition] = useState({ top: 0, left: 0 });
-  const formRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
-  const { updateQueryName } = useQueryStore();
+export function RenameQuery({ open, onOpenChange, query }: RenameQueryProps) {
+  const [newName, setNewName] = useState(query.name || "");
+  const [isLoading, setIsLoading] = useState(false);
 
-  // Reset name when dialog opens or query changes
   useEffect(() => {
     if (open) {
-      setNewName(query.name || `Query ${query.id.slice(0, 8)}`);
-
-      // Calculate position relative to trigger
-      if (triggerRef.current) {
-        const triggerRect = triggerRef.current.getBoundingClientRect();
-        setPosition({
-          top: triggerRect.bottom + 4,
-          left: triggerRect.left
-        });
-      }
-
-      // Focus input after a short delay to ensure it's rendered
-      setTimeout(() => {
-        inputRef.current?.focus();
-        inputRef.current?.select();
-      }, 10);
+      setNewName(query.name || "");
     }
-  }, [open, query.name, query.id, triggerRef]);
+  }, [open, query.name]);
 
-  // Close on outside click
-  useEffect(() => {
-    if (!open) return;
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
 
-    const handleClickOutside = (event: MouseEvent) => {
-      if (formRef.current && !formRef.current.contains(event.target as Node)) {
-        onOpenChange(false);
-      }
-    };
+    if (!newName.trim()) return;
 
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [open, onOpenChange]);
-
-  const handleRename = async () => {
-    if (!newName.trim()) {
-      toast.error("Query name cannot be empty");
-      return;
-    }
-
-    if (newName.trim() === query.name) {
-      onOpenChange(false);
-      return;
-    }
-
+    setIsLoading(true);
     try {
-      setLoading(true);
-      await updateQueryName(query.id, newName.trim());
-      toast.success(`Query renamed to "${newName.trim()}"`);
-      onOpenChange(false);
+      const result = await QueryVersionService.updateQueryName(query.id, newName.trim());
+      if (result.success) {
+        onOpenChange(false);
+      } else {
+        console.error("Failed to rename query:", result.error);
+        // You might want to show a toast error here
+      }
     } catch (error) {
-      toast.error("Failed to rename query");
       console.error("Failed to rename query:", error);
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
   };
-
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setNewName(e.target.value);
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    e.stopPropagation();
-    if (e.key === "Enter" && !loading) {
-      e.preventDefault();
-      handleRename();
-    } else if (e.key === "Escape") {
-      e.preventDefault();
-      onOpenChange(false);
-    }
-  };
-
-  if (!open) return null;
 
   return (
-    <>
-      {/* Backdrop */}
-      <div className="fixed inset-0 z-40" />
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-[425px]">
+        <DialogHeader>
+          <DialogTitle>Rename Query</DialogTitle>
+          <DialogDescription>Change the name of your query.</DialogDescription>
+        </DialogHeader>
 
-      {/* Positioned form */}
-      <div
-        ref={formRef}
-        className="fixed z-50 bg-popover border rounded-md shadow-lg p-3"
-        style={{
-          top: position.top,
-          left: position.left,
-          minWidth: "200px"
-        }}
-      >
-        <div className="flex items-center gap-2">
-          <Input
-            ref={inputRef}
-            value={newName}
-            onChange={handleInputChange}
-            onKeyDown={handleKeyDown}
-            disabled={loading}
-            placeholder="Enter query name..."
-            className="text-xs h-7 flex-1"
-          />
-          <Button
-            size="sm"
-            onClick={handleRename}
-            disabled={loading || !newName.trim()}
-            className="h-7 w-7 p-0"
-          >
-            {loading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => onOpenChange(false)}
-            disabled={loading}
-            className="h-7 w-7 p-0"
-          >
-            <X className="h-3 w-3" />
-          </Button>
-        </div>
-      </div>
-    </>
+        <form onSubmit={handleSubmit}>
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="name" className="text-right">
+                Name
+              </Label>
+              <Input
+                id="name"
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                className="col-span-3"
+                placeholder="Enter query name"
+                disabled={isLoading}
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => onOpenChange(false)}
+              disabled={isLoading}
+            >
+              Cancel
+            </Button>
+            <Button type="submit" disabled={isLoading || !newName.trim()}>
+              {isLoading ? "Renaming..." : "Rename"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
-};
+}

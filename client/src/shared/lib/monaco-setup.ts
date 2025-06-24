@@ -28,3 +28,16 @@ export const getAvailableSQLDialects = () => [
   { label: "MySQL", value: LanguageIdEnum.MYSQL },
   { label: "PostgreSQL", value: LanguageIdEnum.PG }
 ];
+
+// Helper to map dbtype to Monaco language
+export const getMonacoLanguage = (dbtype?: string): string => {
+  if (!dbtype) return LanguageIdEnum.MYSQL;
+  switch (dbtype.toLowerCase()) {
+    case "postgres":
+      return LanguageIdEnum.PG;
+    case "mysql":
+      return LanguageIdEnum.MYSQL;
+    default:
+      return LanguageIdEnum.MYSQL;
+  }
+};

@@ -97,6 +97,11 @@ export class QueryExecutionService {
       if (shouldSaveNewVersion) {
         // Save the current editor content as a new version
         const newVersion = await queryStore.saveQueryVersion(tab.queryId, queryToRun, "run");
+
+        // Update tab to mark it as clean
+        const { QueryVersionService } = await import("./QueryVersionService");
+        await QueryVersionService.updateTabAfterVersionSave(tab.queryId, newVersion, queryToRun);
+
         return newVersion.id;
       } else {
         // Content is the same as latest version, use existing version
@@ -110,6 +115,11 @@ export class QueryExecutionService {
 
       // Save the current editor content as the first version
       const newVersion = await queryStore.saveQueryVersion(newQuery.id, queryToRun, "run");
+
+      // Update tab to mark it as clean
+      const { QueryVersionService } = await import("./QueryVersionService");
+      await QueryVersionService.updateTabAfterVersionSave(newQuery.id, newVersion, queryToRun);
+
       return newVersion.id;
     }
   }

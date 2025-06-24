@@ -5,11 +5,12 @@ import { toast } from "sonner";
 import { useTabManagerStore } from "@/shared/store/useTabManagerStore";
 import { useTabExecutionStore } from "@/shared/store/useTabExecutionStore";
 import { useUnsavedChangesStore } from "@/shared/store/useUnsavedChangesStore";
-import { useSourceStore, useChatStore, useQueryStore } from "@/shared/store";
-import { LanguageIdEnum } from "@/shared/lib/monaco-setup";
+import { useSourceStore, useChatStore } from "@/shared/store";
+import { getMonacoLanguage } from "@/shared/lib/monaco-setup";
 import { MonacoSQLEditor } from "./MonacoSQLEditor";
 import { MonacoDiffEditor } from "./MonacoDiffEditor";
 import { ProposedChangesBar } from "./ProposedChangesBar";
+import { QueryVersionService } from "@/shared/services";
 import { Input } from "@/components/ui/input";
 import { useState } from "react";
 
@@ -32,7 +33,6 @@ export function Editor({ tabId, onQueryExecuted }: EditorProps) {
   const { saveChanges } = useUnsavedChangesStore();
   const { sources, connectedSources } = useSourceStore();
   const { proposedChanges, acceptProposedChanges, rejectProposedChanges } = useChatStore();
-  const { updateQueryName } = useQueryStore();
 
   // Handle accept proposed changes with user feedback
   const handleAcceptProposedChanges = useCallback(() => {
@@ -93,19 +93,6 @@ export function Editor({ tabId, onQueryExecuted }: EditorProps) {
   );
 
   const canRunQueries = isEditorReady && isSourceConnected;
-
-  // Helper to map dbtype to Monaco language
-  const getMonacoLanguage = useCallback((dbtype?: string): string => {
-    if (!dbtype) return LanguageIdEnum.MYSQL;
-    switch (dbtype.toLowerCase()) {
-      case "postgres":
-        return LanguageIdEnum.PG;
-      case "mysql":
-        return LanguageIdEnum.MYSQL;
-      default:
-        return LanguageIdEnum.MYSQL;
-    }
-  }, []);
 
   // Handle content changes - now uses local state for immediate updates
   const handleContentChange = useCallback((content: string) => {
@@ -181,15 +168,24 @@ export function Editor({ tabId, onQueryExecuted }: EditorProps) {
     if (!currentTab?.queryId) return;
 
     try {
-      // Use the centralized updateQueryName from the store
-      await updateQueryName(currentTab.queryId, tempName.trim() || "Untitled Query");
-      setEditingName(false);
-      toast.success("Query name updated");
+      // Use QueryVersionService for proper tab synchronization
+      const result = await QueryVersionService.updateQueryName(
+        currentTab.queryId,
+        tempName.trim() || "Untitled Query"
+      );
+
+      if (result.success) {
+        setEditingName(false);
+        toast.success("Query name updated");
+      } else {
+        console.error("Failed to update query name:", result.error);
+        toast.error("Failed to update query name");
+      }
     } catch (error) {
       console.error("Failed to update query name:", error);
       toast.error("Failed to update query name");
     }
-  }, [currentTab?.queryId, tempName, updateQueryName]);
+  }, [currentTab?.queryId, tempName]);
 
   // Handle keyboard shortcuts
   useEffect(() => {

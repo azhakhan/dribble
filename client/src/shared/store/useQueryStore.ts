@@ -322,10 +322,6 @@ export const useQueryStore = create<QueryState>((set, get) => ({
         queries: { ...state.queries, [queryId]: updatedQuery }
       }));
 
-      // Use QueryVersionService to handle tab synchronization
-      const { QueryVersionService } = await import("@/shared/services");
-      await QueryVersionService.updateQueryName(queryId, newName);
-
       return updatedQuery;
     } catch (error) {
       console.error("Failed to update query name:", error);
