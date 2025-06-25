@@ -15,6 +15,34 @@ export default defineConfig({
     // Exclude Monaco and Monaco SQL Languages from dependency optimization
     exclude: ["monaco-editor", "monaco-sql-languages"]
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          // Vendor chunks
+          vendor: ["react", "react-dom"],
+          ui: ["@glideapps/glide-data-grid", "lucide-react"],
+          stores: ["zustand"],
+          monaco: ["monaco-editor", "monaco-sql-languages"],
+          // Routing and panels
+          routing: ["react-router-dom"],
+          panels: ["react-resizable-panels"],
+          // Feature chunks
+          llm: [
+            "src/features/llm/LLMList.tsx",
+            "src/features/llm/LLMDialog.tsx",
+            "src/features/llm/LLMForm.tsx"
+          ],
+          chat: ["src/features/chat/ChatSidebar.tsx", "src/features/chat/SQLCodeBlock.tsx"],
+          editor: [
+            "src/features/editor/Editor.tsx",
+            "src/features/editor/MonacoSQLEditor.tsx",
+            "src/features/editor/MonacoDiffEditor.tsx"
+          ]
+        }
+      }
+    }
+  },
   server: {
     port: 3000,
     strictPort: true, // Don't try other ports if 3000 is taken

@@ -41,4 +41,5 @@ function QueryEditorComponent({
   );
 }
 
-export const QueryEditor = memo(QueryEditorComponent);
+const QueryEditor = memo(QueryEditorComponent);
+export default QueryEditor;
