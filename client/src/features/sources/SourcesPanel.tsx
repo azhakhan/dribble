@@ -1,4 +1,4 @@
-import { FileTree } from "./FileTree";
+import { FileTree } from "./components/FileTree";
 import { AddSource } from "./dialogs/AddSource";
 import type { FileNode } from "@/shared/lib/fileTreeUtils";
 
