@@ -1,6 +1,7 @@
 export { QueryExecutionService } from "./QueryExecutionService";
 export { TabNavigationService } from "./TabNavigationService";
 export { QueryVersionService } from "./QueryVersionService";
+export { ErrorService, ErrorContext, ErrorSeverity } from "./ErrorService";
 
 export type { QueryExecutionOptions, QueryExecutionResult } from "./QueryExecutionService";
 
@@ -12,3 +13,5 @@ export type {
   QueryVersionResult,
   QueryCreationResult
 } from "./QueryVersionService";
+
+export type { ErrorDetails, ErrorReportingConfig } from "./ErrorService";
