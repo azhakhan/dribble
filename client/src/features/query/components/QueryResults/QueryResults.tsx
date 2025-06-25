@@ -1,13 +1,14 @@
 import { memo } from "react";
 import { ResultsTable } from "./ResultsTable";
 import { ResultsPagination } from "./ResultsPagination";
+import type { TableData } from "@/shared/types/api";
 
 interface QueryResultsProps {
   tableData?: {
     sourceId: string;
     tableName: string;
   } | null;
-  queryResults?: object[] | null;
+  queryResults?: TableData | null;
   isQueryRunning: boolean;
 }
 

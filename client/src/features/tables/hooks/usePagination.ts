@@ -1,6 +1,7 @@
 import { useTabManagerStore } from "@/shared/store/useTabManagerStore";
 import { useTabExecutionStore } from "@/shared/store/useTabExecutionStore";
 import { useTableFilterStore } from "@/shared/store/useTableFilterStore";
+import type { TableData } from "@/shared/types/api";
 
 interface PaginationState {
   currentPage: number;
@@ -20,7 +21,7 @@ interface PaginationActions {
 }
 
 interface UsePaginationProps {
-  data: object[] | null;
+  data: TableData | null;
   isLoading: boolean;
 }
 

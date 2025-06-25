@@ -1,12 +1,13 @@
 import { memo } from "react";
 import { TableDataDisplay } from "@/features/tables/TableDataDisplay";
+import type { TableData } from "@/shared/types/api";
 
 interface ResultsTableProps {
   tableData?: {
     sourceId: string;
     tableName: string;
   } | null;
-  queryResults?: object[] | null;
+  queryResults?: TableData | null;
   isQueryRunning: boolean;
 }
 
