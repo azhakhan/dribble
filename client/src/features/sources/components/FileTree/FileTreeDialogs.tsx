@@ -13,6 +13,7 @@ interface FileTreeDialogsProps {
   setRenameDialogOpen: (open: boolean) => void;
   deleteDialogOpen: boolean;
   setDeleteDialogOpen: (open: boolean) => void;
+  triggerRef: React.RefObject<HTMLButtonElement | null>;
 }
 
 export const FileTreeDialogs: React.FC<FileTreeDialogsProps> = ({
@@ -24,7 +25,8 @@ export const FileTreeDialogs: React.FC<FileTreeDialogsProps> = ({
   renameDialogOpen,
   setRenameDialogOpen,
   deleteDialogOpen,
-  setDeleteDialogOpen
+  setDeleteDialogOpen,
+  triggerRef
 }) => {
   if (!isSource || !nodeId) {
     return null;
@@ -38,6 +40,7 @@ export const FileTreeDialogs: React.FC<FileTreeDialogsProps> = ({
         onOpenChange={setRenameDialogOpen}
         sourceId={nodeId}
         sourceName={nodeName}
+        triggerRef={triggerRef}
       />
       <DeleteSource
         open={deleteDialogOpen}

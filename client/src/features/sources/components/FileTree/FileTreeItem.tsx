@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useTreeStore, useSourceStore } from "@/shared/store";
 import type { FileNode } from "@/shared/lib/fileTreeUtils";
 import { TreeChevron } from "../shared/TreeChevron";
@@ -57,6 +57,9 @@ export const FileTreeItem: React.FC<FileTreeItemProps> = ({
   const [renameDialogOpen, setRenameDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
+
+  // Ref for the actions trigger button
+  const actionsRef = useRef<HTMLButtonElement>(null);
 
   // Close dropdown when any dialog opens to prevent conflicts
   useEffect(() => {
@@ -155,6 +158,7 @@ export const FileTreeItem: React.FC<FileTreeItemProps> = ({
             />
 
             <FileTreeActions
+              ref={actionsRef}
               isConnected={isConnected}
               isLoading={isLoading}
               nodeId={node.id}
@@ -181,6 +185,7 @@ export const FileTreeItem: React.FC<FileTreeItemProps> = ({
         setRenameDialogOpen={setRenameDialogOpen}
         deleteDialogOpen={deleteDialogOpen}
         setDeleteDialogOpen={setDeleteDialogOpen}
+        triggerRef={actionsRef}
       />
 
       {/* Children */}
