@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef } from "react";
 import { renameSource } from "@/shared/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -57,14 +57,6 @@ export const RenameSource = ({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [open, onOpenChange]);
 
-  // Ref callback to handle input focus and selection
-  const inputRefCallback = useCallback((input: HTMLInputElement | null) => {
-    if (input) {
-      input.focus();
-      input.select();
-    }
-  }, []);
-
   const handleRename = async () => {
     if (!newName.trim() || newName.trim() === sourceName) {
       onOpenChange(false);
@@ -119,7 +111,6 @@ export const RenameSource = ({
       >
         <div className="flex items-center gap-2">
           <Input
-            ref={inputRefCallback}
             value={newName}
             onChange={handleInputChange}
             onKeyDown={handleKeyDown}
