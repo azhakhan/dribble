@@ -5,6 +5,9 @@ export interface SchemaColumn {
   nullable: boolean;
 }
 
+// Import improved API types
+import type { TableData, TableFilterState as ApiTableFilterState } from "../types/api";
+
 export interface SchemaForeignKey {
   column: string;
   constraint_name: string;
@@ -51,7 +54,7 @@ export interface QueryTab {
   title: string;
   isDirty: boolean;
   editorContent: string;
-  queryResults: object[] | null;
+  queryResults: TableData | null;
   queryRunning: boolean;
   selectedTableData: { sourceId: string; tableName: string; query: string } | null;
   isLoadingQuery: boolean;
@@ -70,14 +73,8 @@ export interface PaginationInfo {
   has_prev: boolean;
 }
 
-// Table filter interface
-export interface TableFilterState {
-  currentOffset: number;
-  whereInput: string;
-  orderByInput: string;
-  pageSize: number;
-  displaySize: number;
-}
+// Table filter interface - use the API type directly
+export type TableFilterState = ApiTableFilterState;
 
 // Tree state interface
 export interface SidebarState {

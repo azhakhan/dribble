@@ -10,6 +10,7 @@ import {
 } from "@glideapps/glide-data-grid";
 import { useTheme } from "@/components/theme-provider";
 import { useCallback, useMemo, useState, useEffect, useRef } from "react";
+import type { TableRow, ColumnDefinition, TableData } from "@/shared/types/api";
 
 const dataEditorBaseTheme: GlideTheme = {
   accentColor: "#4F5DFF",
@@ -61,7 +62,8 @@ const dataEditorBaseTheme: GlideTheme = {
 const defaultColumns: GridColumn[] = [{ title: "Status", width: 300 }];
 
 interface EditableTableProps {
-  data?: Record<string, unknown>[];
+  data?: TableData;
+  columns?: ColumnDefinition[];
   isLoading?: boolean;
   tableId?: string; // Unique identifier for this table
   source?: string; // Optional source identifier
@@ -97,7 +99,7 @@ const saveColumnSizes = (storageKey: string | null, sizes: Record<string, number
 };
 
 // Helper to determine column type
-const getColumnType = (value: unknown): string => {
+const getColumnType = (value: unknown): ColumnDefinition["type"] => {
   if (typeof value === "number") return "number";
   if (value instanceof Date) return "date";
   if (typeof value === "string") {
@@ -109,11 +111,14 @@ const getColumnType = (value: unknown): string => {
       return "text";
     }
   }
-  return "text";
+  if (typeof value === "boolean") return "boolean";
+  if (typeof value === "object") return "json";
+  return "unknown";
 };
 
 export const EditableTable = ({
   data: queryData,
+  columns: providedColumns,
   isLoading,
   tableId = "default",
   source,
@@ -224,6 +229,16 @@ export const EditableTable = ({
 
   // Update the columns definition
   const columns = useMemo(() => {
+    // Use provided columns if available
+    if (providedColumns && providedColumns.length > 0) {
+      return providedColumns.map((col) => ({
+        title: col.name,
+        width: columnSizes[col.name] || col.width || 200,
+        id: col.name,
+        icon: col.type
+      }));
+    }
+
     // Safe check to ensure data[0] exists
     if (!data || data.length === 0 || !data[0]) {
       return defaultColumns;
@@ -240,7 +255,7 @@ export const EditableTable = ({
         icon: columnType // This will map to our custom icons
       };
     });
-  }, [data, columnSizes]);
+  }, [data, columnSizes, providedColumns]);
 
   // Get column indexes safely
   const dataIndexes = useMemo(() => {
@@ -262,7 +277,7 @@ export const EditableTable = ({
         } as GridCell;
       }
 
-      const dataRow = data[row] as Record<string, unknown>;
+      const dataRow = data[row] as TableRow;
       const columnName = dataIndexes[col];
 
       if (columnName === undefined) {

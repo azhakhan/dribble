@@ -1,6 +1,7 @@
 import type { CreateQueryRunRequest } from "@/shared/lib/api";
 import { executeQueryVersionRun, getQueryRunResults } from "@/shared/lib/api";
 import type { QueryTab } from "@/shared/store/types";
+import type { TableData } from "@/shared/types/api";
 
 export interface QueryExecutionOptions {
   sql?: string;
@@ -9,7 +10,7 @@ export interface QueryExecutionOptions {
 
 export interface QueryExecutionResult {
   success: boolean;
-  results?: object[];
+  results?: TableData;
   error?: string;
 }
 
@@ -187,8 +188,8 @@ export class QueryExecutionService {
   /**
    * Poll for query results until completion
    */
-  private static async pollForResults(runId: string): Promise<object[]> {
-    const pollOnce = async (maxAttempts: number): Promise<object[]> => {
+  private static async pollForResults(runId: string): Promise<TableData> {
+    const pollOnce = async (maxAttempts: number): Promise<TableData> => {
       if (maxAttempts <= 0) {
         throw new Error("Max polling attempts reached - query may still be running");
       }
@@ -216,7 +217,7 @@ export class QueryExecutionService {
   /**
    * Process and format query results
    */
-  private static processResults(results: object[]): object[] {
+  private static processResults(results: TableData): TableData {
     if (Array.isArray(results)) {
       return results.length > 0 ? results : [{ message: "Query returned no data" }];
     } else if (typeof results === "object" && results !== null) {
