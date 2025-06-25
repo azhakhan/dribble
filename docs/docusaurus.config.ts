@@ -66,12 +66,17 @@ const config: Config = {
       respectPrefersColorScheme: false
     },
     navbar: {
-      title: "Dribble Docs",
+      title: "DRIBBLE docs",
       logo: {
         alt: "Dribble Logo",
         src: "img/logo.svg",
         srcDark: "img/logo-dark.svg",
-        href: "https://dribblesql.com"
+        href: "https://dribblesql.com",
+        target: "_blank",
+        style: {
+          height: "20px",
+          marginTop: "6px"
+        }
       },
       items: [
         {
