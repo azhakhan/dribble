@@ -5,6 +5,7 @@ import logging
 from sqlalchemy import text
 from .models import MySQLCreds
 from .connection_manager import create_database_engine, get_database_connection
+from .exceptions import ValidationError
 
 logger = logging.getLogger(__name__)
 
@@ -81,18 +82,33 @@ def validate_environment():
         dict: Environment configuration
 
     Raises:
-        Exception: If required environment variables are missing
+        ValidationError: If required environment variables are missing or invalid
     """
     db_creds = os.environ.get("DB_CREDS")
     if not db_creds:
-        raise Exception("DB_CREDS environment variable is required")
+        raise ValidationError(
+            "DB_CREDS environment variable is required", field_name="DB_CREDS", invalid_value=None
+        )
 
     try:
-        creds = MySQLCreds(**json.loads(db_creds))
+        creds_dict = json.loads(db_creds)
     except json.JSONDecodeError as e:
-        raise Exception(f"Invalid JSON in DB_CREDS: {e}") from e
+        raise ValidationError(
+            f"Invalid JSON in DB_CREDS: {e}",
+            original_exception=e,
+            field_name="DB_CREDS",
+            invalid_value=db_creds,
+        )
+
+    try:
+        creds = MySQLCreds(**creds_dict)
     except Exception as e:
-        raise Exception(f"Invalid DB_CREDS format: {e}") from e
+        raise ValidationError(
+            f"Invalid DB_CREDS format: {e}",
+            original_exception=e,
+            field_name="DB_CREDS",
+            invalid_value=creds_dict,
+        )
 
     server_url = os.environ.get("SERVER_URL", "http://server:8000")
 

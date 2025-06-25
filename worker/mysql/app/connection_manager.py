@@ -4,6 +4,7 @@ from sqlalchemy.exc import OperationalError
 import time
 import logging
 from .models import MySQLCreds
+from .exceptions import DatabaseConnectionError
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +40,12 @@ def create_database_engine(creds: MySQLCreds):
 
 def get_database_connection(engine, max_retries: int = 3, retry_delay: float = 1.0):
     """Get a database connection with retry logic"""
+    connection_details = {
+        "max_retries": max_retries,
+        "retry_delay": retry_delay,
+        "database_type": "mysql",
+    }
+
     for attempt in range(max_retries):
         try:
             conn = engine.connect()
@@ -51,4 +58,8 @@ def get_database_connection(engine, max_retries: int = 3, retry_delay: float = 1
                 time.sleep(retry_delay * (2**attempt))  # Exponential backoff
                 continue
             else:
-                raise e
+                raise DatabaseConnectionError(
+                    f"Failed to establish database connection after {max_retries} attempts",
+                    original_exception=e,
+                    connection_details=connection_details,
+                )

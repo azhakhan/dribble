@@ -16,6 +16,7 @@ from .query_executor import execute_query
 from .sql_builder import SQLBuilder
 from .schema_inspector import get_mysql_schemas
 from .utils import setup_logging, validate_environment, test_connection_cli
+from .exceptions import WorkerError, DatabaseConnectionError, QueryExecutionError, ValidationError
 
 # Configure logging
 logger = setup_logging()
@@ -34,14 +35,24 @@ async def lifespan(app: FastAPI):
             conn.execute(text("SELECT 1"))
         logger.info("MySQL database connection test successful during startup")
 
+    except ValidationError as e:
+        logger.error(f"Environment validation failed during startup: {str(e)}")
+        raise e
+    except DatabaseConnectionError as e:
+        logger.error(f"MySQL database connection failed during startup: {str(e)}")
+        if hasattr(app.state, "engine"):
+            app.state.engine.dispose()
+        raise e
     except OperationalError as e:
         logger.error(f"MySQL database connection failed during startup: {str(e)}")
         if hasattr(app.state, "engine"):
             app.state.engine.dispose()
-        raise Exception(f"Database connection failed: {e}") from e
+        raise DatabaseConnectionError(
+            "MySQL database connection failed during startup", original_exception=e
+        ) from e
     except Exception as e:
         logger.error(f"Application startup failed: {str(e)}")
-        raise e
+        raise WorkerError("Application startup failed", original_exception=e) from e
 
     yield
 
@@ -82,6 +93,19 @@ async def run_query(request: QueryRequest):
                 )
             await set_result(request.query_id, {"status": "success", "data": result["data"]})
 
+        except QueryExecutionError as e:
+            execution_time_ms = int((time.time() - start_time) * 1000)
+            logger.error(f"Query {request.query_id} failed after {execution_time_ms}ms: {str(e)}")
+            await set_result(request.query_id, {"status": "error", "error": str(e)})
+        except DatabaseConnectionError as e:
+            execution_time_ms = int((time.time() - start_time) * 1000)
+            logger.error(
+                f"Query {request.query_id} failed due to database connection error after {execution_time_ms}ms: {str(e)}"
+            )
+            await set_result(
+                request.query_id,
+                {"status": "error", "error": f"Database connection error: {str(e)}"},
+            )
         except Exception as e:
             execution_time_ms = int((time.time() - start_time) * 1000)
             logger.error(f"Query {request.query_id} failed after {execution_time_ms}ms: {str(e)}")
@@ -133,6 +157,44 @@ async def run_query_version(request: QueryVersionRequest):
             # Update the result cache
             await set_result(request.query_run_id, {"status": "success", "data": result["data"]})
 
+        except QueryExecutionError as e:
+            execution_time_ms = int((time.time() - start_time) * 1000)
+            error_message = str(e)
+            logger.error(f"Query execution failed: {error_message}")
+
+            # Create error update request for the server
+            update_request = UpdateQueryRunRequest(
+                result_message=None,
+                row_count=0,
+                execution_time_ms=execution_time_ms,
+                error_message=error_message,
+            )
+
+            # Call the server to update the query run with error
+            await _update_server_query_run(request.query_run_id, update_request)
+
+            # Update the result cache with error
+            await set_result(request.query_run_id, {"status": "error", "error": error_message})
+        except DatabaseConnectionError as e:
+            execution_time_ms = int((time.time() - start_time) * 1000)
+            error_message = f"Database connection error: {str(e)}"
+            logger.error(
+                f"Query execution failed due to database connection error: {error_message}"
+            )
+
+            # Create error update request for the server
+            update_request = UpdateQueryRunRequest(
+                result_message=None,
+                row_count=0,
+                execution_time_ms=execution_time_ms,
+                error_message=error_message,
+            )
+
+            # Call the server to update the query run with error
+            await _update_server_query_run(request.query_run_id, update_request)
+
+            # Update the result cache with error
+            await set_result(request.query_run_id, {"status": "error", "error": error_message})
         except Exception as e:
             execution_time_ms = int((time.time() - start_time) * 1000)
             error_message = str(e)
@@ -187,6 +249,9 @@ async def health_check():
         with get_database_connection(app.state.engine) as conn:
             conn.execute(text("SELECT 1"))
         health_status["checks"]["database"] = "healthy"
+    except DatabaseConnectionError as e:
+        health_status["checks"]["database"] = f"unhealthy: Database connection error - {str(e)}"
+        health_status["status"] = "unhealthy"
     except Exception as e:
         health_status["checks"]["database"] = f"unhealthy: {str(e)}"
         health_status["status"] = "unhealthy"

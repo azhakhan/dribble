@@ -6,6 +6,7 @@ import datetime
 import decimal
 import uuid
 from .connection_manager import get_database_connection
+from .exceptions import QueryExecutionError, DatabaseConnectionError
 
 logger = logging.getLogger(__name__)
 
@@ -154,4 +155,22 @@ def execute_query(query: str, engine):
 
     except OperationalError as e:
         logger.error(f"[{datetime.datetime.now()}] Database error: {str(e)}")
-        raise Exception(f"Error executing query: {e}") from e
+        raise QueryExecutionError(
+            f"Error executing {query_type} query",
+            original_exception=e,
+            query=query,
+            query_type=query_type,
+        )
+    except DatabaseConnectionError:
+        # Re-raise database connection errors as-is
+        raise
+    except Exception as e:
+        logger.error(
+            f"[{datetime.datetime.now()}] Unexpected error during query execution: {str(e)}"
+        )
+        raise QueryExecutionError(
+            f"Unexpected error executing {query_type} query",
+            original_exception=e,
+            query=query,
+            query_type=query_type,
+        )
