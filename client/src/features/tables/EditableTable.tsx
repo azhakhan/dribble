@@ -11,6 +11,7 @@ import {
 import { useTheme } from "@/components/theme-provider";
 import { useCallback, useMemo, useState, useEffect, useRef } from "react";
 import type { TableRow, ColumnDefinition, TableData } from "@/shared/types/api";
+import { createNoDataMessage } from "@/shared/utils/errorUtils";
 
 const dataEditorBaseTheme: GlideTheme = {
   accentColor: "#4F5DFF",
@@ -153,7 +154,7 @@ export const EditableTable = ({
   const data = useMemo(() => {
     // Ensure data is an array and not null/undefined
     if (!queryData || !Array.isArray(queryData) || queryData.length === 0) {
-      return [{ status: "No data available" }];
+      return createNoDataMessage();
     }
     return queryData;
   }, [queryData]);

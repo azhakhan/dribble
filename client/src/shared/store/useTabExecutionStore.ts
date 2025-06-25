@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { QueryExecutionService, type QueryExecutionOptions } from "@/shared/services";
+import { errorToTableData } from "@/shared/utils/errorUtils";
 
 interface TabExecutionState {
   // Query execution
@@ -47,7 +48,7 @@ export const useTabExecutionStore = create<TabExecutionState>()(() => ({
             ? {
                 ...t,
                 queryRunning: false,
-                queryResults: result.results || []
+                queryResults: result.results || null
               }
             : t
         );
@@ -66,7 +67,7 @@ export const useTabExecutionStore = create<TabExecutionState>()(() => ({
             ? {
                 ...t,
                 queryRunning: false,
-                queryResults: result.results || [{ error: result.error || "Unknown error" }]
+                queryResults: result.results || errorToTableData(result.error || "Unknown error")
               }
             : t
         );
@@ -80,13 +81,7 @@ export const useTabExecutionStore = create<TabExecutionState>()(() => ({
           ? {
               ...t,
               queryRunning: false,
-              queryResults: [
-                {
-                  error: `Query execution failed: ${
-                    error instanceof Error ? error.message : "Unknown error"
-                  }`
-                }
-              ]
+              queryResults: errorToTableData(error, "Query execution failed")
             }
           : t
       );

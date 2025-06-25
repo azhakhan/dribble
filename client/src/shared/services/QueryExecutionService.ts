@@ -2,6 +2,8 @@ import type { CreateQueryRunRequest } from "@/shared/lib/api";
 import { executeQueryVersionRun, getQueryRunResults } from "@/shared/lib/api";
 import type { QueryTab } from "@/shared/store/types";
 import type { TableData } from "@/shared/types/api";
+import { convertToTableData } from "@/shared/utils/typeUtils";
+import { createNoDataMessage } from "@/shared/utils/errorUtils";
 
 export interface QueryExecutionOptions {
   sql?: string;
@@ -62,7 +64,7 @@ export class QueryExecutionService {
       return {
         success: false,
         error: `Query execution failed: ${errorMessage}`,
-        results: [{ error: `Query execution failed: ${errorMessage}` }]
+        results: [{ error: errorMessage }]
       };
     }
   }
@@ -218,14 +220,10 @@ export class QueryExecutionService {
    * Process and format query results
    */
   private static processResults(results: TableData): TableData {
-    if (Array.isArray(results)) {
-      return results.length > 0 ? results : [{ message: "Query returned no data" }];
-    } else if (typeof results === "object" && results !== null) {
-      return [results];
-    } else {
-      // Handle primitive types (string, number, etc.) by wrapping them in objects
-      return [{ result: results }];
+    if (!Array.isArray(results)) {
+      return convertToTableData(results);
     }
+    return results.length > 0 ? results : createNoDataMessage("Query returned no data");
   }
 
   /**
