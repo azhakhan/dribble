@@ -2,46 +2,38 @@
 sidebar_position: 1
 ---
 
-# Tutorial Intro
+# Welcome to Dribble
 
-Let's discover **Docusaurus in less than 5 minutes**.
+**Dribble** is an AI-powered, open source SQL IDE that makes working with databases simple and intuitive. Connect to multiple databases, write queries with AI assistance, and explore your data all in one interface.
 
-## Getting Started
+![Dribble Interface](../../image.png)
 
-Get started by **creating a new site**.
+## What makes Dribble special?
 
-Or **try Docusaurus immediately** with **[docusaurus.new](https://docusaurus.new)**.
+🔌 **Multi-database support** - Connect to PostgreSQL, MySQL, and more  
+🧠 **AI-powered assistance** - Get help writing and optimizing SQL queries  
+📊 **Visual data exploration** - Browse your database schema like a file tree  
+💾 **Query management** - Save, version, and organize your queries  
+⚡ **Fast execution** - Isolated workers ensure optimal performance  
+🌐 **Web-based** - Access from anywhere with a modern browser
 
-### What you'll need
+## Quick Navigation
 
-- [Node.js](https://nodejs.org/en/download/) version 18.0 or above:
-  - When installing Node.js, you are recommended to check all checkboxes related to dependencies.
+**For Users:**
 
-## Generate a new site
+- [Quickstart Guide](./quickstart) - Get up and running in minutes
+- [Key Concepts](./concepts) - Understand how Dribble works
+- [Using the App](./using-the-app) - Complete feature walkthrough
 
-Generate a new Docusaurus site using the **classic template**.
+**For Developers:**
 
-The classic template will automatically be added to your project after you run the command:
+- [Developer Concepts](./developer-concepts) - Architecture and technical details
+- [API Reference](./api-reference) - Server endpoints and data models
 
-```bash
-npm init docusaurus@latest my-website classic
-```
+## Need Help?
 
-You can type this command into Command Prompt, Powershell, Terminal, or any other integrated terminal of your code editor.
+- 📚 Browse the documentation sections above
+- 💬 Use the built-in AI assistant for SQL help
+- 🐛 [Report issues](https://github.com/azhakhan/dribble/issues) on GitHub
 
-The command also installs all necessary dependencies you need to run Docusaurus.
-
-## Start your site
-
-Run the development server:
-
-```bash
-cd my-website
-npm run start
-```
-
-The `cd` command changes the directory you're working with. In order to work with your newly created Docusaurus site, you'll need to navigate the terminal there.
-
-The `npm run start` command builds your website locally and serves it through a development server, ready for you to view at http://localhost:3000/.
-
-Open `docs/intro.md` (this page) and edit some lines: the site **reloads automatically** and displays your changes.
+Let's get started with the [Quickstart Guide](./quickstart)!
