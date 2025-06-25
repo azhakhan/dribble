@@ -1,5 +1,5 @@
 import { memo } from "react";
-import { TableDataDisplay } from "@/features/tables/TableDataDisplay";
+import { TableDataDisplayOptimized } from "@/features/tables/TableDataDisplayOptimized";
 import type { TableData } from "@/shared/types/api";
 
 interface ResultsTableProps {
@@ -13,10 +13,12 @@ interface ResultsTableProps {
 
 function ResultsTableComponent({ tableData, queryResults, isQueryRunning }: ResultsTableProps) {
   return (
-    <TableDataDisplay
+    <TableDataDisplayOptimized
       tableData={tableData || null}
       queryResults={queryResults}
       isQueryRunning={isQueryRunning}
+      useVirtualization={false}
+      virtualizationThreshold={1000}
     />
   );
 }

@@ -9,7 +9,7 @@ import {
   type Theme as GlideTheme
 } from "@glideapps/glide-data-grid";
 import { useTheme } from "@/components/theme-provider";
-import { useCallback, useMemo, useState, useEffect, useRef } from "react";
+import { useCallback, useMemo, useState, useEffect, useRef, memo } from "react";
 import type { TableRow, ColumnDefinition, TableData } from "@/shared/types/api";
 import { createNoDataMessage } from "@/shared/utils/errorUtils";
 
@@ -62,7 +62,7 @@ const dataEditorBaseTheme: GlideTheme = {
 // Default columns
 const defaultColumns: GridColumn[] = [{ title: "Status", width: 300 }];
 
-interface EditableTableProps {
+interface OptimizedEditableTableProps {
   data?: TableData;
   columns?: ColumnDefinition[];
   isLoading?: boolean;
@@ -71,13 +71,12 @@ interface EditableTableProps {
   schema?: string; // Optional schema identifier
 }
 
-// Helper to generate storage key
+// Memoized helper functions to prevent re-creation on every render
 const getStorageKey = (tableId?: string, source?: string, schema?: string) => {
   const parts = [source, schema, tableId].filter(Boolean);
   return parts.length > 0 ? `table_columns_${parts.join("_")}` : null;
 };
 
-// Helper to load column sizes from localStorage
 const loadColumnSizes = (storageKey: string | null) => {
   if (!storageKey) return {};
   try {
@@ -89,7 +88,6 @@ const loadColumnSizes = (storageKey: string | null) => {
   }
 };
 
-// Helper to save column sizes to localStorage
 const saveColumnSizes = (storageKey: string | null, sizes: Record<string, number>) => {
   if (!storageKey) return;
   try {
@@ -117,29 +115,29 @@ const getColumnType = (value: unknown): ColumnDefinition["type"] => {
   return "unknown";
 };
 
-export const EditableTable = ({
+const OptimizedEditableTableComponent = ({
   data: queryData,
   columns: providedColumns,
   isLoading,
   tableId = "default",
   source,
   schema
-}: EditableTableProps) => {
+}: OptimizedEditableTableProps) => {
   const { resolvedTheme } = useTheme();
   const initializedRef = useRef(false);
+
   const storageKey = useMemo(
     () => getStorageKey(tableId, source, schema),
     [tableId, source, schema]
   );
 
-  // Custom header icons
+  // Memoized custom header icons - prevent recreation on every render
   const customHeaderIcons = useMemo(
     () => ({
       text: ({ fgColor }: { fgColor: string }) =>
         `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="${fgColor}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-case-upper-icon lucide-case-upper"><path d="m3 15 4-8 4 8"/><path d="M4 13h6"/><path d="M15 11h4.5a2 2 0 0 1 0 4H15V7h4a2 2 0 0 1 0 4"/></svg>`,
       number: ({ fgColor }: { fgColor: string }) =>
         `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="${fgColor}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-hash"><line x1="4" x2="20" y1="9" y2="9"/><line x1="4" x2="20" y1="15" y2="15"/><line x1="10" x2="8" y1="3" y2="21"/><line x1="16" x2="14" y1="3" y2="21"/></svg>`,
-      // number: ({ fgColor }: { fgColor: string }) =>,
       date: ({ fgColor }: { fgColor: string }) =>
         `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="${fgColor}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-calendar"><path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/></svg>`,
       url: ({ fgColor }: { fgColor: string }) =>
@@ -150,9 +148,8 @@ export const EditableTable = ({
     []
   );
 
-  // Use query data if available, otherwise use default data
+  // Memoized data processing
   const data = useMemo(() => {
-    // Ensure data is an array and not null/undefined
     if (!queryData || !Array.isArray(queryData) || queryData.length === 0) {
       return createNoDataMessage();
     }
@@ -193,7 +190,8 @@ export const EditableTable = ({
     }
   }, [data, columnSizes, storageKey]);
 
-  const getGlideTheme = (): GlideTheme => {
+  // Memoized theme generation
+  const getGlideTheme = useMemo((): GlideTheme => {
     const isDark = resolvedTheme === "dark";
 
     return {
@@ -226,9 +224,9 @@ export const EditableTable = ({
       resizeIndicatorColor: isDark ? "#2E2E2E" : "#E4E4E7",
       horizontalBorderColor: isDark ? "#2E2E2E" : "#E4E4E7"
     };
-  };
+  }, [resolvedTheme]);
 
-  // Update the columns definition
+  // Memoized columns definition
   const columns = useMemo(() => {
     // Use provided columns if available
     if (providedColumns && providedColumns.length > 0) {
@@ -258,7 +256,7 @@ export const EditableTable = ({
     });
   }, [data, columnSizes, providedColumns]);
 
-  // Get column indexes safely
+  // Memoized column indexes
   const dataIndexes = useMemo(() => {
     if (!data || data.length === 0 || !data[0]) {
       return ["status"]; // Default column if no data
@@ -310,20 +308,23 @@ export const EditableTable = ({
     [dataIndexes, data]
   );
 
-  const handleColumnResize = (column: GridColumn, newSize: number) => {
-    // Update the column size in state
-    const newColumnSizes = {
-      ...columnSizes,
-      [column.title]: newSize
-    };
+  const handleColumnResize = useCallback(
+    (column: GridColumn, newSize: number) => {
+      // Update the column size in state
+      const newColumnSizes = {
+        ...columnSizes,
+        [column.title]: newSize
+      };
 
-    setColumnSizes(newColumnSizes);
+      setColumnSizes(newColumnSizes);
 
-    // Save to localStorage
-    if (storageKey) {
-      saveColumnSizes(storageKey, newColumnSizes);
-    }
-  };
+      // Save to localStorage
+      if (storageKey) {
+        saveColumnSizes(storageKey, newColumnSizes);
+      }
+    },
+    [columnSizes, storageKey]
+  );
 
   if (isLoading) {
     return <div className="h-full w-full flex items-center justify-center">Loading data...</div>;
@@ -335,7 +336,7 @@ export const EditableTable = ({
       headerIcons={customHeaderIcons}
       getCellContent={getCellContent}
       rows={data.length}
-      theme={getGlideTheme()}
+      theme={getGlideTheme}
       width="100%"
       height="100%"
       smoothScrollX
@@ -346,3 +347,6 @@ export const EditableTable = ({
     />
   );
 };
+
+// Export memoized component
+export const OptimizedEditableTable = memo(OptimizedEditableTableComponent);
