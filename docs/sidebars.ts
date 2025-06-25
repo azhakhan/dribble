@@ -1,4 +1,4 @@
-import type {SidebarsConfig} from '@docusaurus/plugin-content-docs';
+import type { SidebarsConfig } from "@docusaurus/plugin-content-docs";
 
 // This runs in Node.js - Don't use client-side code here (browser APIs, JSX...)
 
@@ -15,32 +15,23 @@ import type {SidebarsConfig} from '@docusaurus/plugin-content-docs';
 const sidebars: SidebarsConfig = {
   // Organized documentation sidebar
   tutorialSidebar: [
-    'intro',
+    "index",
     {
-      type: 'category',
-      label: 'Getting Started',
-      items: [
-        'quickstart',
-        'concepts',
-      ],
+      type: "category",
+      label: "Getting Started",
+      items: ["quickstart", "concepts"]
     },
     {
-      type: 'category', 
-      label: 'User Guide',
-      items: [
-        'using-the-app',
-        'troubleshooting',
-      ],
+      type: "category",
+      label: "User Guide",
+      items: ["using-the-app", "troubleshooting"]
     },
     {
-      type: 'category',
-      label: 'Developer Resources',
-      items: [
-        'developer-concepts',
-        'api-reference',
-      ],
-    },
-  ],
+      type: "category",
+      label: "Developer Resources",
+      items: ["developer-concepts", "api-reference"]
+    }
+  ]
 };
 
 export default sidebars;

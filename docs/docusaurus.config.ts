@@ -59,7 +59,7 @@ const config: Config = {
 
   themeConfig: {
     // Replace with your project's social card
-    image: "img/docusaurus-social-card.jpg",
+    // image: "img/docusaurus-social-card.jpg", // Removed social card
     colorMode: {
       defaultMode: "dark",
       disableSwitch: false,
@@ -71,8 +71,7 @@ const config: Config = {
         alt: "Dribble Logo",
         src: "img/logo.svg",
         srcDark: "img/logo-dark.svg",
-        href: "https://dribblesql.com",
-        target: "_blank",
+        href: "/",
         style: {
           height: "20px",
           marginTop: "6px"
@@ -80,10 +79,14 @@ const config: Config = {
       },
       items: [
         {
-          type: "docSidebar",
-          sidebarId: "tutorialSidebar",
-          position: "left",
-          label: "Documentation"
+          label: "Home",
+          href: "https://dribblesql.com",
+          position: "left"
+        },
+        {
+          label: "GitHub",
+          href: "https://github.com/azhakhan/dribble",
+          position: "left"
         }
       ]
     },
