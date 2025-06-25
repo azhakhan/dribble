@@ -75,7 +75,7 @@ function TabHeaderComponent() {
             size="xs"
             onClick={handleNewTab}
             disabled={sources.length === 0}
-            className="h-full px-3 rounded-none hover:bg-accent flex-shrink-0 min-w-[40px]"
+            className="h-full px-3 rounded-none hover:bg-accent flex-shrink-0 min-w-[40px] cursor-pointer"
           >
             <Plus className="h-2 w-2" />
           </Button>

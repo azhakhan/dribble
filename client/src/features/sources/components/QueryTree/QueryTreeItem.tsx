@@ -99,7 +99,12 @@ export const QueryTreeItem: React.FC<QueryTreeItemProps> = ({
       </div>
 
       {/* Dialogs */}
-      <RenameQuery query={query} open={renameDialogOpen} onOpenChange={setRenameDialogOpen} />
+      <RenameQuery
+        query={query}
+        open={renameDialogOpen}
+        onOpenChange={setRenameDialogOpen}
+        triggerRef={triggerRef}
+      />
       <DeleteQuery
         query={query}
         open={deleteDialogOpen}
