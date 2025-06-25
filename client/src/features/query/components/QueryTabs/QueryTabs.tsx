@@ -6,7 +6,7 @@ import { useUnsavedChangesStore } from "@/shared/store/useUnsavedChangesStore";
 import { useSourceStore } from "@/shared/store";
 import { UnsavedChangesDialog } from "../../UnsavedChangesDialog";
 import { TabHeader } from "./TabHeader";
-import { TabContent } from "./TabContent";
+import { OptimizedTabContent } from "./OptimizedTabContent";
 import { Capybara } from "@/components/Capybara";
 
 function QueryTabsComponent() {
@@ -61,7 +61,7 @@ function QueryTabsComponent() {
 
       {/* Active tab content */}
       <div className="flex-1 min-h-0">
-        {activeTab && <TabContent key={activeTab.id} tabId={activeTab.id} />}
+        {activeTab && <OptimizedTabContent key={activeTab.id} tabId={activeTab.id} />}
       </div>
 
       {/* Unsaved Changes Dialog */}

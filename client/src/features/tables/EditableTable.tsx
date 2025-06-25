@@ -1,5 +1,20 @@
 import "@glideapps/glide-data-grid/dist/index.css";
 
+/**
+ * @deprecated This component is deprecated. Use OptimizedEditableTable instead.
+ *
+ * Migration:
+ * import { OptimizedEditableTable } from "@/features/tables/OptimizedEditableTable";
+ *
+ * The OptimizedEditableTable provides:
+ * - Better performance with React.memo
+ * - Memoized theme and column calculations
+ * - Optimized cell content rendering
+ * - Reduced re-renders
+ *
+ * This file will be removed in a future version.
+ */
+
 import {
   DataEditor,
   type GridCell,

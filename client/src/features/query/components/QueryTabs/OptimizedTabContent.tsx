@@ -45,33 +45,38 @@ const OptimizedTabContentComponent = ({ tabId }: OptimizedTabContentProps) => {
     );
   }
 
-  if (showRuns && currentTab.queryId) {
-    return (
-      <QueryRuns
-        queryId={currentTab.queryId}
-        onBack={handleShowRuns}
-        sourceName={currentSource?.name || ""}
-        queryName={currentTab.title}
-      />
-    );
-  }
-
   return (
     <PanelGroup direction="vertical" className="h-full">
-      <Panel defaultSize={50} minSize={20}>
-        <QueryEditor
-          tabId={tabId}
-          onQueryExecuted={handleQueryExecuted}
-          onShowRuns={handleShowRuns}
-        />
-      </Panel>
-      <PanelResizeHandle className="h-1 bg-border hover:bg-accent transition-background" />
       <Panel defaultSize={50} minSize={20}>
         <QueryResults
           tableData={null}
           queryResults={currentTab.queryResults}
           isQueryRunning={currentTab.queryRunning}
         />
+      </Panel>
+
+      <PanelResizeHandle className="h-1 bg-border hover:bg-accent transition-background" />
+      <Panel defaultSize={50} minSize={20}>
+        {showRuns ? (
+          currentTab.queryId ? (
+            <QueryRuns
+              queryId={currentTab.queryId}
+              onBack={handleShowRuns}
+              sourceName={currentSource?.name || ""}
+              queryName={currentTab.title}
+            />
+          ) : (
+            <div className="h-full flex items-center justify-center text-muted-foreground">
+              No query selected
+            </div>
+          )
+        ) : (
+          <QueryEditor
+            tabId={tabId}
+            onQueryExecuted={handleQueryExecuted}
+            onShowRuns={handleShowRuns}
+          />
+        )}
       </Panel>
     </PanelGroup>
   );

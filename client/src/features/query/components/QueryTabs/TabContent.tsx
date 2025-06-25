@@ -1,3 +1,17 @@
+/**
+ * @deprecated This component is deprecated. Use OptimizedTabContent instead.
+ *
+ * Migration:
+ * import { OptimizedTabContent } from "./OptimizedTabContent";
+ *
+ * The OptimizedTabContent provides:
+ * - Optimized Zustand selectors to prevent unnecessary re-renders
+ * - Better performance with React.memo
+ * - Reduced re-renders when other tabs change
+ *
+ * This file will be removed in a future version.
+ */
+
 import { memo } from "react";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 import { useTabManagerStore } from "@/shared/store/useTabManagerStore";
