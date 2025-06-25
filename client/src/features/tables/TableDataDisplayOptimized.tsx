@@ -1,5 +1,5 @@
 import { memo } from "react";
-import { OptimizedEditableTable } from "@/features/tables/OptimizedEditableTable";
+import { EditableTable } from "@/features/tables/components/EditableTable";
 import { VirtualizedTable } from "@/components/VirtualizedTable";
 import { TableFilterBar } from "@/features/tables/TableFilterBar";
 import { Capybara } from "@/components/Capybara";
@@ -62,7 +62,7 @@ const TableDataDisplayOptimizedComponent = ({
           />
         ) : (
           // Use optimized regular table for smaller datasets
-          <OptimizedEditableTable
+          <EditableTable
             data={displayData || undefined}
             isLoading={isLoading}
             tableId={tableData?.tableName || "default"}
