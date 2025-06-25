@@ -2,6 +2,7 @@ import { useRef, useCallback, useMemo, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { PlayIcon, PencilIcon, CheckIcon, XIcon, Database, SaveIcon } from "lucide-react";
 import { toast } from "sonner";
+import { ErrorService, ErrorContext } from "@/shared/services";
 import { useTabManagerStore } from "@/shared/store/useTabManagerStore";
 import { useTabExecutionStore } from "@/shared/store/useTabExecutionStore";
 import { useUnsavedChangesStore } from "@/shared/store/useUnsavedChangesStore";
@@ -46,8 +47,9 @@ export function Editor({ tabId, onQueryExecuted }: EditorProps) {
       await rejectProposedChanges();
       toast.success("Changes rejected and reverted");
     } catch (error) {
-      console.error("Failed to reject proposed changes:", error);
-      toast.error("Failed to reject changes");
+      ErrorService.handle(error, ErrorContext.QUERY_SAVING, {
+        userMessage: "Failed to reject changes"
+      });
     }
   }, [rejectProposedChanges]);
 
@@ -108,8 +110,9 @@ export function Editor({ tabId, onQueryExecuted }: EditorProps) {
       await saveChanges(tabId);
       toast.success("Changes saved successfully");
     } catch (error) {
-      console.error("Failed to save changes:", error);
-      toast.error("Failed to save changes");
+      ErrorService.handle(error, ErrorContext.QUERY_SAVING, {
+        userMessage: "Failed to save changes"
+      });
     }
   }, [currentTab, tabId, saveChanges]);
 
@@ -118,7 +121,11 @@ export function Editor({ tabId, onQueryExecuted }: EditorProps) {
     async (sqlToRun?: string) => {
       if (!canRunQueries || !currentTab) {
         if (!isSourceConnected) {
-          toast.error("Cannot run query: Source is not connected");
+          ErrorService.handleConnectionError(
+            new Error("Source is not connected"),
+            tabSource?.id || "unknown",
+            tabSource?.name
+          );
         }
         return;
       }
@@ -132,8 +139,9 @@ export function Editor({ tabId, onQueryExecuted }: EditorProps) {
         await executeQuery(tabId, queryToRun);
         toast.success("Query executed successfully");
       } catch (error) {
-        console.error("Failed to execute query:", error);
-        toast.error("Failed to execute query");
+        ErrorService.handleQueryError(error, "execute query", {
+          queryId: currentTab?.queryId || undefined
+        });
       } finally {
         // Notify parent component that query execution completed (success or failure)
         // This ensures the query runs are refreshed to show the latest status
@@ -178,12 +186,14 @@ export function Editor({ tabId, onQueryExecuted }: EditorProps) {
         setEditingName(false);
         toast.success("Query name updated");
       } else {
-        console.error("Failed to update query name:", result.error);
-        toast.error("Failed to update query name");
+        ErrorService.handle(new Error(result.error || "Unknown error"), ErrorContext.QUERY_SAVING, {
+          userMessage: "Failed to update query name"
+        });
       }
     } catch (error) {
-      console.error("Failed to update query name:", error);
-      toast.error("Failed to update query name");
+      ErrorService.handle(error, ErrorContext.QUERY_SAVING, {
+        userMessage: "Failed to update query name"
+      });
     }
   }, [currentTab?.queryId, tempName]);
 

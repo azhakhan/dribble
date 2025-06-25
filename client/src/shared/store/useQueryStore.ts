@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import type { Query, QueryVersion, QueryRun } from "@/shared/lib/api";
 import type { PaginationInfo } from "./types";
+import { ErrorService } from "@/shared/services";
 import {
   getQueryById,
   getQueryVersions,
@@ -109,7 +110,7 @@ export const useQueryStore = create<QueryState>((set, get) => ({
         loadingQueries: new Set([...state.loadingQueries].filter((id) => id !== queryId))
       }));
     } catch (error) {
-      console.error(`Failed to load query ${queryId}:`, error);
+      ErrorService.handleDataLoadingError(error, "query", queryId);
       set((state) => ({
         loadingQueries: new Set([...state.loadingQueries].filter((id) => id !== queryId))
       }));
@@ -280,7 +281,7 @@ export const useQueryStore = create<QueryState>((set, get) => ({
       }));
       return newQuery;
     } catch (error) {
-      console.error("Failed to create query:", error);
+      ErrorService.handleQueryError(error, "create query");
       throw error;
     }
   },
