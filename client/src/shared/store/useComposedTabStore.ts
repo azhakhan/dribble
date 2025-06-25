@@ -76,6 +76,3 @@ export const useComposedTabStore = () => {
     }
   };
 };
-
-// For backwards compatibility, also export as useTabStore
-export const useTabStore = useComposedTabStore;
