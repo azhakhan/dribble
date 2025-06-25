@@ -3,6 +3,8 @@ import { EditableTable } from "@/features/tables/components/EditableTable";
 import { VirtualizedTable } from "@/components/VirtualizedTable";
 import { TableFilterBar } from "@/features/tables/TableFilterBar";
 import { Capybara } from "@/components/Capybara";
+import { useTableFilterStore } from "@/shared/store/useTableFilterStore";
+import { useTabManagerStore } from "@/shared/store/useTabManagerStore";
 import type { TableData } from "@/shared/types/api";
 
 interface TableDataDisplayOptimizedProps {
@@ -23,11 +25,26 @@ const TableDataDisplayOptimizedComponent = ({
   useVirtualization = false,
   virtualizationThreshold = 1000
 }: TableDataDisplayOptimizedProps) => {
-  // Determine what data to display and loading state
-  const displayData = queryResults;
+  const { activeTabId } = useTabManagerStore();
+  const { getTabFilterState } = useTableFilterStore();
+
+  // Get the current tab's filter state to determine display size
+  const tabId = activeTabId || "default";
+  const { displaySize } = getTabFilterState(tabId);
+
+  // Keep full data for pagination logic, but slice for display
+  const fullData = queryResults; // Full data for pagination calculations
+  let displayData = queryResults;
+
+  // Limit the displayed data to displaySize if results exceed it
+  // This ensures we don't show the extra +1 record to users
+  if (displayData && displayData.length > displaySize) {
+    displayData = displayData.slice(0, displaySize);
+  }
+
   const isLoading = isQueryRunning;
 
-  // Auto-enable virtualization for large datasets
+  // Auto-enable virtualization for large datasets (use display data for this check)
   const shouldUseVirtualization =
     useVirtualization || (displayData && displayData.length > virtualizationThreshold);
 
@@ -41,10 +58,10 @@ const TableDataDisplayOptimizedComponent = ({
 
   return (
     <div className="h-full flex flex-col">
-      {/* Filter bar with title */}
-      <TableFilterBar data={displayData || null} isLoading={isLoading} />
+      {/* Filter bar with title - pass full data for correct pagination logic */}
+      <TableFilterBar data={fullData || null} isLoading={isLoading} />
 
-      {/* Scrollable content */}
+      {/* Scrollable content - use sliced data for display */}
       <div className="flex-1 min-h-0">
         {shouldUseVirtualization && displayData && displayData.length > 0 ? (
           // Use virtualized table for large datasets
