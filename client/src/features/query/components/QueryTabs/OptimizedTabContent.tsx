@@ -1,10 +1,12 @@
-import { memo } from "react";
+import { memo, Suspense, lazy } from "react";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 import { useTabManagerStore } from "@/shared/store/useTabManagerStore";
 import { useSourceStore } from "@/shared/store";
 import { QueryResults } from "../QueryResults";
-import { QueryEditor } from "../QueryEditor";
 import { QueryRuns } from "../../QueryRuns";
+
+// Feature-based code splitting
+const QueryEditor = lazy(() => import("../QueryEditor/QueryEditor"));
 import { useQueryExecution } from "../../hooks/useQueryExecution";
 import { useQueryVersion } from "../../hooks/useQueryVersion";
 
@@ -71,11 +73,19 @@ const OptimizedTabContentComponent = ({ tabId }: OptimizedTabContentProps) => {
             </div>
           )
         ) : (
-          <QueryEditor
-            tabId={tabId}
-            onQueryExecuted={handleQueryExecuted}
-            onShowRuns={handleShowRuns}
-          />
+          <Suspense
+            fallback={
+              <div className="flex items-center justify-center h-full">
+                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-foreground"></div>
+              </div>
+            }
+          >
+            <QueryEditor
+              tabId={tabId}
+              onQueryExecuted={handleQueryExecuted}
+              onShowRuns={handleShowRuns}
+            />
+          </Suspense>
         )}
       </Panel>
     </PanelGroup>

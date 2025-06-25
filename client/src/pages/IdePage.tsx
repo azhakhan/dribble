@@ -1,10 +1,14 @@
-import { useMemo, useCallback, useEffect, useState } from "react";
+import { useMemo, useCallback, useEffect, useState, Suspense, lazy } from "react";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 import { useUIStore, useSourceStore } from "@/shared/store";
 import { useTabManagerStore } from "@/shared/store/useTabManagerStore";
 import { SidebarTabs } from "@/features/sources/SidebarTabs";
 import { QueryTabs } from "@/features/query/QueryTabs";
-import { ChatSidebar } from "@/features/chat/ChatSidebar";
+
+// Lazy load ChatSidebar
+const ChatSidebar = lazy(() =>
+  import("@/features/chat/ChatSidebar").then((m) => ({ default: m.ChatSidebar }))
+);
 import {
   useStoreSources,
   useStoreConnectedSources,
@@ -14,7 +18,7 @@ import { useSourceStatusQuery } from "@/shared/hooks/useSourceStatusQuery";
 import { sourcesToFileTreeNodes } from "@/shared/lib/fileTreeUtils";
 import type { Source, ConnectedSource, Query } from "@/shared/lib/api";
 
-export function IdePage() {
+function IdePage() {
   // Get state and actions from Zustand store
   const { panelSizes, setPanelSizes } = useUIStore();
   const {
@@ -189,10 +193,20 @@ export function IdePage() {
 
         <Panel defaultSize={panelSizes[2]} minSize={15}>
           <div className="h-full">
-            <ChatSidebar />
+            <Suspense
+              fallback={
+                <div className="flex items-center justify-center h-full">
+                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-foreground"></div>
+                </div>
+              }
+            >
+              <ChatSidebar />
+            </Suspense>
           </div>
         </Panel>
       </PanelGroup>
     </div>
   );
 }
+
+export default IdePage;

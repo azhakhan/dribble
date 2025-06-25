@@ -3,10 +3,22 @@ import { BrowserRouter as Router, Routes, Route, useNavigate, Link } from "react
 import { ModeToggle } from "@/components/mode-toggle";
 import logoLight from "@/assets/logo-light.svg";
 import logoDark from "@/assets/logo-dark.svg";
+import { Suspense, lazy } from "react";
 
-import { SettingsPage } from "@/pages";
 import { SettingsIcon } from "lucide-react";
-import { IdePage } from "./pages/IdePage";
+
+// Route-based code splitting
+const IdePage = lazy(() => import("@/pages/IdePage"));
+const SettingsPage = lazy(() => import("@/pages/SettingsPage"));
+
+// Loading component for suspense fallback
+function LoadingSpinner() {
+  return (
+    <div className="flex items-center justify-center h-full">
+      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-foreground"></div>
+    </div>
+  );
+}
 
 function TopMenu() {
   const navigate = useNavigate();
@@ -42,11 +54,13 @@ function App() {
       <Router>
         <div className="h-screen flex flex-col overflow-hidden">
           <TopMenu />
-          <Routes>
-            <Route path="/" element={<IdePage />} />
-            <Route path="/ide" element={<IdePage />} />
-            <Route path="/settings" element={<SettingsPage />} />
-          </Routes>
+          <Suspense fallback={<LoadingSpinner />}>
+            <Routes>
+              <Route path="/" element={<IdePage />} />
+              <Route path="/ide" element={<IdePage />} />
+              <Route path="/settings" element={<SettingsPage />} />
+            </Routes>
+          </Suspense>
         </div>
       </Router>
     </ThemeProvider>
