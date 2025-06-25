@@ -1,4 +1,4 @@
-import { OptimizedEditableTable } from "@/features/tables/OptimizedEditableTable";
+import { EditableTable } from "@/features/tables/components/EditableTable";
 import { TableFilterBar } from "@/features/tables/TableFilterBar";
 import { Capybara } from "@/components/Capybara";
 import type { TableData } from "@/shared/types/api";
@@ -30,7 +30,7 @@ export const TableDataDisplay = ({
 
           {/* Scrollable content */}
           <div className="flex-1 min-h-0">
-            <OptimizedEditableTable
+            <EditableTable
               data={displayData || undefined}
               isLoading={isLoading}
               tableId="table-data-display"

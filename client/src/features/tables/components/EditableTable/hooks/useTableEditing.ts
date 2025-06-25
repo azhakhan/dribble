@@ -1,17 +1,8 @@
-import "@glideapps/glide-data-grid/dist/index.css";
-
-import {
-  DataEditor,
-  type GridCell,
-  GridCellKind,
-  type GridColumn,
-  type Item,
-  type Theme as GlideTheme
-} from "@glideapps/glide-data-grid";
+import { useCallback, useMemo } from "react";
 import { useTheme } from "@/components/theme-provider";
-import { useCallback, useMemo, useState, useEffect, useRef, memo } from "react";
-import type { TableRow, ColumnDefinition, TableData } from "@/shared/types/api";
-import { createNoDataMessage } from "@/shared/utils/errorUtils";
+import { GridCellKind } from "@glideapps/glide-data-grid";
+import type { GridCell, Theme as GlideTheme, Item } from "@glideapps/glide-data-grid";
+import type { TableRow } from "@/shared/types/api";
 
 const dataEditorBaseTheme: GlideTheme = {
   accentColor: "#4F5DFF",
@@ -59,77 +50,13 @@ const dataEditorBaseTheme: GlideTheme = {
   lineHeight: 1.4 //unitless scaler depends on your font
 };
 
-// Default columns
-const defaultColumns: GridColumn[] = [{ title: "Status", width: 300 }];
-
-interface OptimizedEditableTableProps {
-  data?: TableData;
-  columns?: ColumnDefinition[];
-  isLoading?: boolean;
-  tableId?: string; // Unique identifier for this table
-  source?: string; // Optional source identifier
-  schema?: string; // Optional schema identifier
+interface UseTableEditingParams {
+  data: Record<string, unknown>[];
+  dataIndexes: string[];
 }
 
-// Memoized helper functions to prevent re-creation on every render
-const getStorageKey = (tableId?: string, source?: string, schema?: string) => {
-  const parts = [source, schema, tableId].filter(Boolean);
-  return parts.length > 0 ? `table_columns_${parts.join("_")}` : null;
-};
-
-const loadColumnSizes = (storageKey: string | null) => {
-  if (!storageKey) return {};
-  try {
-    const saved = localStorage.getItem(storageKey);
-    return saved ? JSON.parse(saved) : {};
-  } catch (e) {
-    console.error("Failed to load column sizes:", e);
-    return {};
-  }
-};
-
-const saveColumnSizes = (storageKey: string | null, sizes: Record<string, number>) => {
-  if (!storageKey) return;
-  try {
-    localStorage.setItem(storageKey, JSON.stringify(sizes));
-  } catch (e) {
-    console.error("Failed to save column sizes:", e);
-  }
-};
-
-// Helper to determine column type
-const getColumnType = (value: unknown): ColumnDefinition["type"] => {
-  if (typeof value === "number") return "number";
-  if (value instanceof Date) return "date";
-  if (typeof value === "string") {
-    // Check if it's a URL
-    try {
-      new URL(value);
-      return "url";
-    } catch {
-      return "text";
-    }
-  }
-  if (typeof value === "boolean") return "boolean";
-  if (typeof value === "object") return "json";
-  return "unknown";
-};
-
-const OptimizedEditableTableComponent = ({
-  data: queryData,
-  columns: providedColumns,
-  isLoading,
-  tableId = "default",
-  source,
-  schema
-}: OptimizedEditableTableProps) => {
+export const useTableEditing = ({ data, dataIndexes }: UseTableEditingParams) => {
   const { resolvedTheme } = useTheme();
-  const initializedRef = useRef(false);
-
-  const storageKey = useMemo(
-    () => getStorageKey(tableId, source, schema),
-    [tableId, source, schema]
-  );
 
   // Memoized custom header icons - prevent recreation on every render
   const customHeaderIcons = useMemo(
@@ -147,48 +74,6 @@ const OptimizedEditableTableComponent = ({
     }),
     []
   );
-
-  // Memoized data processing
-  const data = useMemo(() => {
-    if (!queryData || !Array.isArray(queryData) || queryData.length === 0) {
-      return createNoDataMessage();
-    }
-    return queryData;
-  }, [queryData]);
-
-  // State for managing column sizes
-  const [columnSizes, setColumnSizes] = useState<Record<string, number>>({});
-
-  // Load saved column sizes from localStorage on mount
-  useEffect(() => {
-    if (!initializedRef.current && storageKey) {
-      const savedSizes = loadColumnSizes(storageKey);
-      setColumnSizes(savedSizes);
-      initializedRef.current = true;
-    }
-  }, [storageKey]);
-
-  // Initialize column sizes when data changes
-  useEffect(() => {
-    if (data.length > 0 && initializedRef.current) {
-      const keys = Object.keys(data[0]);
-      const newSizes = { ...columnSizes };
-      let changed = false;
-
-      // Add any missing columns with default width
-      keys.forEach((key) => {
-        if (newSizes[key] === undefined) {
-          newSizes[key] = 200;
-          changed = true;
-        }
-      });
-
-      if (changed) {
-        setColumnSizes(newSizes);
-        if (storageKey) saveColumnSizes(storageKey, newSizes);
-      }
-    }
-  }, [data, columnSizes, storageKey]);
 
   // Memoized theme generation
   const getGlideTheme = useMemo((): GlideTheme => {
@@ -225,44 +110,6 @@ const OptimizedEditableTableComponent = ({
       horizontalBorderColor: isDark ? "#2E2E2E" : "#E4E4E7"
     };
   }, [resolvedTheme]);
-
-  // Memoized columns definition
-  const columns = useMemo(() => {
-    // Use provided columns if available
-    if (providedColumns && providedColumns.length > 0) {
-      return providedColumns.map((col) => ({
-        title: col.name,
-        width: columnSizes[col.name] || col.width || 200,
-        id: col.name,
-        icon: col.type
-      }));
-    }
-
-    // Safe check to ensure data[0] exists
-    if (!data || data.length === 0 || !data[0]) {
-      return defaultColumns;
-    }
-
-    return Object.keys(data[0]).map((key) => {
-      const value = data[0][key];
-      const columnType = getColumnType(value);
-
-      return {
-        title: key,
-        width: columnSizes[key] || 200,
-        id: key,
-        icon: columnType // This will map to our custom icons
-      };
-    });
-  }, [data, columnSizes, providedColumns]);
-
-  // Memoized column indexes
-  const dataIndexes = useMemo(() => {
-    if (!data || data.length === 0 || !data[0]) {
-      return ["status"]; // Default column if no data
-    }
-    return Object.keys(data[0]);
-  }, [data]);
 
   const getCellContent = useCallback(
     (cell: Item): GridCell => {
@@ -308,45 +155,9 @@ const OptimizedEditableTableComponent = ({
     [dataIndexes, data]
   );
 
-  const handleColumnResize = useCallback(
-    (column: GridColumn, newSize: number) => {
-      // Update the column size in state
-      const newColumnSizes = {
-        ...columnSizes,
-        [column.title]: newSize
-      };
-
-      setColumnSizes(newColumnSizes);
-
-      // Save to localStorage
-      if (storageKey) {
-        saveColumnSizes(storageKey, newColumnSizes);
-      }
-    },
-    [columnSizes, storageKey]
-  );
-
-  if (isLoading) {
-    return <div className="h-full w-full flex items-center justify-center">Loading data...</div>;
-  }
-
-  return (
-    <DataEditor
-      columns={columns}
-      headerIcons={customHeaderIcons}
-      getCellContent={getCellContent}
-      rows={data.length}
-      theme={getGlideTheme}
-      width="100%"
-      height="100%"
-      smoothScrollX
-      smoothScrollY
-      rowHeight={30}
-      onColumnResize={handleColumnResize}
-      rowMarkers="number"
-    />
-  );
+  return {
+    customHeaderIcons,
+    getGlideTheme,
+    getCellContent
+  };
 };
-
-// Export memoized component
-export const OptimizedEditableTable = memo(OptimizedEditableTableComponent);
