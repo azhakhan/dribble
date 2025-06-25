@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Check, X, Loader2 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
+import { useSourceStore } from "@/shared/store";
 import { toast } from "sonner";
 
 interface RenameSourceProps {
@@ -26,6 +27,7 @@ export const RenameSource = ({
   const [position, setPosition] = useState({ top: 0, left: 0 });
   const formRef = useRef<HTMLDivElement>(null);
   const queryClient = useQueryClient();
+  const { loadSources } = useSourceStore();
 
   // Reset name when dialog opens or sourceName changes
   useEffect(() => {
@@ -67,6 +69,7 @@ export const RenameSource = ({
       setLoading(true);
       await renameSource(sourceId, newName.trim());
       queryClient.invalidateQueries({ queryKey: ["sources"] });
+      await loadSources();
       toast.success(`Source renamed to "${newName.trim()}"`);
       onOpenChange(false);
     } catch (error) {
