@@ -47,7 +47,7 @@ Dribble follows a distributed, container-based architecture designed for scalabi
 - Isolated FastAPI containers per database type
 - Dockerized for security and scalability
 - Communicate via HTTP API over Docker network
-- Support PostgreSQL, MySQL, and other databases
+- Support PostgreSQL and MySQL with isolated workers
 
 ## Data Models and Persistence
 
@@ -144,53 +144,6 @@ sequenceDiagram
     S->>S: Cache Results
     S->>C: Return to Client
 ```
-
-### Worker APIs
-
-Each worker exposes these endpoints:
-
-**POST /execute/**
-```json
-{
-  "query": "SELECT * FROM users LIMIT 10",
-  "query_id": "uuid-string"
-}
-```
-Response:
-```json
-{
-  "query_id": "uuid-string",
-  "status": "started"
-}
-```
-
-**POST /execute/version**
-```json
-{
-  "query_run_id": "uuid-string",
-  "sql": "SELECT * FROM users",
-  "modifiers": {
-    "limit": 501,
-    "offset": 0,
-    "where": "active = true",
-    "order_by": "created_at DESC"
-  }
-}
-```
-
-**GET /health**
-```json
-{
-  "status": "healthy",
-  "database_connection": "connected",
-  "redis_connection": "connected"
-}
-```
-
-**GET /schema/**
-Returns database schema information (tables, columns, types).
-
-Note: Workers are pre-configured with database credentials via environment variables when containers start. They maintain persistent connections to their assigned database.
 
 ## State Management Architecture
 
@@ -316,47 +269,6 @@ When a user asks a question, the system assembles context from:
 1. **Current Query**: The SQL being worked on
 2. **Database Schema**: Relevant tables and columns
 3. **Chat History**: Previous conversation context
-4. **Query History**: Recent queries for patterns
-
-### Context Flow
-
-```python
-async def generate_ai_response(
-    message: str,
-    query_id: UUID,
-    source_id: UUID
-) -> str:
-    # Gather context
-    query = await get_current_query(query_id)
-    schema = await get_database_schema(source_id)
-    history = await get_chat_history(query_id)
-
-    # Build context prompt
-    context = build_context_prompt(query, schema, history)
-
-    # Call LLM
-    response = await llm_client.generate(
-        message=message,
-        context=context,
-        model=get_user_model_preference()
-    )
-
-    return response
-```
-
-### LLM Configuration
-
-Users can configure AI behavior:
-
-```python
-class LLMSettings(BaseModel):
-    model: str = "gpt-4"
-    temperature: float = 0.7
-    max_tokens: int = 2000
-    system_prompt: str = "You are a helpful SQL assistant..."
-    include_schema: bool = True
-    include_query_history: bool = True
-```
 
 ## Query Execution Pipeline
 
@@ -439,31 +351,6 @@ Key areas for performance optimization in Dribble.
 **Connection Limits**: Database connections are managed
 **Migration Performance**: Schema changes are efficient
 
-## Security Model
-
-Dribble implements defense-in-depth security.
-
-### Authentication & Authorization
-
-- User authentication via JWT tokens
-- Role-based access control (planned)
-- API endpoint protection
-- Database credential encryption
-
-### Worker Isolation
-
-- Workers run in isolated containers
-- Limited network access
-- No persistent storage
-- Resource limits enforced
-
-### Data Protection
-
-- Database credentials encrypted at rest
-- Query results cleaned of sensitive data
-- Audit logging for all operations
-- HTTPS enforced for all communications
-
 ## Development Workflow
 
 Best practices for developing with Dribble.
@@ -484,10 +371,8 @@ cd client && yarn lint
 
 ### Testing Strategy
 
-**Unit Tests**: Individual components and functions
-**Integration Tests**: API endpoints and database operations
-**E2E Tests**: Full user workflows (planned)
-**Performance Tests**: Query execution and UI responsiveness
+- **Unit Tests**: Individual components and functions
+- **Integration Tests**: API endpoints and database operations
 
 ### Code Quality
 
@@ -495,30 +380,3 @@ cd client && yarn lint
 - **ESLint** for TypeScript/React code quality
 - **Pre-commit hooks** for automated checks
 - **Type checking** with mypy and TypeScript
-
-## Extending Dribble
-
-Common extension patterns for developers.
-
-### Adding New Database Types
-
-1. Create new worker in `/worker/<database_type>/`
-2. Implement standard worker API
-3. Add connection logic to server
-4. Update UI for new source type
-
-### Custom AI Models
-
-1. Implement LLM interface
-2. Add model configuration
-3. Update settings UI
-4. Test with existing prompts
-
-### New Export Formats
-
-1. Add export handler to backend
-2. Implement download endpoint
-3. Update results table UI
-4. Add format selection
-
-This architecture enables Dribble to be both powerful and maintainable while providing a great developer experience. For more specific implementation details, refer to the codebase and API documentation.

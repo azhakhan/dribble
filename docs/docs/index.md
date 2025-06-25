@@ -10,11 +10,11 @@ slug: /
 
 ## What makes Dribble special?
 
-🔌 **Multi-database support** - Connect to PostgreSQL, MySQL, and more  
-🧠 **AI-powered assistance** - Get help writing and optimizing SQL queries  
-📊 **Visual data exploration** - Browse your database schema like a file tree  
-💾 **Query management** - Save, version, and organize your queries  
-⚡ **Fast execution** - Isolated workers ensure optimal performance  
+🔌 **Multi-database support** - Connect to PostgreSQL and MySQL with isolated workers  
+🧠 **AI-powered assistance** - Get context-aware help writing and optimizing SQL queries  
+📊 **Visual data exploration** - Browse your database schema in an intuitive file tree  
+💾 **Query management** - Save, version, and organize your queries with automatic versioning  
+⚡ **Fast execution** - Isolated Docker workers ensure optimal performance and security  
 🌐 **Web-based** - Access from anywhere with a modern browser
 
 ## Quick Navigation
@@ -28,7 +28,6 @@ slug: /
 **For Developers:**
 
 - [Developer Concepts](./developer-concepts) - Architecture and technical details
-- [API Reference](./api-reference) - Server endpoints and data models
 
 ## Need Help?
 

@@ -29,7 +29,7 @@ const sidebars: SidebarsConfig = {
     {
       type: "category",
       label: "Developer Resources",
-      items: ["developer-concepts", "api-reference"]
+      items: ["developer-concepts"]
     }
   ]
 };
