@@ -1,30 +1,266 @@
 /**
- * Any CSS included here will be global. The classic template
- * bundles Infima by default. Infima is a CSS framework designed to
- * work well for content-centric websites.
+ * Custom CSS to match the main Dribble application styling
+ * Uses OKLCH color space for better color accuracy and consistency
  */
 
-/* You can override the default Infima variables here. */
+/* Light theme variables - exactly matching client app */
 :root {
-  --ifm-color-primary: #2e8555;
-  --ifm-color-primary-dark: #29784c;
-  --ifm-color-primary-darker: #277148;
-  --ifm-color-primary-darkest: #205d3b;
-  --ifm-color-primary-light: #33925d;
-  --ifm-color-primary-lighter: #359962;
-  --ifm-color-primary-lightest: #3cad6e;
-  --ifm-code-font-size: 95%;
-  --docusaurus-highlighted-code-line-bg: rgba(0, 0, 0, 0.1);
+  /* Typography - matching client app font sizes */
+  --ifm-font-size-base: 16px;
+  --ifm-line-height-base: 1.5;
+  --ifm-heading-font-weight: 600;
+  --ifm-h1-font-size: 2rem;
+  --ifm-h2-font-size: 1.5rem;
+  --ifm-h3-font-size: 1.25rem;
+  --ifm-h4-font-size: 1.125rem;
+  --ifm-h5-font-size: 1rem;
+  --ifm-h6-font-size: 0.875rem;
+
+  /* Primary colors - exactly matching main app */
+  --ifm-color-primary: oklch(0.205 0 0);
+  --ifm-color-primary-dark: oklch(0.145 0 0);
+  --ifm-color-primary-darker: oklch(0.145 0 0);
+  --ifm-color-primary-darkest: oklch(0.145 0 0);
+  --ifm-color-primary-light: oklch(0.269 0 0);
+  --ifm-color-primary-lighter: oklch(0.556 0 0);
+  --ifm-color-primary-lightest: oklch(0.708 0 0);
+
+  /* Background colors - exact match */
+  --ifm-background-color: oklch(1 0 0);
+  --ifm-background-surface-color: oklch(1 0 0);
+  
+  /* Text colors - exact match */
+  --ifm-font-color-base: oklch(0.145 0 0);
+  --ifm-font-color-secondary: oklch(0.556 0 0);
+  
+  /* Border and divider colors - exact match */
+  --ifm-color-emphasis-300: oklch(0.922 0 0);
+  --ifm-hr-border-color: oklch(0.922 0 0);
+  --ifm-table-border-color: oklch(0.922 0 0);
+  
+  /* Card and container backgrounds - exact match */
+  --ifm-card-background-color: oklch(1 0 0);
+  --ifm-hover-overlay: oklch(0.97 0 0);
+  
+  /* Code styling - smaller font size */
+  --ifm-code-font-size: 12px;
+  --ifm-code-background: oklch(0.97 0 0);
+  --ifm-code-color: oklch(0.205 0 0);
+  --docusaurus-highlighted-code-line-bg: oklch(0.97 0 0);
+  
+  /* Border radius matching main app */
+  --ifm-global-radius: 0.625rem;
+  --ifm-button-border-radius: 0.625rem;
+  --ifm-card-border-radius: 0.625rem;
+  --ifm-code-border-radius: calc(0.625rem - 2px);
+  
+  /* Navbar styling - exact match */
+  --ifm-navbar-background-color: oklch(1 0 0);
+  --ifm-navbar-link-color: oklch(0.145 0 0);
+  --ifm-navbar-link-hover-color: oklch(0.205 0 0);
+  
+  /* Footer styling - exact match */
+  --ifm-footer-background-color: oklch(0.985 0 0);
+  --ifm-footer-color: oklch(0.145 0 0);
+  --ifm-footer-link-color: oklch(0.556 0 0);
+  --ifm-footer-link-hover-color: oklch(0.205 0 0);
+  
+  /* Sidebar styling - exact match */
+  --ifm-menu-color: oklch(0.145 0 0);
+  --ifm-menu-color-background-active: oklch(0.97 0 0);
+  --ifm-menu-color-background-hover: oklch(0.97 0 0);
 }
 
-/* For readability concerns, you should choose a lighter palette in dark mode. */
+/* Dark theme variables - exactly matching client app */
 [data-theme='dark'] {
-  --ifm-color-primary: #25c2a0;
-  --ifm-color-primary-dark: #21af90;
-  --ifm-color-primary-darker: #1fa588;
-  --ifm-color-primary-darkest: #1a8870;
-  --ifm-color-primary-light: #29d5b0;
-  --ifm-color-primary-lighter: #32d8b4;
-  --ifm-color-primary-lightest: #4fddbf;
-  --docusaurus-highlighted-code-line-bg: rgba(0, 0, 0, 0.3);
+  /* Primary colors for dark mode - exact match */
+  --ifm-color-primary: oklch(0.922 0 0);
+  --ifm-color-primary-dark: oklch(0.708 0 0);
+  --ifm-color-primary-darker: oklch(0.556 0 0);
+  --ifm-color-primary-darkest: oklch(0.556 0 0);
+  --ifm-color-primary-light: oklch(0.985 0 0);
+  --ifm-color-primary-lighter: oklch(0.985 0 0);
+  --ifm-color-primary-lightest: oklch(0.985 0 0);
+
+  /* Background colors - exact match */
+  --ifm-background-color: oklch(0.145 0 0);
+  --ifm-background-surface-color: oklch(0.205 0 0);
+  
+  /* Text colors - exact match */
+  --ifm-font-color-base: oklch(0.985 0 0);
+  --ifm-font-color-secondary: oklch(0.708 0 0);
+  
+  /* Border and divider colors - exact match */
+  --ifm-color-emphasis-300: oklch(1 0 0 / 10%);
+  --ifm-hr-border-color: oklch(1 0 0 / 10%);
+  --ifm-table-border-color: oklch(1 0 0 / 10%);
+  
+  /* Card and container backgrounds - exact match */
+  --ifm-card-background-color: oklch(0.205 0 0);
+  --ifm-hover-overlay: oklch(0.269 0 0);
+  
+  /* Code styling - exact match */
+  --ifm-code-background: oklch(0.269 0 0);
+  --ifm-code-color: oklch(0.985 0 0);
+  --docusaurus-highlighted-code-line-bg: oklch(1 0 0 / 10%);
+  
+  /* Navbar styling - exact match */
+  --ifm-navbar-background-color: oklch(0.145 0 0);
+  --ifm-navbar-link-color: oklch(0.985 0 0);
+  --ifm-navbar-link-hover-color: oklch(0.922 0 0);
+  
+  /* Footer styling - exact match */
+  --ifm-footer-background-color: oklch(0.205 0 0);
+  --ifm-footer-color: oklch(0.985 0 0);
+  --ifm-footer-link-color: oklch(0.708 0 0);
+  --ifm-footer-link-hover-color: oklch(0.922 0 0);
+  
+  /* Sidebar styling - exact match */
+  --ifm-menu-color: oklch(0.985 0 0);
+  --ifm-menu-color-background-active: oklch(0.269 0 0);
+  --ifm-menu-color-background-hover: oklch(0.269 0 0);
+}
+
+/* Custom scrollbar styling to match main app */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: oklch(0.4 0 0) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background-color: oklch(0.4 0 0);
+  border-radius: 4px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background-color: oklch(0.5 0 0);
+}
+
+[data-theme='dark'] *::-webkit-scrollbar-thumb {
+  background-color: oklch(0.6 0 0);
+}
+
+[data-theme='dark'] *::-webkit-scrollbar-thumb:hover {
+  background-color: oklch(0.7 0 0);
+}
+
+[data-theme='dark'] * {
+  scrollbar-color: oklch(0.6 0 0) transparent;
+}
+
+/* Enhanced typography and spacing - matching client app */
+html {
+  font-size: 16px;
+}
+
+body {
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+.markdown h1,
+.markdown h2,
+.markdown h3,
+.markdown h4,
+.markdown h5,
+.markdown h6 {
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+/* Ensure navbar title and links use proper sizing */
+.navbar__title {
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.navbar__link {
+  font-size: 0.875rem;
+}
+
+/* Menu item sizing */
+.menu__link {
+  font-size: 0.875rem;
+}
+
+/* Footer text sizing */
+.footer {
+  font-size: 0.875rem;
+}
+
+/* Improved button styling */
+.button {
+  font-weight: 500;
+  transition: all 0.2s ease-in-out;
+}
+
+.button:hover {
+  transform: translateY(-1px);
+}
+
+/* Enhanced card styling */
+.card {
+  border: 1px solid var(--ifm-color-emphasis-300);
+  box-shadow: 0 1px 3px 0 oklch(0 0 0 / 10%), 0 1px 2px 0 oklch(0 0 0 / 6%);
+  transition: all 0.2s ease-in-out;
+}
+
+.card:hover {
+  box-shadow: 0 4px 6px -1px oklch(0 0 0 / 10%), 0 2px 4px -1px oklch(0 0 0 / 6%);
+  transform: translateY(-1px);
+}
+
+/* Navbar enhancements */
+.navbar {
+  border-bottom: 1px solid var(--ifm-color-emphasis-300);
+  backdrop-filter: blur(8px);
+}
+
+/* Footer simplification */
+.footer {
+  border-top: 1px solid var(--ifm-color-emphasis-300);
+}
+
+.footer__title {
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+}
+
+/* Table styling improvements */
+table {
+  border-collapse: separate;
+  border-spacing: 0;
+  border-radius: var(--ifm-global-radius);
+  overflow: hidden;
+}
+
+/* Code block improvements */
+.prism-code {
+  border-radius: var(--ifm-code-border-radius);
+}
+
+/* Responsive improvements */
+@media (max-width: 996px) {
+  .navbar__item {
+    margin: 0 0.25rem;
+  }
+}
+
+/* Focus states for accessibility */
+.button:focus,
+.navbar__link:focus,
+.menu__link:focus {
+  outline: 2px solid var(--ifm-color-primary);
+  outline-offset: 2px;
 }
