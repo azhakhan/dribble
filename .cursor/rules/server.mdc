@@ -48,7 +48,7 @@ Brief layout:
 ## Preferences
 
 - Use small and extra small font sizes for UI components like buttons and inputs
-- For big feature changes, create an .md file in the docs directory to explain the change
+- For big feature changes, create an .md file in the internal_docs directory to explain the change
 
 ## Technical Details
 
