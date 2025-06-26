@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 from sqlalchemy import text
 from sqlalchemy.exc import OperationalError
 import asyncio
-from app.helpers import set_result
+from app.helpers import set_result, publish_result
 import datetime
 import time
 import requests
@@ -92,24 +92,33 @@ async def run_query(request: QueryRequest):
                     f"Query {request.query_id} executed successfully in {execution_time_ms}ms, {result['row_count']} rows affected ({result['query_type']})"
                 )
             await set_result(request.query_id, {"status": "success", "data": result["data"]})
+            # Publish success notification
+            await publish_result(request.query_id, "success", data=result["data"])
 
         except QueryExecutionError as e:
             execution_time_ms = int((time.time() - start_time) * 1000)
             logger.error(f"Query {request.query_id} failed after {execution_time_ms}ms: {str(e)}")
             await set_result(request.query_id, {"status": "error", "error": str(e)})
+            # Publish error notification
+            await publish_result(request.query_id, "error", error=str(e))
         except DatabaseConnectionError as e:
             execution_time_ms = int((time.time() - start_time) * 1000)
+            error_msg = f"Database connection error: {str(e)}"
             logger.error(
                 f"Query {request.query_id} failed due to database connection error after {execution_time_ms}ms: {str(e)}"
             )
             await set_result(
                 request.query_id,
-                {"status": "error", "error": f"Database connection error: {str(e)}"},
+                {"status": "error", "error": error_msg},
             )
+            # Publish error notification
+            await publish_result(request.query_id, "error", error=error_msg)
         except Exception as e:
             execution_time_ms = int((time.time() - start_time) * 1000)
             logger.error(f"Query {request.query_id} failed after {execution_time_ms}ms: {str(e)}")
             await set_result(request.query_id, {"status": "error", "error": str(e)})
+            # Publish error notification
+            await publish_result(request.query_id, "error", error=str(e))
 
     asyncio.create_task(execute_sql_query())
     return {"query_id": request.query_id, "status": "started"}
@@ -156,6 +165,8 @@ async def run_query_version(request: QueryVersionRequest):
 
             # Update the result cache
             await set_result(request.query_run_id, {"status": "success", "data": result["data"]})
+            # Publish success notification
+            await publish_result(request.query_run_id, "success", data=result["data"])
 
         except QueryExecutionError as e:
             execution_time_ms = int((time.time() - start_time) * 1000)
@@ -175,6 +186,8 @@ async def run_query_version(request: QueryVersionRequest):
 
             # Update the result cache with error
             await set_result(request.query_run_id, {"status": "error", "error": error_message})
+            # Publish error notification
+            await publish_result(request.query_run_id, "error", error=error_message)
         except DatabaseConnectionError as e:
             execution_time_ms = int((time.time() - start_time) * 1000)
             error_message = f"Database connection error: {str(e)}"
@@ -195,6 +208,8 @@ async def run_query_version(request: QueryVersionRequest):
 
             # Update the result cache with error
             await set_result(request.query_run_id, {"status": "error", "error": error_message})
+            # Publish error notification
+            await publish_result(request.query_run_id, "error", error=error_message)
         except Exception as e:
             execution_time_ms = int((time.time() - start_time) * 1000)
             error_message = str(e)
@@ -213,6 +228,8 @@ async def run_query_version(request: QueryVersionRequest):
 
             # Update the result cache with error
             await set_result(request.query_run_id, {"status": "error", "error": error_message})
+            # Publish error notification
+            await publish_result(request.query_run_id, "error", error=error_message)
 
     asyncio.create_task(execute_sql_query())
     return {"query_run_id": request.query_run_id, "status": "started"}
