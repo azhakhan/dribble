@@ -43,52 +43,33 @@ export const useTabExecutionStore = create<TabExecutionState>()(() => ({
       const result = await QueryExecutionServiceSSE.executeQuery(tab, options);
 
       if (result.success && result.queryRunId) {
-        // Set up SSE connection for real-time updates
+        // The SSE connection and tracking is now handled automatically by QueryExecutionServiceSSE
+        // We just need to monitor the results in the SSE store
         const sseStore = useSSEStore.getState();
 
-        // Create EventSource for SSE connection
-        const eventSource = new EventSource(
-          `http://localhost:8000/stream/query-results/${result.queryRunId}`
-        );
+        // Set up a polling mechanism to check for results updates
+        // In a real implementation, you'd use the useQueryStream hook in the component
+        const checkForUpdates = () => {
+          const queryResult = sseStore.getQueryResult(result.queryRunId!);
 
-        // Add connection to store
-        sseStore.addConnection(result.queryRunId, eventSource);
-
-        // Set up event handlers
-        eventSource.onopen = () => {
-          sseStore.updateConnectionStatus(result.queryRunId!, "connected");
-        };
-
-        eventSource.onmessage = (event) => {
-          try {
-            const message = JSON.parse(event.data);
-
-            // Update SSE store
-            sseStore.updateQueryStatus(
-              result.queryRunId!,
-              message.status,
-              message.data,
-              message.error
-            );
-
-            // Update tab state
+          if (queryResult) {
             const currentTabs = useTabManagerStore.getState().openTabs;
             const updatedTabs = currentTabs.map((t) => {
               if (t.id !== tabId) return t;
 
-              if (message.status === "success" && message.data) {
+              if (queryResult.status === "success" && queryResult.data) {
                 return {
                   ...t,
                   queryRunning: false,
-                  queryResults: convertToTableData(message.data)
+                  queryResults: convertToTableData(queryResult.data)
                 };
-              } else if (message.status === "error") {
+              } else if (queryResult.status === "error") {
                 return {
                   ...t,
                   queryRunning: false,
-                  queryResults: errorToTableData(message.error || "Query execution failed")
+                  queryResults: errorToTableData(queryResult.error || "Query execution failed")
                 };
-              } else if (message.status === "running") {
+              } else if (queryResult.status === "running") {
                 return {
                   ...t,
                   queryRunning: true
@@ -97,31 +78,20 @@ export const useTabExecutionStore = create<TabExecutionState>()(() => ({
               return t;
             });
             useTabManagerStore.setState({ openTabs: updatedTabs });
-
-            // Close connection if query is complete
-            if (message.status === "success" || message.status === "error") {
-              eventSource.close();
-              sseStore.removeConnection(result.queryRunId!);
-            }
-          } catch (error) {
-            console.error("Error parsing SSE message:", error);
           }
         };
 
-        eventSource.onerror = () => {
-          sseStore.updateConnectionStatus(result.queryRunId!, "error");
-          const errorTabs = useTabManagerStore.getState().openTabs;
-          const updatedErrorTabs = errorTabs.map((t) =>
-            t.id === tabId
-              ? {
-                  ...t,
-                  queryRunning: false,
-                  queryResults: errorToTableData("Connection error")
-                }
-              : t
-          );
-          useTabManagerStore.setState({ openTabs: updatedErrorTabs });
-        };
+        // Check immediately and then poll for updates
+        checkForUpdates();
+        const interval = setInterval(() => {
+          const queryResult = sseStore.getQueryResult(result.queryRunId!);
+          checkForUpdates();
+
+          // Stop polling when query is complete
+          if (queryResult && (queryResult.status === "success" || queryResult.status === "error")) {
+            clearInterval(interval);
+          }
+        }, 100);
 
         // Refresh query data if we have a queryId
         if (tab.queryId) {

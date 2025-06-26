@@ -9,19 +9,23 @@ export interface QueryResult {
   error?: string;
 }
 
-export interface SSEConnection {
-  queryId: string;
+export interface GlobalSSEConnection {
+  clientId: string;
   eventSource: EventSource;
   status: "connecting" | "connected" | "closed" | "error";
   lastMessageTime: number;
+  reconnectAttempts: number;
 }
 
 interface SSEState {
   // Real-time query results keyed by queryId
   queryResults: Record<string, QueryResult>;
 
-  // Active SSE connections
-  connections: Record<string, SSEConnection>;
+  // Single global SSE connection
+  connection: GlobalSSEConnection | null;
+
+  // Active queries being tracked
+  activeQueries: Set<string>;
 
   // Actions
   setQueryResult: (queryId: string, result: QueryResult) => void;
@@ -31,25 +35,34 @@ interface SSEState {
     data?: TableRow[],
     error?: string
   ) => void;
-  addConnection: (queryId: string, eventSource: EventSource) => void;
-  updateConnectionStatus: (queryId: string, status: SSEConnection["status"]) => void;
-  removeConnection: (queryId: string) => void;
+
+  // Single connection management
+  setConnection: (connection: GlobalSSEConnection) => void;
+  updateConnectionStatus: (status: GlobalSSEConnection["status"]) => void;
+  incrementReconnectAttempts: () => void;
+  resetReconnectAttempts: () => void;
+  closeConnection: () => void;
+
+  // Query management
+  addActiveQuery: (queryId: string) => void;
+  removeActiveQuery: (queryId: string) => void;
   clearQueryResult: (queryId: string) => void;
 
   // Utility functions
   getQueryResult: (queryId: string) => QueryResult | undefined;
-  getConnectionStatus: (queryId: string) => SSEConnection["status"] | "disconnected";
+  getConnectionStatus: () => GlobalSSEConnection["status"] | "disconnected";
   isQueryRunning: (queryId: string) => boolean;
-  hasActiveConnection: (queryId: string) => boolean;
+  hasActiveConnection: () => boolean;
+  isQueryActive: (queryId: string) => boolean;
 
   // Cleanup functions
-  closeConnection: (queryId: string) => void;
-  closeAllConnections: () => void;
+  clearAllResults: () => void;
 }
 
 export const useSSEStore = create<SSEState>((set, get) => ({
   queryResults: {},
-  connections: {},
+  connection: null,
+  activeQueries: new Set(),
 
   setQueryResult: (queryId, result) => {
     set((state) => ({
@@ -63,58 +76,91 @@ export const useSSEStore = create<SSEState>((set, get) => ({
   updateQueryStatus: (queryId, status, data, error) => {
     set((state) => {
       const existingResult = state.queryResults[queryId];
+      const updatedResult: QueryResult = {
+        queryId,
+        status,
+        timestamp: Date.now(),
+        data: data || existingResult?.data,
+        error: error || existingResult?.error
+      };
+
       return {
         queryResults: {
           ...state.queryResults,
-          [queryId]: {
-            queryId,
-            status,
-            timestamp: Date.now(),
-            data: data || existingResult?.data,
-            error: error || existingResult?.error
-          }
+          [queryId]: updatedResult
         }
       };
     });
   },
 
-  addConnection: (queryId, eventSource) => {
-    set((state) => ({
-      connections: {
-        ...state.connections,
-        [queryId]: {
-          queryId,
-          eventSource,
-          status: "connecting",
+  setConnection: (connection) => {
+    set({ connection });
+  },
+
+  updateConnectionStatus: (status) => {
+    set((state) => {
+      if (!state.connection) return state;
+
+      return {
+        connection: {
+          ...state.connection,
+          status,
           lastMessageTime: Date.now()
         }
-      }
+      };
+    });
+  },
+
+  incrementReconnectAttempts: () => {
+    set((state) => {
+      if (!state.connection) return state;
+
+      return {
+        connection: {
+          ...state.connection,
+          reconnectAttempts: state.connection.reconnectAttempts + 1
+        }
+      };
+    });
+  },
+
+  resetReconnectAttempts: () => {
+    set((state) => {
+      if (!state.connection) return state;
+
+      return {
+        connection: {
+          ...state.connection,
+          reconnectAttempts: 0
+        }
+      };
+    });
+  },
+
+  closeConnection: () => {
+    const state = get();
+
+    if (state.connection?.eventSource) {
+      state.connection.eventSource.close();
+    }
+
+    set({
+      connection: null,
+      activeQueries: new Set() // Clear active queries when connection closes
+    });
+  },
+
+  addActiveQuery: (queryId) => {
+    set((state) => ({
+      activeQueries: new Set([...state.activeQueries, queryId])
     }));
   },
 
-  updateConnectionStatus: (queryId, status) => {
+  removeActiveQuery: (queryId) => {
     set((state) => {
-      const connection = state.connections[queryId];
-      if (!connection) return state;
-
-      return {
-        connections: {
-          ...state.connections,
-          [queryId]: {
-            ...connection,
-            status,
-            lastMessageTime: Date.now()
-          }
-        }
-      };
-    });
-  },
-
-  removeConnection: (queryId) => {
-    set((state) => {
-      const newConnections = { ...state.connections };
-      delete newConnections[queryId];
-      return { connections: newConnections };
+      const newActiveQueries = new Set(state.activeQueries);
+      newActiveQueries.delete(queryId);
+      return { activeQueries: newActiveQueries };
     });
   },
 
@@ -130,9 +176,8 @@ export const useSSEStore = create<SSEState>((set, get) => ({
     return get().queryResults[queryId];
   },
 
-  getConnectionStatus: (queryId) => {
-    const connection = get().connections[queryId];
-    return connection?.status || "disconnected";
+  getConnectionStatus: () => {
+    return get().connection?.status || "disconnected";
   },
 
   isQueryRunning: (queryId) => {
@@ -140,31 +185,19 @@ export const useSSEStore = create<SSEState>((set, get) => ({
     return result?.status === "running";
   },
 
-  hasActiveConnection: (queryId) => {
-    const connection = get().connections[queryId];
+  hasActiveConnection: () => {
+    const connection = get().connection;
     return connection?.status === "connected";
   },
 
-  closeConnection: (queryId) => {
-    const state = get();
-    const connection = state.connections[queryId];
-
-    if (connection?.eventSource) {
-      connection.eventSource.close();
-    }
-
-    get().removeConnection(queryId);
+  isQueryActive: (queryId) => {
+    return get().activeQueries.has(queryId);
   },
 
-  closeAllConnections: () => {
-    const state = get();
-
-    Object.values(state.connections).forEach((connection) => {
-      if (connection.eventSource) {
-        connection.eventSource.close();
-      }
+  clearAllResults: () => {
+    set({
+      queryResults: {},
+      activeQueries: new Set()
     });
-
-    set({ connections: {} });
   }
 }));

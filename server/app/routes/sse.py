@@ -1,12 +1,12 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 from fastapi.responses import StreamingResponse
-from typing import Optional
+from typing import Optional, Set
 import asyncio
 import json
 import logging
+import time
+import uuid
 from app.core.redis_subscriber import (
-    get_query_messages,
-    get_latest_query_message,
     query_results_subscriber,
 )
 
@@ -14,62 +14,91 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/stream", tags=["sse"])
 
+# Store active client sessions (in production, use Redis or proper session management)
+active_client_sessions: Set[str] = set()
 
-@router.get("/query-results/{query_id}")
-async def stream_query_results(query_id: str, last_timestamp: Optional[float] = None):
+
+@router.get("/events")
+async def stream_events(client_id: Optional[str] = Query(None)):
     """
-    Stream query execution results via Server-Sent Events.
+    Single SSE connection that streams all query results multiplexed by query_id.
 
     Args:
-        query_id: The query or query_run ID to stream results for
-        last_timestamp: Optional timestamp to get only newer messages
+        client_id: Optional client identifier (hardcoded for open source version)
     """
+    # For open source version, generate a simple client ID if not provided
+    if not client_id:
+        client_id = f"client-{uuid.uuid4().hex[:8]}"
 
-    async def generate_sse_events():
-        """Generate SSE events for query results"""
+    # Track active session
+    active_client_sessions.add(client_id)
+
+    async def generate_multiplexed_sse_events():
+        """Generate SSE events for all query results multiplexed through single connection"""
         try:
-            # Send any existing messages first
-            existing_messages = get_query_messages(query_id, last_timestamp)
-            for message in existing_messages:
-                yield f"data: {json.dumps(message)}\n\n"
+            logger.info(f"🔗 Starting multiplexed SSE stream for client: {client_id}")
 
-            # If we have a final status (success/error), close the stream
-            latest_message = get_latest_query_message(query_id)
-            if latest_message and latest_message.get("status") in ["success", "error"]:
-                yield "event: close\ndata: Query completed\n\n"
-                return
+            # Send initial connection confirmation
+            yield f"data: {json.dumps({'type': 'connection', 'client_id': client_id, 'status': 'connected', 'timestamp': time.time()})}\n\n"
 
-            # Keep the connection alive and stream new messages
-            last_seen_timestamp = latest_message.get("timestamp", 0) if latest_message else 0
+            # Keep track of last seen timestamps per query to avoid duplicates
+            last_seen_timestamps = {}
+            heartbeat_interval = 30  # seconds
+            last_heartbeat = time.time()
 
-            while True:
-                # Check for new messages
-                new_messages = get_query_messages(query_id, last_seen_timestamp)
+            while client_id in active_client_sessions:
+                current_time = time.time()
+                has_new_messages = False
 
-                for message in new_messages:
-                    yield f"data: {json.dumps(message)}\n\n"
-                    last_seen_timestamp = max(last_seen_timestamp, message.get("timestamp", 0))
+                # Get all active queries and check for new messages
+                active_queries = query_results_subscriber.get_active_queries()
 
-                    # If this is a final status, close the stream
-                    if message.get("status") in ["success", "error"]:
-                        yield "event: close\ndata: Query completed\n\n"
-                        return
+                for query_id in active_queries:
+                    last_timestamp = last_seen_timestamps.get(query_id, 0)
+                    new_messages = query_results_subscriber.get_messages(query_id, last_timestamp)
 
-                # Send heartbeat to keep connection alive
-                yield "event: heartbeat\ndata: ping\n\n"
+                    for message in new_messages:
+                        # Add query_id to message for multiplexing
+                        multiplexed_message = {
+                            "type": "query_result",
+                            "query_id": query_id,
+                            **message,
+                        }
 
-                # Wait before checking again
+                        yield f"data: {json.dumps(multiplexed_message)}\n\n"
+
+                        # Update last seen timestamp
+                        msg_timestamp = message.get("timestamp", current_time)
+                        last_seen_timestamps[query_id] = max(
+                            last_seen_timestamps.get(query_id, 0), msg_timestamp
+                        )
+                        has_new_messages = True
+
+                        logger.debug(
+                            f"📨 Sent multiplexed message for query {query_id}: {message.get('status')}"
+                        )
+
+                # Send heartbeat if no recent messages and enough time has passed
+                if not has_new_messages and (current_time - last_heartbeat) >= heartbeat_interval:
+                    yield f"event: heartbeat\ndata: {json.dumps({'type': 'heartbeat', 'timestamp': current_time})}\n\n"
+                    last_heartbeat = current_time
+
+                # Wait before next iteration
                 await asyncio.sleep(1)
 
         except asyncio.CancelledError:
-            logger.info(f"SSE stream cancelled for query {query_id}")
+            logger.info(f"SSE stream cancelled for client {client_id}")
             raise
         except Exception as e:
-            logger.error(f"Error in SSE stream for query {query_id}: {str(e)}")
-            yield f"event: error\ndata: {json.dumps({'error': str(e)})}\n\n"
+            logger.error(f"Error in SSE stream for client {client_id}: {str(e)}")
+            yield f"event: error\ndata: {json.dumps({'type': 'error', 'error': str(e), 'timestamp': time.time()})}\n\n"
+        finally:
+            # Clean up client session
+            active_client_sessions.discard(client_id)
+            logger.info(f"🔒 SSE stream closed for client {client_id}")
 
     return StreamingResponse(
-        generate_sse_events(),
+        generate_multiplexed_sse_events(),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
@@ -83,18 +112,23 @@ async def stream_query_results(query_id: str, last_timestamp: Optional[float] = 
 @router.get("/query-status/{query_id}")
 async def get_query_status(query_id: str):
     """
-    Get the current status of a query without streaming.
-    Useful for initial status checks.
+    Get current status of a specific query (non-streaming endpoint)
     """
-    latest_message = get_latest_query_message(query_id)
+    latest_message = query_results_subscriber.get_latest_message(query_id)
 
     if not latest_message:
-        return {"query_id": query_id, "status": "not_found", "message": "No status available"}
+        return {
+            "query_id": query_id,
+            "status": "not_found",
+            "timestamp": time.time(),
+            "has_data": False,
+            "has_error": False,
+        }
 
     return {
         "query_id": query_id,
         "status": latest_message.get("status", "unknown"),
-        "timestamp": latest_message.get("timestamp"),
+        "timestamp": latest_message.get("timestamp", time.time()),
         "has_data": "data" in latest_message,
         "has_error": "error" in latest_message,
     }
@@ -102,19 +136,32 @@ async def get_query_status(query_id: str):
 
 @router.get("/active-queries")
 async def get_active_queries():
-    """Get list of queries that have active status messages"""
+    """
+    Get list of queries that have stored results
+    """
     active_queries = query_results_subscriber.get_active_queries()
 
-    query_statuses = []
+    query_summaries = []
     for query_id in active_queries:
-        latest_message = get_latest_query_message(query_id)
+        latest_message = query_results_subscriber.get_latest_message(query_id)
         if latest_message:
-            query_statuses.append(
+            query_summaries.append(
                 {
                     "query_id": query_id,
-                    "status": latest_message.get("status"),
-                    "timestamp": latest_message.get("timestamp"),
+                    "status": latest_message.get("status", "unknown"),
+                    "timestamp": latest_message.get("timestamp", time.time()),
                 }
             )
 
-    return {"active_queries": query_statuses, "total_count": len(query_statuses)}
+    return {"active_queries": query_summaries, "total_count": len(query_summaries)}
+
+
+@router.get("/active-clients")
+async def get_active_clients():
+    """
+    Get list of active client sessions
+    """
+    return {
+        "active_clients": list(active_client_sessions),
+        "total_count": len(active_client_sessions),
+    }

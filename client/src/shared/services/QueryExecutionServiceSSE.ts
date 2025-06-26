@@ -5,6 +5,7 @@ import type { TableData, TableRow } from "@/shared/types/api";
 import { convertToTableData } from "@/shared/utils/typeUtils";
 import { createNoDataMessage } from "@/shared/utils/errorUtils";
 import { useSSEStore } from "@/shared/store/useSSEStore";
+import { sseConnectionManager } from "./SSEConnectionManager";
 
 export interface QueryExecutionOptions {
   sql?: string;
@@ -48,7 +49,20 @@ export class QueryExecutionServiceSSE {
       // Step 2: Create and start the query run
       const runId = await this.createQueryRun(tab, versionId, options.overrideFilters);
 
-      // Step 3: Return immediately with the run ID
+      // Step 3: Ensure SSE connection is established and track the query
+      try {
+        await sseConnectionManager.connect();
+        sseConnectionManager.trackQuery(runId);
+        console.log(`🔍 Query ${runId} registered for SSE streaming`);
+      } catch (sseError) {
+        console.warn(
+          `⚠️ SSE connection failed for query ${runId}, results will need to be polled:`,
+          sseError
+        );
+        // Continue with execution - the hook will handle fallback
+      }
+
+      // Step 4: Return immediately with the run ID
       // The SSE stream will be managed by the useQueryStream hook
       return {
         success: true,

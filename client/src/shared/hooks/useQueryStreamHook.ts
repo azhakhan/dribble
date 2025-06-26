@@ -1,6 +1,8 @@
 import { useEffect, useCallback, useRef } from "react";
 import { useSSEStore } from "@/shared/store/useSSEStore";
+import { sseConnectionManager } from "@/shared/services/SSEConnectionManager";
 import type { QueryResult } from "@/shared/store/useSSEStore";
+import type { SSEMessageHandler } from "@/shared/services/SSEConnectionManager";
 import type { TableRow } from "@/shared/types/api";
 
 export interface UseQueryStreamOptions {
@@ -13,7 +15,7 @@ export interface UseQueryStreamOptions {
 
 export interface UseQueryStreamReturn {
   result: QueryResult | undefined;
-  connectionStatus: "connecting" | "connected" | "closed" | "error" | "disconnected";
+  connectionStatus: string;
   isRunning: boolean;
   hasActiveConnection: boolean;
   startStream: () => void;
@@ -21,8 +23,8 @@ export interface UseQueryStreamReturn {
 }
 
 /**
- * Hook for streaming query execution results via SSE
- * Automatically manages EventSource connections and stores results in Zustand
+ * Hook for streaming query execution results via SSE using single global connection
+ * Automatically manages connection and tracks query results in Zustand store
  */
 export function useQueryStream(
   queryId: string,
@@ -30,190 +32,137 @@ export function useQueryStream(
 ): UseQueryStreamReturn {
   const { enabled = true, onStatusChange, onSuccess, onError, onComplete } = options;
 
-  const {
-    addConnection,
-    updateConnectionStatus,
-    updateQueryStatus,
-    closeConnection,
-    getQueryResult,
-    getConnectionStatus,
-    isQueryRunning,
-    hasActiveConnection
-  } = useSSEStore();
-
-  const eventSourceRef = useRef<EventSource | null>(null);
-  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const reconnectAttempts = useRef(0);
-  const maxReconnectAttempts = 3;
+  const { getQueryResult, getConnectionStatus, isQueryRunning } = useSSEStore();
+  const handlerRef = useRef<SSEMessageHandler | null>(null);
 
   const result = getQueryResult(queryId);
-  const connectionStatus = getConnectionStatus(queryId);
+  const connectionStatus = getConnectionStatus();
 
-  const startStream = useCallback(() => {
-    if (!queryId || hasActiveConnection(queryId)) {
+  const startStream = useCallback(async () => {
+    if (!queryId || !enabled) {
       return;
     }
 
-    console.log(`🔗 Starting SSE stream for query: ${queryId}`);
+    console.log(`🔗 Starting stream for query: ${queryId}`);
 
     try {
-      const eventSource = new EventSource(`/api/stream/query-results/${queryId}`);
-      eventSourceRef.current = eventSource;
+      // Ensure global connection is established
+      await sseConnectionManager.connect();
 
-      // Add connection to store
-      addConnection(queryId, eventSource);
+      // Track this query
+      sseConnectionManager.trackQuery(queryId);
 
-      eventSource.onopen = () => {
-        console.log(`✅ SSE connection opened for query: ${queryId}`);
-        updateConnectionStatus(queryId, "connected");
-        reconnectAttempts.current = 0;
-      };
+      // Set up message handler for callbacks
+      const handler: SSEMessageHandler = {
+        onQueryResult: (receivedQueryId, queryResult) => {
+          if (receivedQueryId === queryId) {
+            // Call optional callbacks
+            if (onStatusChange) {
+              onStatusChange(queryId, queryResult.status);
+            }
 
-      eventSource.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          console.log(`📨 SSE message for query ${queryId}:`, data);
+            if (queryResult.status === "success" && queryResult.data && onSuccess) {
+              onSuccess(queryId, queryResult.data);
+            }
 
-          const { status, data: queryData, error, timestamp } = data;
+            if (queryResult.status === "error" && queryResult.error && onError) {
+              onError(queryId, queryResult.error);
+            }
 
-          // Update query status in store
-          updateQueryStatus(queryId, status, queryData, error);
-
-          // Call optional callbacks
-          if (onStatusChange) {
-            onStatusChange(queryId, status);
+            if (
+              (queryResult.status === "success" || queryResult.status === "error") &&
+              onComplete
+            ) {
+              onComplete(queryId, queryResult);
+            }
           }
-
-          if (status === "success" && queryData && onSuccess) {
-            onSuccess(queryId, queryData);
-          }
-
-          if (status === "error" && error && onError) {
+        },
+        onError: (error) => {
+          console.error(`❌ SSE error for query ${queryId}:`, error);
+          if (onError) {
             onError(queryId, error);
           }
-
-          // If query is complete (success or error), close the connection
-          if (status === "success" || status === "error") {
-            console.log(`🏁 Query ${queryId} completed with status: ${status}`);
-            if (onComplete) {
-              onComplete(queryId, { queryId, status, timestamp, data: queryData, error });
-            }
-            stopStream();
-          }
-        } catch (parseError) {
-          console.error(`❌ Error parsing SSE message for query ${queryId}:`, parseError);
         }
       };
 
-      eventSource.addEventListener("close", () => {
-        console.log(`🔒 SSE stream closed for query: ${queryId}`);
-        stopStream();
-      });
-
-      eventSource.addEventListener("heartbeat", () => {
-        // Just acknowledge heartbeat - keeps connection alive
-        console.debug(`💓 Heartbeat received for query: ${queryId}`);
-      });
-
-      eventSource.onerror = (error) => {
-        console.error(`❌ SSE error for query ${queryId}:`, error);
-        updateConnectionStatus(queryId, "error");
-
-        // Attempt to reconnect with exponential backoff
-        if (reconnectAttempts.current < maxReconnectAttempts) {
-          const delay = Math.pow(2, reconnectAttempts.current) * 1000; // 1s, 2s, 4s
-          reconnectAttempts.current++;
-
-          console.log(
-            `🔄 Reconnecting SSE for query ${queryId} in ${delay}ms (attempt ${reconnectAttempts.current})`
-          );
-
-          reconnectTimeoutRef.current = setTimeout(() => {
-            stopStream();
-            startStream();
-          }, delay);
-        } else {
-          console.error(`💥 Max reconnection attempts reached for query ${queryId}`);
-          stopStream();
-        }
-      };
+      handlerRef.current = handler;
+      sseConnectionManager.addMessageHandler(handler);
     } catch (error) {
-      console.error(`❌ Failed to create SSE connection for query ${queryId}:`, error);
-      updateConnectionStatus(queryId, "error");
+      console.error(`❌ Failed to start stream for query ${queryId}:`, error);
+      if (onError) {
+        onError(queryId, error instanceof Error ? error.message : "Connection failed");
+      }
     }
-  }, [
-    queryId,
-    hasActiveConnection,
-    addConnection,
-    updateConnectionStatus,
-    updateQueryStatus,
-    onStatusChange,
-    onSuccess,
-    onError,
-    onComplete
-  ]);
+  }, [queryId, enabled, onStatusChange, onSuccess, onError, onComplete]);
 
   const stopStream = useCallback(() => {
-    if (reconnectTimeoutRef.current) {
-      clearTimeout(reconnectTimeoutRef.current);
-      reconnectTimeoutRef.current = null;
+    if (!queryId) return;
+
+    console.log(`🔒 Stopping stream for query: ${queryId}`);
+
+    // Remove message handler
+    if (handlerRef.current) {
+      sseConnectionManager.removeMessageHandler(handlerRef.current);
+      handlerRef.current = null;
     }
 
-    if (eventSourceRef.current) {
-      eventSourceRef.current.close();
-      eventSourceRef.current = null;
-    }
+    // Stop tracking this query
+    sseConnectionManager.untrackQuery(queryId);
+  }, [queryId]);
 
-    closeConnection(queryId);
-    console.log(`🛑 Stopped SSE stream for query: ${queryId}`);
-  }, [queryId, closeConnection]);
-
-  // Auto-start stream when enabled
+  // Auto-start stream if enabled
   useEffect(() => {
     if (enabled && queryId) {
       startStream();
     }
 
     return () => {
-      if (!enabled) {
-        stopStream();
-      }
-    };
-  }, [enabled, queryId, startStream, stopStream]);
-
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
+      // Cleanup on unmount
       stopStream();
     };
-  }, [stopStream]);
+  }, [enabled, queryId, startStream, stopStream]);
 
   return {
     result,
     connectionStatus,
     isRunning: isQueryRunning(queryId),
-    hasActiveConnection: hasActiveConnection(queryId),
+    hasActiveConnection: sseConnectionManager.isConnected(),
     startStream,
     stopStream
   };
 }
 
 /**
+ * Tab-aware version that only streams when tab is active
+ */
+export function useTabAwareQueryStream(
+  queryId: string,
+  isTabActive: boolean,
+  options: UseQueryStreamOptions = {}
+): UseQueryStreamReturn {
+  const stream = useQueryStream(queryId, {
+    ...options,
+    enabled: isTabActive && options.enabled !== false
+  });
+
+  return stream;
+}
+
+/**
  * Hook for managing multiple query streams efficiently
- * Useful for query tabs or when multiple queries need to be monitored
  */
 export function useMultipleQueryStreams(
   queryIds: string[],
   options: UseQueryStreamOptions = {}
 ): Record<string, UseQueryStreamReturn> {
-  const results: Record<string, UseQueryStreamReturn> = {};
+  const streams: Record<string, UseQueryStreamReturn> = {};
 
   queryIds.forEach((queryId) => {
     // eslint-disable-next-line react-hooks/rules-of-hooks
-    results[queryId] = useQueryStream(queryId, options);
+    streams[queryId] = useQueryStream(queryId, options);
   });
 
-  return results;
+  return streams;
 }
 
 /**
@@ -226,16 +175,15 @@ export function useQueryResult(queryId: string): QueryResult | undefined {
 }
 
 /**
- * Hook for managing query stream lifecycle based on tab visibility
- * Automatically starts/stops streams when tabs become active/inactive
+ * Hook for checking the global SSE connection status
  */
-export function useTabAwareQueryStream(
-  queryId: string,
-  isTabActive: boolean,
-  options: UseQueryStreamOptions = {}
-): UseQueryStreamReturn {
-  return useQueryStream(queryId, {
-    ...options,
-    enabled: options.enabled !== false && isTabActive
-  });
+export function useSSEConnectionStatus() {
+  const { getConnectionStatus } = useSSEStore();
+
+  return {
+    status: getConnectionStatus(),
+    isConnected: sseConnectionManager.isConnected(),
+    connect: () => sseConnectionManager.connect(),
+    disconnect: () => sseConnectionManager.disconnect()
+  };
 }
