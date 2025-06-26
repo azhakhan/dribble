@@ -42,8 +42,6 @@ class SSEConnectionManager {
       // Close existing connection if any
       this.disconnect();
 
-      console.log("🔗 Starting global SSE connection...");
-
       try {
         // Connect to the multiplexed events endpoint
         this.eventSource = new EventSource("/api/stream/events");
@@ -60,7 +58,6 @@ class SSEConnectionManager {
         store.setConnection(connection);
 
         this.eventSource.onopen = () => {
-          console.log("✅ Global SSE connection opened");
           store.updateConnectionStatus("connected");
           store.resetReconnectAttempts();
           this.clearReconnectTimeout();
@@ -70,8 +67,7 @@ class SSEConnectionManager {
           this.handleMessage(event);
         };
 
-        this.eventSource.onerror = (event) => {
-          console.error("❌ SSE connection error:", event);
+        this.eventSource.onerror = () => {
           store.updateConnectionStatus("error");
 
           const currentConnection = store.connection;
@@ -80,7 +76,6 @@ class SSEConnectionManager {
           if (attempts < this.maxReconnectAttempts) {
             this.scheduleReconnect();
           } else {
-            console.error("❌ Max reconnection attempts reached");
             this.disconnect();
             reject(new Error("Failed to establish SSE connection after multiple attempts"));
           }
@@ -105,7 +100,6 @@ class SSEConnectionManager {
 
         this.addMessageHandler(connectionHandler);
       } catch (error) {
-        console.error("❌ Failed to create SSE connection:", error);
         reject(error);
       }
     });
@@ -115,8 +109,6 @@ class SSEConnectionManager {
    * Disconnect the SSE connection
    */
   public disconnect(): void {
-    console.log("🔒 Disconnecting global SSE connection");
-
     this.clearReconnectTimeout();
 
     if (this.eventSource) {
@@ -137,8 +129,6 @@ class SSEConnectionManager {
   public trackQuery(queryId: string): void {
     const store = useSSEStore.getState();
     store.addActiveQuery(queryId);
-
-    console.log(`🔍 Now tracking query: ${queryId}`);
   }
 
   /**
@@ -147,8 +137,6 @@ class SSEConnectionManager {
   public untrackQuery(queryId: string): void {
     const store = useSSEStore.getState();
     store.removeActiveQuery(queryId);
-
-    console.log(`🚫 Stopped tracking query: ${queryId}`);
   }
 
   /**
@@ -187,13 +175,10 @@ class SSEConnectionManager {
   private handleMessage(event: MessageEvent): void {
     try {
       const data = JSON.parse(event.data);
-      console.log("📨 SSE message received:", data);
-
       const store = useSSEStore.getState();
 
       switch (data.type) {
         case "connection":
-          console.log(`🎉 Connected with client ID: ${data.client_id}`);
           this.clientId = data.client_id;
 
           // Update connection with client ID
@@ -233,31 +218,25 @@ class SSEConnectionManager {
             // Remove from active queries if completed
             if (data.status === "success" || data.status === "error") {
               store.removeActiveQuery(queryId);
-              console.log(`🏁 Query ${queryId} completed with status: ${data.status}`);
             }
           }
           break;
         }
 
         case "heartbeat":
-          console.log("💓 Heartbeat received");
           this.messageHandlers.forEach((handler) => {
             handler.onHeartbeat?.();
           });
           break;
 
         case "error":
-          console.error("❌ Server error:", data.error);
           this.messageHandlers.forEach((handler) => {
             handler.onError?.(data.error);
           });
           break;
-
-        default:
-          console.warn("⚠️ Unknown SSE message type:", data.type);
       }
-    } catch (error) {
-      console.error("❌ Error parsing SSE message:", error);
+    } catch {
+      // Silently ignore malformed messages
     }
   }
 
@@ -276,12 +255,9 @@ class SSEConnectionManager {
       30000 // Max 30 seconds
     );
 
-    console.log(`🔄 Scheduling reconnect attempt ${attempts + 1} in ${delay}ms`);
-
     this.reconnectTimeout = setTimeout(() => {
-      console.log(`🔄 Attempting to reconnect (attempt ${attempts + 1})`);
-      this.connect().catch((error) => {
-        console.error("❌ Reconnection failed:", error);
+      this.connect().catch(() => {
+        // Reconnection failed, but will retry on next attempt
       });
     }, delay);
   }
@@ -311,9 +287,8 @@ if (typeof window !== "undefined") {
       // Page became visible - reconnect if needed
       const store = useSSEStore.getState();
       if (!store.hasActiveConnection() && store.activeQueries.size > 0) {
-        console.log("📱 Page became visible, reconnecting to SSE...");
-        sseConnectionManager.connect().catch((error) => {
-          console.error("❌ Failed to reconnect on visibility change:", error);
+        sseConnectionManager.connect().catch(() => {
+          // Failed to reconnect on visibility change
         });
       }
     }

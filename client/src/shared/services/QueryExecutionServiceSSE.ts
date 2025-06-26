@@ -53,13 +53,9 @@ export class QueryExecutionServiceSSE {
       try {
         await sseConnectionManager.connect();
         sseConnectionManager.trackQuery(runId);
-        console.log(`🔍 Query ${runId} registered for SSE streaming`);
-      } catch (sseError) {
-        console.warn(
-          `⚠️ SSE connection failed for query ${runId}, results will need to be polled:`,
-          sseError
-        );
-        // Continue with execution - the hook will handle fallback
+      } catch {
+        // SSE connection failed, but continue with execution
+        // The hook will handle fallback polling if needed
       }
 
       // Step 4: Return immediately with the run ID

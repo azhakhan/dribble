@@ -43,8 +43,6 @@ export function useQueryStream(
       return;
     }
 
-    console.log(`🔗 Starting stream for query: ${queryId}`);
-
     try {
       // Ensure global connection is established
       await sseConnectionManager.connect();
@@ -78,7 +76,6 @@ export function useQueryStream(
           }
         },
         onError: (error) => {
-          console.error(`❌ SSE error for query ${queryId}:`, error);
           if (onError) {
             onError(queryId, error);
           }
@@ -88,7 +85,6 @@ export function useQueryStream(
       handlerRef.current = handler;
       sseConnectionManager.addMessageHandler(handler);
     } catch (error) {
-      console.error(`❌ Failed to start stream for query ${queryId}:`, error);
       if (onError) {
         onError(queryId, error instanceof Error ? error.message : "Connection failed");
       }
@@ -97,8 +93,6 @@ export function useQueryStream(
 
   const stopStream = useCallback(() => {
     if (!queryId) return;
-
-    console.log(`🔒 Stopping stream for query: ${queryId}`);
 
     // Remove message handler
     if (handlerRef.current) {

@@ -36,7 +36,7 @@ async def stream_events(client_id: Optional[str] = Query(None)):
     async def generate_multiplexed_sse_events():
         """Generate SSE events for all query results multiplexed through single connection"""
         try:
-            logger.info(f"🔗 Starting multiplexed SSE stream for client: {client_id}")
+            logger.info(f"Starting SSE stream for client: {client_id}")
 
             # Send initial connection confirmation
             yield f"data: {json.dumps({'type': 'connection', 'client_id': client_id, 'status': 'connected', 'timestamp': time.time()})}\n\n"
@@ -74,10 +74,6 @@ async def stream_events(client_id: Optional[str] = Query(None)):
                         )
                         has_new_messages = True
 
-                        logger.debug(
-                            f"📨 Sent multiplexed message for query {query_id}: {message.get('status')}"
-                        )
-
                 # Send heartbeat if no recent messages and enough time has passed
                 if not has_new_messages and (current_time - last_heartbeat) >= heartbeat_interval:
                     yield f"event: heartbeat\ndata: {json.dumps({'type': 'heartbeat', 'timestamp': current_time})}\n\n"
@@ -95,7 +91,7 @@ async def stream_events(client_id: Optional[str] = Query(None)):
         finally:
             # Clean up client session
             active_client_sessions.discard(client_id)
-            logger.info(f"🔒 SSE stream closed for client {client_id}")
+            logger.info(f"SSE stream closed for client {client_id}")
 
     return StreamingResponse(
         generate_multiplexed_sse_events(),
