@@ -2,7 +2,12 @@ import { create } from "zustand";
 import type { Source, SourceStatus, ConnectedSource } from "@/shared/lib/api";
 import type { SourceSchemaMap, SchemaObject } from "./types";
 import type { FileNode } from "@/shared/lib/fileTreeUtils";
-import { getSources, getConnectedSources, getSourceSchemas } from "@/shared/lib/api";
+import {
+  getSources,
+  getConnectedSources,
+  getSourceSchemas,
+  getSourceStatus
+} from "@/shared/lib/api";
 
 interface SourceState {
   // Source data
@@ -25,6 +30,11 @@ interface SourceState {
   sourceSchemaErrors: Record<string, string>;
   sourceStatuses: Record<string, SourceStatus>;
 
+  // Background status polling
+  statusPollingEnabled: boolean;
+  statusPollingInterval: NodeJS.Timeout | null;
+  loadingStatuses: Set<string>;
+
   // Actions
   loadSources: () => Promise<void>;
   loadConnectedSources: () => Promise<void>;
@@ -41,6 +51,12 @@ interface SourceState {
   setSourceStatus: (sourceId: string, status: SourceStatus) => void;
   removeSourceStatus: (sourceId: string) => void;
   removeSource: (sourceId: string) => void;
+
+  // Background status polling actions
+  startStatusPolling: () => void;
+  stopStatusPolling: () => void;
+  loadAllSourceStatuses: () => Promise<void>;
+  getSourceStatus: (sourceId: string) => SourceStatus | undefined;
 
   cleanupDisconnectedSources: (connectedSourceIds: string[]) => void;
 }
@@ -59,6 +75,11 @@ export const useSourceStore = create<SourceState>((set, get) => ({
   loadingSchemas: new Set(),
   sourceSchemaErrors: {},
   sourceStatuses: {},
+
+  // Background status polling state
+  statusPollingEnabled: false,
+  statusPollingInterval: null,
+  loadingStatuses: new Set(),
 
   // Load sources from API
   loadSources: async () => {
@@ -290,5 +311,91 @@ export const useSourceStore = create<SourceState>((set, get) => ({
         sourceSchemaErrors: newSourceSchemaErrors,
         sourceStatuses: newSourceStatuses
       };
-    })
+    }),
+
+  // Background status polling actions
+  startStatusPolling: () => {
+    const state = get();
+
+    // Don't start if already running
+    if (state.statusPollingEnabled || state.statusPollingInterval) {
+      return;
+    }
+
+    set({ statusPollingEnabled: true });
+
+    // Initial load
+    get().loadAllSourceStatuses();
+
+    // Set up polling interval (every 3 seconds)
+    const interval = setInterval(() => {
+      const currentState = get();
+      if (currentState.statusPollingEnabled && currentState.connectedSources.size > 0) {
+        currentState.loadAllSourceStatuses();
+      }
+    }, 5000);
+
+    set({ statusPollingInterval: interval });
+  },
+
+  stopStatusPolling: () => {
+    const state = get();
+
+    if (state.statusPollingInterval) {
+      clearInterval(state.statusPollingInterval);
+    }
+
+    set({
+      statusPollingEnabled: false,
+      statusPollingInterval: null
+    });
+  },
+
+  loadAllSourceStatuses: async () => {
+    const state = get();
+    const connectedSourceIds = Array.from(state.connectedSources);
+
+    if (connectedSourceIds.length === 0) {
+      return;
+    }
+
+    // Load statuses in parallel for all connected sources
+    await Promise.allSettled(
+      connectedSourceIds.map(async (sourceId) => {
+        // Don't load if already loading
+        if (state.loadingStatuses.has(sourceId)) {
+          return;
+        }
+
+        // Mark as loading
+        set((prevState) => ({
+          loadingStatuses: new Set(prevState.loadingStatuses).add(sourceId)
+        }));
+
+        try {
+          const status = await getSourceStatus(sourceId);
+
+          // Update status in store
+          set((prevState) => ({
+            sourceStatuses: {
+              ...prevState.sourceStatuses,
+              [sourceId]: status
+            },
+            loadingStatuses: new Set([...prevState.loadingStatuses].filter((id) => id !== sourceId))
+          }));
+        } catch (error) {
+          console.error(`Failed to load status for source ${sourceId}:`, error);
+
+          // Remove from loading set
+          set((prevState) => ({
+            loadingStatuses: new Set([...prevState.loadingStatuses].filter((id) => id !== sourceId))
+          }));
+        }
+      })
+    );
+  },
+
+  getSourceStatus: (sourceId: string) => {
+    return get().sourceStatuses[sourceId];
+  }
 }));
