@@ -15,14 +15,56 @@ export default defineConfig({
     // Exclude Monaco and Monaco SQL Languages from dependency optimization
     exclude: ["monaco-editor", "monaco-sql-languages"]
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          // Vendor chunks
+          vendor: ["react", "react-dom"],
+          ui: ["@glideapps/glide-data-grid", "lucide-react"],
+          stores: ["zustand"],
+          monaco: ["monaco-editor", "monaco-sql-languages"],
+          // Routing and panels
+          routing: ["react-router-dom"],
+          panels: ["react-resizable-panels"],
+          // Feature chunks
+          llm: [
+            "src/features/llm/LLMList.tsx",
+            "src/features/llm/LLMDialog.tsx",
+            "src/features/llm/LLMForm.tsx"
+          ],
+          chat: ["src/features/chat/ChatSidebar.tsx", "src/features/chat/SQLCodeBlock.tsx"],
+          editor: [
+            "src/features/editor/Editor.tsx",
+            "src/features/editor/MonacoSQLEditor.tsx",
+            "src/features/editor/MonacoDiffEditor.tsx"
+          ]
+        }
+      }
+    }
+  },
   server: {
     port: 3000,
     strictPort: true, // Don't try other ports if 3000 is taken
     host: true, // Listen on all addresses, including network and LAN
     proxy: {
       "/api": {
-        target: "http://server:8000", // Target the Docker service name
+        target: "http://server:8000",
         changeOrigin: true,
+        configure: (proxy) => {
+          proxy.on("proxyRes", (proxyRes) => {
+            // Fix redirect loops by rewriting Location headers
+            if (
+              proxyRes.headers.location &&
+              proxyRes.headers.location.includes("http://server:8000")
+            ) {
+              proxyRes.headers.location = proxyRes.headers.location.replace(
+                "http://server:8000",
+                "http://localhost:3000/api"
+              );
+            }
+          });
+        },
         rewrite: (path) => path.replace(/^\/api/, "")
       }
     }

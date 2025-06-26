@@ -1,8 +1,9 @@
 import axios from "axios";
+import type { TableRow } from "../types/api";
 
 // Create axios instance with base URL
 const api = axios.create({
-  baseURL: "/api", // We'll use the Vite proxy which will route to the correct server
+  baseURL: "/api", // Use the Vite proxy which will route to the correct server
   headers: {
     "Content-Type": "application/json"
   }
@@ -53,9 +54,9 @@ export const executeQueryVersionRun = async (request: CreateQueryRunRequest): Pr
 };
 
 // New function to get query run results
-export const getQueryRunResults = async (run_id: string) => {
+export const getQueryRunResults = async (run_id: string): Promise<TableRow[] | null> => {
   try {
-    const response = await api.get<object[]>(`/execution/run-results/${run_id}`);
+    const response = await api.get<TableRow[]>(`/execution/run-results/${run_id}`);
     return response.data;
   } catch (error) {
     if (axios.isAxiosError(error) && error.response?.status === 202) {
@@ -466,10 +467,6 @@ export const getQueryRunsByVersionId = async (versionId: string): Promise<QueryR
 export const getQueryRunById = async (runId: string): Promise<QueryRun> => {
   const response = await api.get<QueryRun>(`/runs/${runId}`);
   return response.data;
-};
-
-export const deleteQueryRun = async (runId: string): Promise<void> => {
-  await api.delete(`/runs/${runId}`);
 };
 
 export default api;

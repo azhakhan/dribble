@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import type { TableData } from "../types/api";
 import { persist } from "zustand/middleware";
 
 interface UIState {
@@ -14,7 +15,7 @@ interface UIState {
   connectedSourceIds: Set<string>;
 
   // Legacy query state (will be moved to QueryState)
-  queryResults: object[] | null;
+  queryResults: TableData | null;
   queryRunning: boolean;
 
   // Actions
@@ -22,7 +23,7 @@ interface UIState {
   setSelectedTableData: (
     data: { sourceId: string; tableName: string; query: string } | null
   ) => void;
-  setQueryResults: (results: object[] | null) => void;
+  setQueryResults: (results: TableData | null) => void;
   setQueryRunning: (isRunning: boolean) => void;
   setSchemasLoading: (loading: boolean) => void;
   setSchemasError: (error: unknown) => void;

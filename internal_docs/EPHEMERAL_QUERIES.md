@@ -210,7 +210,20 @@ const handleTableDoubleClick = async (sourceId: string, tableName: string) => {
 4. **System executes query immediately**
 5. **Query remains ephemeral** (hidden from QueryTree)
 
+### Name Change Conversion Flow
+
+1. **User clicks rename button** on ephemeral query tab
+2. **User enters new name** and saves
+3. **System converts to regular query**:
+   - Uses provided name
+   - Sets `is_ephemeral = false`
+   - Keeps existing SQL content unchanged
+   - Updates store and UI
+4. **Query now appears in QueryTree** with new name
+
 ### Conversion Flow
+
+#### Conversion on SQL Change + Run
 
 1. **User edits SQL** in ephemeral query tab
 2. **Tab becomes dirty** (`isDirty: true`)
@@ -222,6 +235,15 @@ const handleTableDoubleClick = async (sourceId: string, tableName: string) => {
 5. **System saves new version** with `save_trigger="run"`
 6. **System executes modified query**
 7. **Query now appears in QueryTree**
+
+#### Conversion on Name Change
+
+1. **User renames ephemeral query** in editor (even without SQL changes)
+2. **System converts to regular query**:
+   - Uses provided name
+   - Sets `is_ephemeral = false`
+   - Updates store and UI
+3. **Query now appears in QueryTree**
 
 ## Technical Considerations
 

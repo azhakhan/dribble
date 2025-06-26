@@ -10,7 +10,7 @@ from app.schemas.query import (
 from app.schemas.query_execute import QueryRunModifiers
 from app.schemas.query_run import UpdateQueryRunRequest
 from uuid import UUID
-from typing import List, Dict
+from typing import List, Dict, Optional
 from itertools import groupby
 from app.schemas.query_version import CreateQueryVersionRequest
 
@@ -152,7 +152,7 @@ class QueryVersionService:
         )
 
     @staticmethod
-    def get_latest_version_by_query_id(db: Session, query_id: UUID) -> QueryVersion:
+    def get_latest_version_by_query_id(db: Session, query_id: UUID) -> Optional[QueryVersion]:
         """Get the latest version for a specific query"""
         get_or_404(db, Query, query_id, "Query not found")
 
@@ -267,9 +267,3 @@ class QueryRunService:
     def get_run_by_id(db: Session, run_id: UUID) -> QueryRun:
         """Get a specific query run by ID"""
         return get_or_404(db, QueryRun, run_id, "Query run not found")
-
-    @staticmethod
-    def delete_run(db: Session, run_id: UUID) -> dict:
-        """Delete a query run"""
-        run = get_or_404(db, QueryRun, run_id, "Query run not found")
-        return safe_delete(db, run)

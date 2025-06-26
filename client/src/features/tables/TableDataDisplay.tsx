@@ -1,13 +1,14 @@
-import { EditableTable } from "@/features/tables/EditableTable";
+import { EditableTable } from "@/features/tables/components/EditableTable";
 import { TableFilterBar } from "@/features/tables/TableFilterBar";
 import { Capybara } from "@/components/Capybara";
+import type { TableData } from "@/shared/types/api";
 
 interface TableDataDisplayProps {
   tableData: {
     sourceId: string;
     tableName: string;
   } | null;
-  queryResults?: object[] | null;
+  queryResults?: TableData | null;
   isQueryRunning?: boolean;
 }
 
@@ -25,11 +26,15 @@ export const TableDataDisplay = ({
       {tableData || queryResults ? (
         <>
           {/* Filter bar with title */}
-          <TableFilterBar data={displayData as object[]} isLoading={isLoading} />
+          <TableFilterBar data={displayData || null} isLoading={isLoading} />
 
           {/* Scrollable content */}
           <div className="flex-1 min-h-0">
-            <EditableTable data={displayData as Record<string, unknown>[]} isLoading={isLoading} />
+            <EditableTable
+              data={displayData || undefined}
+              isLoading={isLoading}
+              tableId="table-data-display"
+            />
           </div>
         </>
       ) : (

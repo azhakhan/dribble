@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import type { ChatMessage, ProposedChanges } from "./types";
-import { useTabStore } from "./useTabStore";
+// Dynamic imports will be used for the tab stores to avoid circular dependencies
 import { useQueryStore } from "./useQueryStore";
 
 interface ChatState {
@@ -63,7 +63,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
   setProposedChanges: async (changes) => {
     if (changes) {
       // When LLM returns proposed changes, automatically save them as the latest version
-      const tabStore = useTabStore.getState();
+      const { useTabManagerStore } = await import("./useTabManagerStore");
+      const { useTabContentStore } = await import("./useTabContentStore");
+      const tabStore = useTabManagerStore.getState();
+      const contentStore = useTabContentStore.getState();
       const queryStore = useQueryStore.getState();
 
       if (tabStore.activeTabId) {
@@ -82,7 +85,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
             });
 
             // Also update global editorContent for backward compatibility
-            tabStore.setEditorContent(changes.proposedContent);
+            contentStore.setEditorContent(changes.proposedContent);
           } catch (error) {
             console.error("Failed to auto-save LLM proposed changes:", error);
             // If saving fails, we'll still show the proposed changes UI for manual handling
@@ -107,7 +110,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
     const state = get();
     if (state.proposedChanges) {
       // When rejecting, create a new version with the original content
-      const tabStore = useTabStore.getState();
+      const { useTabManagerStore } = await import("./useTabManagerStore");
+      const { useTabContentStore } = await import("./useTabContentStore");
+      const tabStore = useTabManagerStore.getState();
+      const contentStore = useTabContentStore.getState();
       const queryStore = useQueryStore.getState();
 
       if (tabStore.activeTabId) {
@@ -130,7 +136,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
             });
 
             // Also update global editorContent for backward compatibility
-            tabStore.setEditorContent(state.proposedChanges.originalContent);
+            contentStore.setEditorContent(state.proposedChanges.originalContent);
           } catch (error) {
             console.error("Failed to save rejection/revert version:", error);
             // If saving fails, still update the UI to show original content
@@ -138,7 +144,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
               editorContent: state.proposedChanges.originalContent,
               isDirty: true // Mark as dirty since the save failed
             });
-            tabStore.setEditorContent(state.proposedChanges.originalContent);
+            contentStore.setEditorContent(state.proposedChanges.originalContent);
           }
         } else {
           // No queryId, just update the editor content back to original
@@ -146,7 +152,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
             editorContent: state.proposedChanges.originalContent,
             isDirty: true
           });
-          tabStore.setEditorContent(state.proposedChanges.originalContent);
+          contentStore.setEditorContent(state.proposedChanges.originalContent);
         }
       }
 

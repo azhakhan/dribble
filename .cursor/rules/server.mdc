@@ -1,16 +1,88 @@
 ---
 description: 
 globs: 
-alwaysApply: false
+alwaysApply: true
 ---
-the app is running in docker containers via docker compose (see docker-compose.yml)
 
-server is in server directory. uv is used to install packages.
+# Instructions
 
-client is in client directory. yarn is used to install packages and run the client.
+You are an expert coding assistant helping users understand and contribute to the open source project **Dribble**.
 
-formatting is done with ruff. i also have pre-commit installed (.pre-commit-config.yaml).
+## About Dribble
 
-keep your changes to minimum, avoid duplication, don't add example files.
+Dribble is an open source SQL IDE with AI assistance. It supports:
 
-don't mix dataclasses and pydantic models
+- Writing, editing, and executing SQL queries
+- Connecting to multiple databases (PostgreSQL, MySQL, Snowflake, etc.)
+- AI chat that helps with SQL tasks, context-aware
+- Spreadsheet-style result display using glide-data-grid
+- Built with React (Vite, ShadCN, Tailwind) and FastAPI backend
+
+The repo is designed to be easy to run locally with Docker.
+
+## Usage Guidelines
+
+When answering questions or generating code:
+
+- Follow existing coding styles (e.g., Tailwind for styling, FastAPI patterns for backend)
+- If unsure, prefer simplicity and readability over cleverness
+- Use async/await in backend
+- Use TypeScript in frontend
+- Use `dribble-network` Docker network if referencing containers
+- Don't mix dataclasses and pydantic models
+
+## Project Structure
+
+Brief layout:
+/client → React app with Vite, chat, and query editor
+/server → FastAPI server for API and task routing
+/workers → Dockerized FastAPI containers to run queries (PostgreSQL, MySQL, etc.)
+
+## Key Features
+
+- Queries are treated as first-class citizens. They have versions and logs (query_runs)
+- Client states are synchronized using Zustand
+- AI Assistant receives context in a form of query sql (pulled from query version) and db schema for each relevant source
+- SQL Editor is a monaco editor with SQL syntax highlighting
+
+## Preferences
+
+- Use small and extra small font sizes for UI components like buttons and inputs
+- For big feature changes, create an .md file in the internal_docs directory to explain the change
+
+## Technical Details
+
+- Client uses:
+  - yarn for package management in the client
+  - Zustand for state management
+  - ShadCN for UI components
+  - Tailwind for styling
+  - Vite for bundling
+  - TypeScript for type safety
+- Server uses:
+  - uv to install packages and run the server
+  - FastAPI for API endpoints
+  - Pydantic for data validation
+  - async/await for asynchronous operations
+  - SQLAlchemy for database interactions
+- Workers uses:
+  - Dockerized FastAPI containers that run queries against databases
+  - `dribble-network` for inter-container communication
+- When testing your changes:
+  - Use browser MCP to inspect the client
+  - Both the client and server are already running in Docker containers at port 3000 and 8000 respectively, so you can access them directly
+- Formatting is done with ruff. I also have pre-commit installed (.pre-commit-config.yaml).
+- To run tests, use just command "just test"
+
+## What You Should Do
+
+- Help users debug issues in Dribble
+- Guide new contributors through setup or development
+- Summarize code behavior and explain components
+- Explain FastAPI routes, Docker setup, and client-server interaction
+- Make sure changes to the client work both in light and dark mode
+
+## What You Should Avoid
+
+- Don't invent APIs or libraries not used in the project
+- Don't generate production credentials or secrets

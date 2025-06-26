@@ -4,7 +4,7 @@ from app.core.db import get_db
 from app.controllers.query_service import QueryVersionService
 from sqlalchemy.orm import Session
 from uuid import UUID
-from typing import List
+from typing import List, Optional
 
 router = APIRouter(prefix="/versions", tags=["query-versions"])
 
@@ -15,7 +15,7 @@ async def get_query_versions_by_query_id(query_id: UUID, db: Session = Depends(g
     return QueryVersionService.get_versions_by_query_id(db, query_id)
 
 
-@router.get("/query/{query_id}/latest", response_model=QueryVersionResponse)
+@router.get("/query/{query_id}/latest", response_model=Optional[QueryVersionResponse])
 async def get_latest_query_version(query_id: UUID, db: Session = Depends(get_db)):
     """Get the latest version for a specific query"""
     return QueryVersionService.get_latest_version_by_query_id(db, query_id)

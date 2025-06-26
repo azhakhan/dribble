@@ -1,15 +1,8 @@
-import "@glideapps/glide-data-grid/dist/index.css";
-
-import {
-  DataEditor,
-  type GridCell,
-  GridCellKind,
-  type GridColumn,
-  type Item,
-  type Theme as GlideTheme
-} from "@glideapps/glide-data-grid";
+import { useCallback, useMemo } from "react";
 import { useTheme } from "@/components/theme-provider";
-import { useCallback, useMemo, useState, useEffect, useRef } from "react";
+import { GridCellKind } from "@glideapps/glide-data-grid";
+import type { GridCell, Theme as GlideTheme, Item } from "@glideapps/glide-data-grid";
+import type { TableRow } from "@/shared/types/api";
 
 const dataEditorBaseTheme: GlideTheme = {
   accentColor: "#4F5DFF",
@@ -57,83 +50,21 @@ const dataEditorBaseTheme: GlideTheme = {
   lineHeight: 1.4 //unitless scaler depends on your font
 };
 
-// Default columns
-const defaultColumns: GridColumn[] = [{ title: "Status", width: 300 }];
-
-interface EditableTableProps {
-  data?: Record<string, unknown>[];
-  isLoading?: boolean;
-  tableId?: string; // Unique identifier for this table
-  source?: string; // Optional source identifier
-  schema?: string; // Optional schema identifier
+interface UseTableEditingParams {
+  data: Record<string, unknown>[];
+  dataIndexes: string[];
 }
 
-// Helper to generate storage key
-const getStorageKey = (tableId?: string, source?: string, schema?: string) => {
-  const parts = [source, schema, tableId].filter(Boolean);
-  return parts.length > 0 ? `table_columns_${parts.join("_")}` : null;
-};
-
-// Helper to load column sizes from localStorage
-const loadColumnSizes = (storageKey: string | null) => {
-  if (!storageKey) return {};
-  try {
-    const saved = localStorage.getItem(storageKey);
-    return saved ? JSON.parse(saved) : {};
-  } catch (e) {
-    console.error("Failed to load column sizes:", e);
-    return {};
-  }
-};
-
-// Helper to save column sizes to localStorage
-const saveColumnSizes = (storageKey: string | null, sizes: Record<string, number>) => {
-  if (!storageKey) return;
-  try {
-    localStorage.setItem(storageKey, JSON.stringify(sizes));
-  } catch (e) {
-    console.error("Failed to save column sizes:", e);
-  }
-};
-
-// Helper to determine column type
-const getColumnType = (value: unknown): string => {
-  if (typeof value === "number") return "number";
-  if (value instanceof Date) return "date";
-  if (typeof value === "string") {
-    // Check if it's a URL
-    try {
-      new URL(value);
-      return "url";
-    } catch {
-      return "text";
-    }
-  }
-  return "text";
-};
-
-export const EditableTable = ({
-  data: queryData,
-  isLoading,
-  tableId = "default",
-  source,
-  schema
-}: EditableTableProps) => {
+export const useTableEditing = ({ data, dataIndexes }: UseTableEditingParams) => {
   const { resolvedTheme } = useTheme();
-  const initializedRef = useRef(false);
-  const storageKey = useMemo(
-    () => getStorageKey(tableId, source, schema),
-    [tableId, source, schema]
-  );
 
-  // Custom header icons
+  // Memoized custom header icons - prevent recreation on every render
   const customHeaderIcons = useMemo(
     () => ({
       text: ({ fgColor }: { fgColor: string }) =>
         `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="${fgColor}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-case-upper-icon lucide-case-upper"><path d="m3 15 4-8 4 8"/><path d="M4 13h6"/><path d="M15 11h4.5a2 2 0 0 1 0 4H15V7h4a2 2 0 0 1 0 4"/></svg>`,
       number: ({ fgColor }: { fgColor: string }) =>
         `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="${fgColor}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-hash"><line x1="4" x2="20" y1="9" y2="9"/><line x1="4" x2="20" y1="15" y2="15"/><line x1="10" x2="8" y1="3" y2="21"/><line x1="16" x2="14" y1="3" y2="21"/></svg>`,
-      // number: ({ fgColor }: { fgColor: string }) =>,
       date: ({ fgColor }: { fgColor: string }) =>
         `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="${fgColor}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-calendar"><path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/></svg>`,
       url: ({ fgColor }: { fgColor: string }) =>
@@ -144,50 +75,8 @@ export const EditableTable = ({
     []
   );
 
-  // Use query data if available, otherwise use default data
-  const data = useMemo(() => {
-    // Ensure data is an array and not null/undefined
-    if (!queryData || !Array.isArray(queryData) || queryData.length === 0) {
-      return [{ status: "No data available" }];
-    }
-    return queryData;
-  }, [queryData]);
-
-  // State for managing column sizes
-  const [columnSizes, setColumnSizes] = useState<Record<string, number>>({});
-
-  // Load saved column sizes from localStorage on mount
-  useEffect(() => {
-    if (!initializedRef.current && storageKey) {
-      const savedSizes = loadColumnSizes(storageKey);
-      setColumnSizes(savedSizes);
-      initializedRef.current = true;
-    }
-  }, [storageKey]);
-
-  // Initialize column sizes when data changes
-  useEffect(() => {
-    if (data.length > 0 && initializedRef.current) {
-      const keys = Object.keys(data[0]);
-      const newSizes = { ...columnSizes };
-      let changed = false;
-
-      // Add any missing columns with default width
-      keys.forEach((key) => {
-        if (newSizes[key] === undefined) {
-          newSizes[key] = 200;
-          changed = true;
-        }
-      });
-
-      if (changed) {
-        setColumnSizes(newSizes);
-        if (storageKey) saveColumnSizes(storageKey, newSizes);
-      }
-    }
-  }, [data, columnSizes, storageKey]);
-
-  const getGlideTheme = (): GlideTheme => {
+  // Memoized theme generation
+  const getGlideTheme = useMemo((): GlideTheme => {
     const isDark = resolvedTheme === "dark";
 
     return {
@@ -220,35 +109,7 @@ export const EditableTable = ({
       resizeIndicatorColor: isDark ? "#2E2E2E" : "#E4E4E7",
       horizontalBorderColor: isDark ? "#2E2E2E" : "#E4E4E7"
     };
-  };
-
-  // Update the columns definition
-  const columns = useMemo(() => {
-    // Safe check to ensure data[0] exists
-    if (!data || data.length === 0 || !data[0]) {
-      return defaultColumns;
-    }
-
-    return Object.keys(data[0]).map((key) => {
-      const value = data[0][key];
-      const columnType = getColumnType(value);
-
-      return {
-        title: key,
-        width: columnSizes[key] || 200,
-        id: key,
-        icon: columnType // This will map to our custom icons
-      };
-    });
-  }, [data, columnSizes]);
-
-  // Get column indexes safely
-  const dataIndexes = useMemo(() => {
-    if (!data || data.length === 0 || !data[0]) {
-      return ["status"]; // Default column if no data
-    }
-    return Object.keys(data[0]);
-  }, [data]);
+  }, [resolvedTheme]);
 
   const getCellContent = useCallback(
     (cell: Item): GridCell => {
@@ -262,7 +123,7 @@ export const EditableTable = ({
         } as GridCell;
       }
 
-      const dataRow = data[row] as Record<string, unknown>;
+      const dataRow = data[row] as TableRow;
       const columnName = dataIndexes[col];
 
       if (columnName === undefined) {
@@ -294,41 +155,9 @@ export const EditableTable = ({
     [dataIndexes, data]
   );
 
-  const handleColumnResize = (column: GridColumn, newSize: number, colIndex: number) => {
-    console.log("Column resized:", column.title, newSize, colIndex);
-
-    // Update the column size in state
-    const newColumnSizes = {
-      ...columnSizes,
-      [column.title]: newSize
-    };
-
-    setColumnSizes(newColumnSizes);
-
-    // Save to localStorage
-    if (storageKey) {
-      saveColumnSizes(storageKey, newColumnSizes);
-    }
+  return {
+    customHeaderIcons,
+    getGlideTheme,
+    getCellContent
   };
-
-  if (isLoading) {
-    return <div className="h-full w-full flex items-center justify-center">Loading data...</div>;
-  }
-
-  return (
-    <DataEditor
-      columns={columns}
-      headerIcons={customHeaderIcons}
-      getCellContent={getCellContent}
-      rows={data.length}
-      theme={getGlideTheme()}
-      width="100%"
-      height="100%"
-      smoothScrollX
-      smoothScrollY
-      rowHeight={30}
-      onColumnResize={handleColumnResize}
-      rowMarkers="number"
-    />
-  );
 };

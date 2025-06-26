@@ -1,6 +1,6 @@
 import { Database, FileText } from "lucide-react";
 import { SourcesPanel } from "./SourcesPanel";
-import { QueryTree } from "./QueryTree";
+import { QueryTree } from "./components/QueryTree";
 import { useTreeStore } from "@/shared/store";
 import type { FileNode } from "@/shared/lib/fileTreeUtils";
 import type { Query } from "@/shared/lib/api";

@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import type { Query, QueryVersion, QueryRun } from "@/shared/lib/api";
 import type { PaginationInfo } from "./types";
+import { ErrorService } from "@/shared/services";
 import {
   getQueryById,
   getQueryVersions,
@@ -47,7 +48,11 @@ interface QueryState {
 
   // Query creation and management
   createNewQuery: ({ sourceId, name }: { sourceId: string; name?: string }) => Promise<Query>;
-  saveQueryVersion: (queryId: string, sql: string, saveTrigger: "run" | "ai") => Promise<void>;
+  saveQueryVersion: (
+    queryId: string,
+    sql: string,
+    saveTrigger: "run" | "ai"
+  ) => Promise<QueryVersion>;
   updateQueryName: (queryId: string, newName: string) => Promise<Query>;
   deleteQuery: (queryId: string) => Promise<void>;
 
@@ -105,7 +110,7 @@ export const useQueryStore = create<QueryState>((set, get) => ({
         loadingQueries: new Set([...state.loadingQueries].filter((id) => id !== queryId))
       }));
     } catch (error) {
-      console.error(`Failed to load query ${queryId}:`, error);
+      ErrorService.handleDataLoadingError(error, "query", queryId);
       set((state) => ({
         loadingQueries: new Set([...state.loadingQueries].filter((id) => id !== queryId))
       }));
@@ -276,7 +281,7 @@ export const useQueryStore = create<QueryState>((set, get) => ({
       }));
       return newQuery;
     } catch (error) {
-      console.error("Failed to create query:", error);
+      ErrorService.handleQueryError(error, "create query");
       throw error;
     }
   },
@@ -284,15 +289,24 @@ export const useQueryStore = create<QueryState>((set, get) => ({
   // Save query version
   saveQueryVersion: async (queryId, sql, saveTrigger) => {
     try {
-      await createQueryVersion({
+      const newVersion = await createQueryVersion({
         query_id: queryId,
         sql,
         save_trigger: saveTrigger
       });
 
-      // Reload versions to get the latest
-      const currentState = get();
-      await currentState.loadQueryVersions(queryId);
+      // Update the queryVersions cache with the new version
+      set((state) => {
+        const existingVersions = state.queryVersions[queryId] || [];
+        return {
+          queryVersions: {
+            ...state.queryVersions,
+            [queryId]: [newVersion, ...existingVersions] // Add new version at the beginning (latest first)
+          }
+        };
+      });
+
+      return newVersion;
     } catch (error) {
       console.error("Failed to save query version:", error);
       throw error;
@@ -309,18 +323,6 @@ export const useQueryStore = create<QueryState>((set, get) => ({
         queries: { ...state.queries, [queryId]: updatedQuery }
       }));
 
-      // Update any open tabs that reference this query
-      const { useTabStore } = await import("./useTabStore");
-      const tabStore = useTabStore.getState();
-      const openTabs = tabStore.openTabs;
-
-      // Find tabs that have this queryId and update their titles
-      for (const tab of openTabs) {
-        if (tab.queryId === queryId) {
-          tabStore.updateTabTitle(tab.id, updatedQuery.name || newName);
-        }
-      }
-
       return updatedQuery;
     } catch (error) {
       console.error("Failed to update query name:", error);
@@ -334,8 +336,8 @@ export const useQueryStore = create<QueryState>((set, get) => ({
       await deleteQuery(queryId);
 
       // Close any open tabs for this query
-      const { useTabStore } = await import("./useTabStore");
-      const { closeTabsByQueryId } = useTabStore.getState();
+      const { useTabManagerStore } = await import("./useTabManagerStore");
+      const { closeTabsByQueryId } = useTabManagerStore.getState();
       closeTabsByQueryId(queryId);
 
       // Remove the query from the store

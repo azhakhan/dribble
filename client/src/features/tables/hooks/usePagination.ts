@@ -1,4 +1,7 @@
-import { useTabStore } from "@/shared/store";
+import { useTabManagerStore } from "@/shared/store/useTabManagerStore";
+import { useTabExecutionStore } from "@/shared/store/useTabExecutionStore";
+import { useTableFilterStore } from "@/shared/store/useTableFilterStore";
+import type { TableData } from "@/shared/types/api";
 
 interface PaginationState {
   currentPage: number;
@@ -18,7 +21,7 @@ interface PaginationActions {
 }
 
 interface UsePaginationProps {
-  data: object[] | null;
+  data: TableData | null;
   isLoading: boolean;
 }
 
@@ -30,13 +33,9 @@ export const usePagination = ({
   actions: PaginationActions;
   pageSize: number;
 } => {
-  const {
-    activeTabId,
-    getTabFilterState,
-    setTableFilterOffset,
-    setTableFilterPageSize,
-    executeQuery
-  } = useTabStore();
+  const { activeTabId } = useTabManagerStore();
+  const { executeQuery } = useTabExecutionStore();
+  const { getTabFilterState, setTableFilterOffset, setTableFilterPageSize } = useTableFilterStore();
 
   const tabId = activeTabId || "default";
   const { currentOffset, pageSize, displaySize } = getTabFilterState(tabId);

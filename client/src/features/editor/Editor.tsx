@@ -2,11 +2,16 @@ import { useRef, useCallback, useMemo, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { PlayIcon, PencilIcon, CheckIcon, XIcon, Database, SaveIcon } from "lucide-react";
 import { toast } from "sonner";
-import { useTabStore, useSourceStore, useChatStore, useQueryStore } from "@/shared/store";
-import { LanguageIdEnum } from "@/shared/lib/monaco-setup";
+import { ErrorService, ErrorContext } from "@/shared/services";
+import { useTabManagerStore } from "@/shared/store/useTabManagerStore";
+import { useTabExecutionStore } from "@/shared/store/useTabExecutionStore";
+import { useUnsavedChangesStore } from "@/shared/store/useUnsavedChangesStore";
+import { useSourceStore, useChatStore } from "@/shared/store";
+import { getMonacoLanguage } from "@/shared/lib/monaco-setup";
 import { MonacoSQLEditor } from "./MonacoSQLEditor";
 import { MonacoDiffEditor } from "./MonacoDiffEditor";
 import { ProposedChangesBar } from "./ProposedChangesBar";
+import { QueryVersionService } from "@/shared/services";
 import { Input } from "@/components/ui/input";
 import { useState } from "react";
 
@@ -24,11 +29,11 @@ export function Editor({ tabId, onQueryExecuted }: EditorProps) {
   const [localEditorContent, setLocalEditorContent] = useState("");
 
   // Get all needed state from the store using selectors
-  const { openTabs, updateTabContent, executeQuery, saveChanges, hasUnsavedChanges } =
-    useTabStore();
+  const { openTabs, updateTabContent } = useTabManagerStore();
+  const { executeQuery } = useTabExecutionStore();
+  const { saveChanges } = useUnsavedChangesStore();
   const { sources, connectedSources } = useSourceStore();
   const { proposedChanges, acceptProposedChanges, rejectProposedChanges } = useChatStore();
-  const { updateQueryName } = useQueryStore();
 
   // Handle accept proposed changes with user feedback
   const handleAcceptProposedChanges = useCallback(() => {
@@ -42,8 +47,9 @@ export function Editor({ tabId, onQueryExecuted }: EditorProps) {
       await rejectProposedChanges();
       toast.success("Changes rejected and reverted");
     } catch (error) {
-      console.error("Failed to reject proposed changes:", error);
-      toast.error("Failed to reject changes");
+      ErrorService.handle(error, ErrorContext.QUERY_SAVING, {
+        userMessage: "Failed to reject changes"
+      });
     }
   }, [rejectProposedChanges]);
 
@@ -90,19 +96,6 @@ export function Editor({ tabId, onQueryExecuted }: EditorProps) {
 
   const canRunQueries = isEditorReady && isSourceConnected;
 
-  // Helper to map dbtype to Monaco language
-  const getMonacoLanguage = useCallback((dbtype?: string): string => {
-    if (!dbtype) return LanguageIdEnum.MYSQL;
-    switch (dbtype.toLowerCase()) {
-      case "postgres":
-        return LanguageIdEnum.PG;
-      case "mysql":
-        return LanguageIdEnum.MYSQL;
-      default:
-        return LanguageIdEnum.MYSQL;
-    }
-  }, []);
-
   // Handle content changes - now uses local state for immediate updates
   const handleContentChange = useCallback((content: string) => {
     // Update local state immediately for responsive typing
@@ -111,23 +104,28 @@ export function Editor({ tabId, onQueryExecuted }: EditorProps) {
 
   // Handle saving changes
   const handleSaveChanges = useCallback(async () => {
-    if (!currentTab || !hasUnsavedChanges(tabId)) return;
+    if (!currentTab || !currentTab.isDirty) return;
 
     try {
       await saveChanges(tabId);
       toast.success("Changes saved successfully");
     } catch (error) {
-      console.error("Failed to save changes:", error);
-      toast.error("Failed to save changes");
+      ErrorService.handle(error, ErrorContext.QUERY_SAVING, {
+        userMessage: "Failed to save changes"
+      });
     }
-  }, [currentTab, tabId, saveChanges, hasUnsavedChanges]);
+  }, [currentTab, tabId, saveChanges]);
 
   // Handle query execution
   const handleRunQuery = useCallback(
     async (sqlToRun?: string) => {
       if (!canRunQueries || !currentTab) {
         if (!isSourceConnected) {
-          toast.error("Cannot run query: Source is not connected");
+          ErrorService.handleConnectionError(
+            new Error("Source is not connected"),
+            tabSource?.id || "unknown",
+            tabSource?.name
+          );
         }
         return;
       }
@@ -141,8 +139,9 @@ export function Editor({ tabId, onQueryExecuted }: EditorProps) {
         await executeQuery(tabId, queryToRun);
         toast.success("Query executed successfully");
       } catch (error) {
-        console.error("Failed to execute query:", error);
-        toast.error("Failed to execute query");
+        ErrorService.handleQueryError(error, "execute query", {
+          queryId: currentTab?.queryId || undefined
+        });
       } finally {
         // Notify parent component that query execution completed (success or failure)
         // This ensures the query runs are refreshed to show the latest status
@@ -177,15 +176,26 @@ export function Editor({ tabId, onQueryExecuted }: EditorProps) {
     if (!currentTab?.queryId) return;
 
     try {
-      // Use the centralized updateQueryName from the store
-      await updateQueryName(currentTab.queryId, tempName.trim() || "Untitled Query");
-      setEditingName(false);
-      toast.success("Query name updated");
+      // Use QueryVersionService for proper tab synchronization
+      const result = await QueryVersionService.updateQueryName(
+        currentTab.queryId,
+        tempName.trim() || "Untitled Query"
+      );
+
+      if (result.success) {
+        setEditingName(false);
+        toast.success("Query name updated");
+      } else {
+        ErrorService.handle(new Error(result.error || "Unknown error"), ErrorContext.QUERY_SAVING, {
+          userMessage: "Failed to update query name"
+        });
+      }
     } catch (error) {
-      console.error("Failed to update query name:", error);
-      toast.error("Failed to update query name");
+      ErrorService.handle(error, ErrorContext.QUERY_SAVING, {
+        userMessage: "Failed to update query name"
+      });
     }
-  }, [currentTab?.queryId, tempName, updateQueryName]);
+  }, [currentTab?.queryId, tempName]);
 
   // Handle keyboard shortcuts
   useEffect(() => {

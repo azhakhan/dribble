@@ -18,6 +18,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Loader2 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
+import { useSourceStore } from "@/shared/store";
 import { toast } from "sonner";
 
 interface EditSourceProps {
@@ -34,6 +35,7 @@ export const EditSource = ({ open, onOpenChange, sourceId }: EditSourceProps) =>
   const [sourceType, setSourceType] = useState<"postgres" | "mysql" | "sqlite" | "">("");
   const [formError, setFormError] = useState("");
   const queryClient = useQueryClient();
+  const { loadSources } = useSourceStore();
 
   // PostgreSQL form state
   const [postgresConfig, setPostgresConfig] = useState<PostgresCreds>({
@@ -265,6 +267,7 @@ export const EditSource = ({ open, onOpenChange, sourceId }: EditSourceProps) =>
 
       // Invalidate sources query to refresh the list
       queryClient.invalidateQueries({ queryKey: ["sources"] });
+      await loadSources();
 
       onOpenChange(false);
     } catch (error) {

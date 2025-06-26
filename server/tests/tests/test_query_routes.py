@@ -10,8 +10,8 @@ client = TestClient(app)
 
 @pytest.fixture
 def sample_source_id():
-    """Get a sample source ID from the seeded test data."""
-    # This should match the source ID from your conftest.py seed data
+    """Get the sample source ID from the seeded test data."""
+    # This should match the source ID from conftest.py seed data
     return "84cd6fb6-2ad9-4f8b-8f95-b8701c09ea38"
 
 
@@ -19,9 +19,8 @@ def sample_source_id():
 def sample_query_data(sample_source_id):
     """Sample data for creating queries."""
     return {
+        "source_id": sample_source_id,
         "name": "Test Query",
-        "query": "SELECT * FROM users LIMIT 5",
-        "database_id": sample_source_id,
     }
 
 
@@ -41,30 +40,27 @@ class TestCreateQuery:
         assert response.status_code == 200
         data = response.json()
         assert data["name"] == sample_query_data["name"]
-        assert data["query"] == sample_query_data["query"]
-        assert data["source_id"] == sample_query_data["database_id"]
+        assert data["source_id"] == sample_query_data["source_id"]
         assert "id" in data
         assert "created_at" in data
 
     def test_create_query_invalid_source(self):
         """Test query creation with invalid source ID."""
         invalid_data = {
+            "source_id": str(uuid.uuid4()),  # Non-existent source
             "name": "Test Query",
-            "query": "SELECT * FROM users",
-            "database_id": str(uuid.uuid4()),  # Non-existent source
         }
 
         response = client.post("/query/", json=invalid_data)
 
-        # This should still create the query (foreign key constraint might not be enforced)
-        # but in a real scenario, you might want to validate the source exists
-        assert response.status_code in [200, 500]  # Depends on your FK constraints
+        # Should return 500 due to foreign key constraint violation
+        assert response.status_code == 500
 
     def test_create_query_missing_fields(self):
         """Test query creation with missing required fields."""
         incomplete_data = {
             "name": "Test Query"
-            # Missing query and database_id
+            # Missing source_id
         }
 
         response = client.post("/query/", json=incomplete_data)
@@ -85,7 +81,6 @@ class TestUpdateQuery:
         # Update the query
         update_data = {
             "name": "Updated Query Name",
-            "query": "SELECT COUNT(*) FROM users WHERE active = true",
         }
 
         response = client.put(f"/query/{query_id}", json=update_data)
@@ -93,7 +88,6 @@ class TestUpdateQuery:
         assert response.status_code == 200
         data = response.json()
         assert data["name"] == update_data["name"]
-        assert data["query"] == update_data["query"]
         assert data["id"] == query_id
 
     def test_update_query_partial(self, sample_query_data):
@@ -102,7 +96,6 @@ class TestUpdateQuery:
         create_response = client.post("/query/", json=sample_query_data)
         assert create_response.status_code == 200
         query_id = create_response.json()["id"]
-        original_query = create_response.json()["query"]
 
         # Update only the name
         update_data = {"name": "New Name Only"}
@@ -112,7 +105,6 @@ class TestUpdateQuery:
         assert response.status_code == 200
         data = response.json()
         assert data["name"] == update_data["name"]
-        assert data["query"] == original_query  # Should remain unchanged
 
     def test_update_query_not_found(self):
         """Test updating non-existent query."""
@@ -182,16 +174,16 @@ class TestExecuteQuery:
 
 
 class TestGetQueryResults:
-    """Test the GET /query/results/{query_id}/ endpoint."""
+    """Test the GET /execution/run-results/{run_id} endpoint."""
 
     def test_get_results_not_found(self):
-        """Test getting results for non-existent query."""
+        """Test getting results for non-existent query run."""
         fake_id = str(uuid.uuid4())
 
-        response = client.get(f"/query/results/{fake_id}/")
+        response = client.get(f"/execution/run-results/{fake_id}")
 
         assert response.status_code == 404
-        assert response.json()["detail"] == "Query results not found"
+        assert response.json()["detail"] == "Query run results not found"
 
 
 # Integration test that combines multiple operations

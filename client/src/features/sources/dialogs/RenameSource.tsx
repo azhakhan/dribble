@@ -1,18 +1,10 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { renameSource } from "@/shared/lib/api";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-  DialogClose
-} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Loader2 } from "lucide-react";
+import { Check, X, Loader2 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
+import { useSourceStore } from "@/shared/store";
 import { toast } from "sonner";
 
 interface RenameSourceProps {
@@ -20,31 +12,65 @@ interface RenameSourceProps {
   onOpenChange: (open: boolean) => void;
   sourceId: string;
   sourceName: string;
+  triggerRef: React.RefObject<HTMLButtonElement | null>;
 }
 
-export const RenameSource = ({ open, onOpenChange, sourceId, sourceName }: RenameSourceProps) => {
+export const RenameSource = ({
+  open,
+  onOpenChange,
+  sourceId,
+  sourceName,
+  triggerRef
+}: RenameSourceProps) => {
   const [newName, setNewName] = useState(sourceName);
   const [loading, setLoading] = useState(false);
+  const [position, setPosition] = useState({ top: 0, left: 0 });
+  const formRef = useRef<HTMLDivElement>(null);
   const queryClient = useQueryClient();
+  const { loadSources } = useSourceStore();
 
   // Reset name when dialog opens or sourceName changes
   useEffect(() => {
     if (open) {
       setNewName(sourceName);
+
+      // Calculate position relative to trigger
+      if (triggerRef.current) {
+        const triggerRect = triggerRef.current.getBoundingClientRect();
+        setPosition({
+          top: triggerRect.bottom + 4,
+          left: triggerRect.left
+        });
+      }
     }
-  }, [open, sourceName]);
+  }, [open, sourceName, triggerRef]);
+
+  // Close on outside click
+  useEffect(() => {
+    if (!open) return;
+
+    const handleClickOutside = (event: MouseEvent) => {
+      if (formRef.current && !formRef.current.contains(event.target as Node)) {
+        onOpenChange(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [open, onOpenChange]);
 
   const handleRename = async () => {
-    if (!newName.trim()) {
-      toast.error("Source name cannot be empty");
+    if (!newName.trim() || newName.trim() === sourceName) {
+      onOpenChange(false);
       return;
     }
 
     try {
       setLoading(true);
-      await renameSource(sourceId, newName);
+      await renameSource(sourceId, newName.trim());
       queryClient.invalidateQueries({ queryKey: ["sources"] });
-      toast.success(`Source renamed to "${newName}"`);
+      await loadSources();
+      toast.success(`Source renamed to "${newName.trim()}"`);
       onOpenChange(false);
     } catch (error) {
       toast.error("Failed to rename source");
@@ -58,46 +84,62 @@ export const RenameSource = ({ open, onOpenChange, sourceId, sourceName }: Renam
     setNewName(e.target.value);
   };
 
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    e.stopPropagation();
+    if (e.key === "Enter" && !loading) {
+      e.preventDefault();
+      handleRename();
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      onOpenChange(false);
+    }
+  };
+
+  if (!open) return null;
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[425px]">
-        <DialogHeader>
-          <DialogTitle>Rename Source</DialogTitle>
-          <DialogDescription>Enter a new name for the source.</DialogDescription>
-        </DialogHeader>
-        <div className="grid gap-4 py-4">
-          <div className="grid grid-cols-4 items-center gap-4">
-            <label htmlFor="new-name" className="text-right text-sm font-medium">
-              New Name
-            </label>
-            <Input
-              id="new-name"
-              className="col-span-3"
-              value={newName}
-              onChange={handleInputChange}
-              disabled={loading}
-              autoFocus
-            />
-          </div>
-        </div>
-        <DialogFooter>
-          <DialogClose asChild>
-            <Button variant="outline" disabled={loading} size="sm">
-              Cancel
-            </Button>
-          </DialogClose>
-          <Button onClick={handleRename} disabled={loading} size="sm">
-            {loading ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                Renaming...
-              </>
-            ) : (
-              "Rename"
-            )}
+    <>
+      {/* Backdrop */}
+      <div className="fixed inset-0 z-40" />
+
+      {/* Positioned form */}
+      <div
+        ref={formRef}
+        className="fixed z-50 bg-popover border rounded-md shadow-lg p-3"
+        style={{
+          top: position.top,
+          left: position.left,
+          minWidth: "200px"
+        }}
+      >
+        <div className="flex items-center gap-2">
+          <Input
+            value={newName}
+            onChange={handleInputChange}
+            onKeyDown={handleKeyDown}
+            disabled={loading}
+            placeholder="Enter source name..."
+            className="text-xs h-7 flex-1"
+          />
+          <Button
+            size="sm"
+            onClick={handleRename}
+            disabled={loading || !newName.trim()}
+            className="h-7 w-7 p-0"
+          >
+            {loading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
           </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+            disabled={loading}
+            className="h-7 w-7 p-0"
+          >
+            <X className="h-3 w-3" />
+          </Button>
+        </div>
+      </div>
+    </>
   );
 };

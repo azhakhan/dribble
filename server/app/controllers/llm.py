@@ -347,24 +347,55 @@ def is_safe_query(query: str) -> bool:
     if not (cleaned_query.startswith("SELECT") or cleaned_query.startswith("WITH")):
         return False
 
-    # Check for dangerous keywords
-    dangerous_keywords = [
-        "DELETE",
-        "DROP",
-        "TRUNCATE",
-        "INSERT",
-        "UPDATE",
-        "ALTER",
-        "CREATE",
-        "GRANT",
-        "REVOKE",
-        "EXEC",
-        "EXECUTE",
-    ]
+    # For WITH queries, ensure they end with SELECT and don't contain dangerous operations
+    if cleaned_query.startswith("WITH"):
+        # Check for dangerous keywords that would indicate non-read operations
+        dangerous_keywords = [
+            "DELETE",
+            "DROP",
+            "TRUNCATE",
+            "INSERT",
+            "UPDATE",
+            "ALTER",
+            "CREATE",
+            "GRANT",
+            "REVOKE",
+            "EXEC",
+            "EXECUTE",
+        ]
 
-    for keyword in dangerous_keywords:
-        if keyword in cleaned_query:
+        # Split the query to separate the WITH clause from the main query
+        # Find the final SELECT statement
+        parts = cleaned_query.split()
+        select_found = False
+        for i, part in enumerate(parts):
+            if part == "SELECT" and i > 0:  # Not the first word (which would be WITH)
+                select_found = True
+            elif part in dangerous_keywords:
+                return False
+
+        # WITH queries must contain at least one SELECT
+        if not select_found:
             return False
+    else:
+        # For regular SELECT queries, check for dangerous keywords
+        dangerous_keywords = [
+            "DELETE",
+            "DROP",
+            "TRUNCATE",
+            "INSERT",
+            "UPDATE",
+            "ALTER",
+            "CREATE",
+            "GRANT",
+            "REVOKE",
+            "EXEC",
+            "EXECUTE",
+        ]
+
+        for keyword in dangerous_keywords:
+            if keyword in cleaned_query:
+                return False
 
     return True
 
