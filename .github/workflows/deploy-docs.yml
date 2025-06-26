@@ -1,9 +1,9 @@
 name: Deploy Documentation to GitHub Pages
 
 on:
-  # Runs on pushes targeting the default branch
+  # Runs on pushes targeting the az/v2 branch
   push:
-    branches: ["main"]
+    branches: ["az/v2"]
     paths: ["docs/**"]
 
   # Allows you to run this workflow manually from the Actions tab
