@@ -6,7 +6,7 @@ slug: /
 
 **Dribble** is an AI-powered, open source SQL IDE that makes working with databases simple and intuitive. Connect to multiple databases, write queries with AI assistance, and explore your data all in one interface.
 
-![Dribble Interface](../../image.png)
+![Dribble Interface](/img/dribble-interface.png)
 
 ## What makes Dribble special?
 
