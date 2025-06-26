@@ -105,8 +105,9 @@ export class TabNavigationService {
         const query = queryStore.queries[activeTab.queryId];
         const querySource = query?.source_id ? sourceStore.sources[query.source_id] : null;
 
-        // Only load latest version from server if tab is not dirty
-        if (!activeTab.isDirty) {
+        // Only load latest version from server if tab is not dirty AND
+        // the tab doesn't already have a version loaded
+        if (!activeTab.isDirty && !activeTab.queryVersionId) {
           const latestVersion = await queryStore.loadLatestQueryVersion(activeTab.queryId);
 
           // Update the tab with the latest content
@@ -128,7 +129,8 @@ export class TabNavigationService {
           // Update global editorContent for backward compatibility
           contentStore.setEditorContent(latestVersion?.sql || activeTab.editorContent);
         } else {
-          // Tab has unsaved changes, just update global editorContent without overwriting tab content
+          // Tab has unsaved changes or already has a version loaded,
+          // just update global editorContent without making API calls
           contentStore.setEditorContent(activeTab.editorContent);
         }
 
