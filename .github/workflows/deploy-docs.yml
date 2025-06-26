@@ -35,18 +35,25 @@ jobs:
         with:
           node-version: "18"
           cache: "npm"
+          cache-dependency-path: docs/package-lock.json
 
       - name: Setup GitHub Pages
         uses: actions/configure-pages@v4
 
-      - name: Install dependencies
+      - name: Clean install dependencies
         run: npm ci
 
       - name: Build Docusaurus site
         run: npm run build
 
       - name: List built files (for debugging)
-        run: ls -la build
+        run: |
+          echo "Build directory contents:"
+          ls -la build
+          echo "Checking for index.html:"
+          ls -la build/index.html
+          echo "Checking for CNAME:"
+          ls -la build/CNAME
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
