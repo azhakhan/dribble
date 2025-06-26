@@ -1,6 +1,8 @@
 import { create } from "zustand";
-import { QueryExecutionService, type QueryExecutionOptions } from "@/shared/services";
+import { QueryExecutionServiceSSE, type QueryExecutionOptions } from "@/shared/services";
 import { errorToTableData } from "@/shared/utils/errorUtils";
+import { useSSEStore } from "@/shared/store/useSSEStore";
+import { convertToTableData } from "@/shared/utils/typeUtils";
 
 interface TabExecutionState {
   // Query execution
@@ -37,27 +39,93 @@ export const useTabExecutionStore = create<TabExecutionState>()(() => ({
         overrideFilters
       };
 
-      // Delegate to the service
-      const result = await QueryExecutionService.executeQuery(tab, options);
+      // Delegate to the SSE service
+      const result = await QueryExecutionServiceSSE.executeQuery(tab, options);
 
-      if (result.success) {
-        // Update tab with successful results
-        const finalTabs = useTabManagerStore.getState().openTabs;
-        const updatedFinalTabs = finalTabs.map((t) =>
-          t.id === tabId
-            ? {
-                ...t,
-                queryRunning: false,
-                queryResults: result.results || null
-              }
-            : t
+      if (result.success && result.queryRunId) {
+        // Set up SSE connection for real-time updates
+        const sseStore = useSSEStore.getState();
+
+        // Create EventSource for SSE connection
+        const eventSource = new EventSource(
+          `http://localhost:8000/stream/query-results/${result.queryRunId}`
         );
-        useTabManagerStore.setState({ openTabs: updatedFinalTabs });
+
+        // Add connection to store
+        sseStore.addConnection(result.queryRunId, eventSource);
+
+        // Set up event handlers
+        eventSource.onopen = () => {
+          sseStore.updateConnectionStatus(result.queryRunId!, "connected");
+        };
+
+        eventSource.onmessage = (event) => {
+          try {
+            const message = JSON.parse(event.data);
+
+            // Update SSE store
+            sseStore.updateQueryStatus(
+              result.queryRunId!,
+              message.status,
+              message.data,
+              message.error
+            );
+
+            // Update tab state
+            const currentTabs = useTabManagerStore.getState().openTabs;
+            const updatedTabs = currentTabs.map((t) => {
+              if (t.id !== tabId) return t;
+
+              if (message.status === "success" && message.data) {
+                return {
+                  ...t,
+                  queryRunning: false,
+                  queryResults: convertToTableData(message.data)
+                };
+              } else if (message.status === "error") {
+                return {
+                  ...t,
+                  queryRunning: false,
+                  queryResults: errorToTableData(message.error || "Query execution failed")
+                };
+              } else if (message.status === "running") {
+                return {
+                  ...t,
+                  queryRunning: true
+                };
+              }
+              return t;
+            });
+            useTabManagerStore.setState({ openTabs: updatedTabs });
+
+            // Close connection if query is complete
+            if (message.status === "success" || message.status === "error") {
+              eventSource.close();
+              sseStore.removeConnection(result.queryRunId!);
+            }
+          } catch (error) {
+            console.error("Error parsing SSE message:", error);
+          }
+        };
+
+        eventSource.onerror = () => {
+          sseStore.updateConnectionStatus(result.queryRunId!, "error");
+          const errorTabs = useTabManagerStore.getState().openTabs;
+          const updatedErrorTabs = errorTabs.map((t) =>
+            t.id === tabId
+              ? {
+                  ...t,
+                  queryRunning: false,
+                  queryResults: errorToTableData("Connection error")
+                }
+              : t
+          );
+          useTabManagerStore.setState({ openTabs: updatedErrorTabs });
+        };
 
         // Refresh query data if we have a queryId
-        const finalTab = updatedFinalTabs.find((t) => t.id === tabId);
-        if (finalTab?.queryId) {
-          await QueryExecutionService.refreshQueryData(finalTab.queryId);
+        if (tab.queryId) {
+          await QueryExecutionServiceSSE.refreshQueryData(tab.queryId);
         }
       } else {
         // Handle execution failure
