@@ -67,6 +67,9 @@ interface SSEState {
   // Cleanup functions
   clearAllData: () => void;
 
+  // Mark query as cancelled immediately (client-side cancellation)
+  markQueryCancelled: (queryId: string, runId: string, error?: string) => void;
+
   // Debug helper method
   getDebugInfo: () => {
     queryCount: number;
@@ -110,6 +113,16 @@ export const useSSEStore = create<SSEState>((set, get) => ({
         return state;
       }
 
+      // If the current latest run for this query is already cancelled,
+      // ignore any subsequent results from this run
+      if (
+        existingQuery?.latestRun?.status === "cancelled" &&
+        existingQuery?.latestRun?.runId === runId
+      ) {
+        // Run was cancelled, ignore worker results
+        return state;
+      }
+
       const newRunResult: RunResult = {
         runId,
         queryId,
@@ -123,6 +136,39 @@ export const useSSEStore = create<SSEState>((set, get) => ({
         queryId,
         latestRun: newRunResult,
         awaitingRunId: status === "running" ? runId : null // Clear awaiting if completed
+      };
+
+      return {
+        queries: {
+          ...state.queries,
+          [queryId]: updatedQuery
+        }
+      };
+    });
+  },
+
+  markQueryCancelled: (queryId, runId, error) => {
+    set((state) => {
+      const existingQuery = state.queries[queryId];
+
+      // Only update if this run is what we're waiting for
+      if (!existingQuery || existingQuery.awaitingRunId !== runId) {
+        return state;
+      }
+
+      const cancelledRunResult: RunResult = {
+        runId,
+        queryId,
+        status: "cancelled",
+        timestamp: Date.now(),
+        data: existingQuery?.latestRun?.data || undefined, // Keep existing data
+        error: error || "Query execution was cancelled"
+      };
+
+      const updatedQuery: QueryWithLatestRun = {
+        queryId,
+        latestRun: cancelledRunResult,
+        awaitingRunId: null // Clear awaiting since we're marking as cancelled
       };
 
       return {
@@ -192,9 +238,11 @@ export const useSSEStore = create<SSEState>((set, get) => ({
   },
 
   addActiveRun: (runId) => {
-    set((state) => ({
-      activeRuns: new Set([...state.activeRuns, runId])
-    }));
+    set((state) => {
+      const newActiveRuns = new Set(state.activeRuns);
+      newActiveRuns.add(runId);
+      return { activeRuns: newActiveRuns };
+    });
   },
 
   removeActiveRun: (runId) => {

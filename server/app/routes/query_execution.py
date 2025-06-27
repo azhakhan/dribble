@@ -14,6 +14,11 @@ from app.models import Source, Query, QueryRun
 from sqlalchemy.orm import Session
 from fastapi import Depends
 from app.core.db_utils import get_or_404
+from datetime import datetime
+import asyncio
+import requests
+from app.schemas.query_run import UpdateQueryRunRequest
+from app.controllers.query import publish_cancellation_result
 
 
 router = APIRouter(prefix="/execution", tags=["query-execution"])
@@ -85,6 +90,65 @@ async def cancel_query_run(
             }
 
         return result
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+
+@router.post("/cancel-immediate/{query_run_id}")
+async def cancel_query_run_immediate(
+    query_run_id: UUID,
+    db: Session = Depends(get_db),
+):
+    """Immediately mark a query run as cancelled without waiting for worker response"""
+    try:
+        # Get the query run
+        query_run = get_or_404(db, QueryRun, query_run_id, "Query run not found")
+
+        # Get the query version to get the query and source
+        version = QueryVersionService.get_version_by_id(db, query_run.query_version_id)
+        query = get_or_404(db, Query, version.query_id, "Query not found")
+
+        # Calculate execution time from creation until now
+        execution_time_ms = int((datetime.now() - query_run.created_at).total_seconds() * 1000)
+
+        # Update query run as cancelled in database
+        update_request = UpdateQueryRunRequest(
+            error_message="Query execution was cancelled by user",
+            execution_time_ms=execution_time_ms,
+        )
+        QueryRunService.update_run(db, query_run_id, update_request)
+
+        # Try to send cancellation to worker but don't wait for response
+        # This is fire-and-forget to let worker know it can stop processing
+        try:
+            source = get_or_404(db, Source, query.source_id, "Source not found")
+            container_name = f"dribble-worker-{source.dbtype}-{query.source_id}"
+            asyncio.create_task(
+                asyncio.wait_for(
+                    asyncio.to_thread(
+                        lambda: requests.post(
+                            f"http://{container_name}:8000/cancel/{query_run_id}", timeout=1
+                        )
+                    ),
+                    timeout=1.5,
+                )
+            )
+        except Exception:
+            # Ignore worker communication errors - cancellation is already marked in DB
+            pass
+
+        # Publish cancellation result to SSE
+        await publish_cancellation_result(
+            str(query_run_id), str(query.id), "Query execution was cancelled by user"
+        )
+
+        return {
+            "query_run_id": str(query_run_id),
+            "status": "cancelled",
+            "execution_time_ms": execution_time_ms,
+            "message": "Query marked as cancelled",
+        }
+
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
 

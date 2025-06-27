@@ -14,14 +14,18 @@ from app.models import Source
 logger = logging.getLogger(__name__)
 
 
-async def publish_cancellation_result(query_run_id: str, error: str = None):
+async def publish_cancellation_result(query_run_id: str, query_id: str = None, error: str = None):
     """Publish query cancellation to Redis pub/sub channel for real-time notifications"""
     try:
         message = {
+            "type": "query_result",
             "query_run_id": query_run_id,
             "status": "cancelled",
             "timestamp": time.time(),
         }
+
+        if query_id is not None:
+            message["query_id"] = query_id
 
         if error is not None:
             message["error"] = error
@@ -137,7 +141,7 @@ async def cancel_query_in_worker_async(query_run_id: UUID, source_id: UUID, db: 
         try:
             await set_result(query_run_id, {"status": "cancelled", "error": error_msg})
             # Also publish to the pub/sub channel for real-time updates
-            await publish_cancellation_result(str(query_run_id), error_msg)
+            await publish_cancellation_result(str(query_run_id), None, error_msg)
         except Exception as redis_error:
             logger.error(f"Failed to set cancelled status in Redis: {redis_error}")
 

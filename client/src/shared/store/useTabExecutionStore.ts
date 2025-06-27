@@ -3,7 +3,6 @@ import { QueryExecutionServiceSSE, type QueryExecutionOptions } from "@/shared/s
 import { errorToTableData } from "@/shared/utils/errorUtils";
 import { useSSEStore } from "@/shared/store/useSSEStore";
 import { convertToTableData } from "@/shared/utils/typeUtils";
-import { cancelQueryRun } from "@/shared/lib/api";
 
 interface TabExecutionState {
   // Query execution
@@ -205,31 +204,48 @@ export const useTabExecutionStore = create<TabExecutionState>()(() => ({
     }
 
     try {
-      // Cancel the query run
-      await cancelQueryRun(tab.queryRunId);
+      // Import the new immediate cancellation API
+      const { cancelQueryRunImmediate } = await import("@/shared/lib/api");
+      const { useSSEStore } = await import("./useSSEStore");
 
-      // Update tab state to reflect cancellation
+      // Immediately mark query as cancelled in the SSE store
+      const sseStore = useSSEStore.getState();
+      sseStore.markQueryCancelled(
+        tab.queryId!,
+        tab.queryRunId,
+        "Query execution was cancelled by user"
+      );
+
+      // Update tab state immediately - keep existing data, just stop running state
       const updatedTabs = tabManager.openTabs.map((t) =>
         t.id === tabId
           ? {
               ...t,
               queryRunning: false,
               queryRunId: null,
-              queryResults: errorToTableData("Query execution was cancelled")
+              isLoadingQuery: false // Reset loading state so run button becomes active
+              // Keep queryResults as-is (don't replace with error message)
             }
           : t
       );
       useTabManagerStore.setState({ openTabs: updatedTabs });
+
+      // Call the immediate cancellation API (this updates DB and sends fire-and-forget to worker)
+      await cancelQueryRunImmediate(tab.queryRunId);
+
+      console.log(`Query ${tab.queryRunId} marked as cancelled`);
     } catch (error) {
       console.error("Failed to cancel query:", error);
-      // Update tab state even if cancellation failed
+
+      // Even if the API call failed, we've already updated the client state
+      // Just log the error and keep the cancelled state
       const updatedTabs = tabManager.openTabs.map((t) =>
         t.id === tabId
           ? {
               ...t,
               queryRunning: false,
               queryRunId: null,
-              queryResults: errorToTableData("Failed to cancel query - it may still be running")
+              isLoadingQuery: false
             }
           : t
       );
