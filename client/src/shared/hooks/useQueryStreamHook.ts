@@ -49,7 +49,7 @@ export function useQueryStream(
 
       // Set up message handler for callbacks
       const handler: SSEMessageHandler = {
-        onRunResult: (receivedQueryId, runId, runResult) => {
+        onRunResult: (receivedQueryId, _runId, runResult) => {
           if (receivedQueryId === queryId) {
             // Call optional callbacks
             if (onStatusChange) {

@@ -166,7 +166,6 @@ export function Editor({ tabId, onQueryExecuted }: EditorProps) {
 
     try {
       await cancelQuery(tabId);
-      toast.success("Query cancelled successfully");
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Unknown error";
 

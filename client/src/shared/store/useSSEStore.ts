@@ -145,6 +145,19 @@ export const useSSEStore = create<SSEState>((set, get) => ({
         }
       };
     });
+
+    // Trigger refresh of query runs in the main store when query completes
+    if (status === "success" || status === "error" || status === "cancelled") {
+      // Import dynamically to avoid circular dependency
+      import("./useQueryStore").then(({ useQueryStore }) => {
+        const queryStore = useQueryStore.getState();
+        const pagination = queryStore.queryRunsPagination[queryId];
+        if (pagination) {
+          // Refresh current page to show the completed run
+          queryStore.loadQueryRunsPaginated(queryId, pagination.page, pagination.page_size, true);
+        }
+      });
+    }
   },
 
   markQueryCancelled: (queryId, runId, error) => {
@@ -177,6 +190,16 @@ export const useSSEStore = create<SSEState>((set, get) => ({
           [queryId]: updatedQuery
         }
       };
+    });
+
+    // Trigger refresh of query runs in the main store when query is cancelled
+    import("./useQueryStore").then(({ useQueryStore }) => {
+      const queryStore = useQueryStore.getState();
+      const pagination = queryStore.queryRunsPagination[queryId];
+      if (pagination) {
+        // Refresh current page to show the cancelled run
+        queryStore.loadQueryRunsPaginated(queryId, pagination.page, pagination.page_size, true);
+      }
     });
   },
 
