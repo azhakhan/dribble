@@ -130,6 +130,11 @@ export function Editor({ tabId, onQueryExecuted }: EditorProps) {
         return;
       }
 
+      // Prevent duplicate query runs if a query is already running
+      if (currentTab.queryRunning) {
+        return;
+      }
+
       const queryToRun =
         sqlToRun || (proposedChanges ? proposedChanges.proposedContent : localEditorContent);
       if (!queryToRun.trim()) return;
