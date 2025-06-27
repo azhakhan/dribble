@@ -1,12 +1,12 @@
 from fastapi import APIRouter, HTTPException, Response
-from app.controllers.query import execute_in_worker_version
+from app.controllers.query import execute_in_worker_version, cancel_query_in_worker
 from uuid import UUID
 from app.core._redis import get_result
 from app.schemas.query_execute import CreateQueryRunRequest
 from app.controllers.query_service import QueryRunService, QueryVersionService
 from app.schemas.query_execute import ExecuteQueryVersionRequest
 from app.core.db import get_db
-from app.models import Source, Query
+from app.models import Source, Query, QueryRun
 from sqlalchemy.orm import Session
 from fastapi import Depends
 from app.core.db_utils import get_or_404
@@ -45,6 +45,28 @@ async def execute_query_version_run(
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
+@router.post("/cancel/{query_run_id}")
+async def cancel_query_run(
+    query_run_id: UUID,
+    db: Session = Depends(get_db),
+):
+    """Cancel a running query by query_run_id"""
+    try:
+        # Get the query run to find the source
+        query_run = get_or_404(db, QueryRun, query_run_id, "Query run not found")
+
+        # Get the query version to get the query
+        version = QueryVersionService.get_version_by_id(db, query_run.query_version_id)
+        query = get_or_404(db, Query, version.query_id, "Query not found")
+
+        # Cancel the query in the worker
+        result = cancel_query_in_worker(query_run_id, query.source_id, db)
+
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+
 @router.get("/run-results/{run_id}")
 async def get_query_run_results(run_id: UUID, response: Response):
     """Get query run execution results"""
@@ -59,6 +81,9 @@ async def get_query_run_results(run_id: UUID, response: Response):
         if result.get("status") == "error":
             response.status_code = 500
             return {"status": "error", "error": result["error"]}
+        if result.get("status") == "cancelled":
+            response.status_code = 409  # Conflict status for cancelled
+            return {"status": "cancelled", "error": result.get("error", "Query was cancelled")}
         if result.get("status") == "success":
             return result["data"] if result.get("data") else []
         else:

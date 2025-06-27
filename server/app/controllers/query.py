@@ -44,6 +44,32 @@ def execute_in_worker_version(request: ExecuteQueryVersionRequest, db: Session):
     return response.json()
 
 
+def cancel_query_in_worker(query_run_id: UUID, source_id: UUID, db: Session):
+    """Cancel a running query in the appropriate worker container"""
+    # Get the source to determine the database type
+    source = db.query(Source).filter(Source.id == source_id).first()
+    if not source:
+        raise Exception(f"Source {source_id} not found")
+
+    container_name = f"dribble-worker-{source.dbtype}-{source_id}"
+    try:
+        response = requests.post(
+            f"http://{container_name}:8000/cancel/{query_run_id}",
+            timeout=10,  # Longer timeout for cancellation
+        )
+        if response.status_code == 404:
+            raise Exception("Query not found or already completed")
+        elif response.status_code == 400:
+            raise Exception("Query is already completed")
+        elif response.status_code != 200:
+            raise Exception(f"Worker returned error: {response.text}")
+
+        return response.json()
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Failed to cancel query {query_run_id} in worker: {str(e)}")
+        raise Exception(f"Failed to communicate with worker: {str(e)}") from e
+
+
 async def get_query_results(query_id: UUID):
     # check for results in redis
     result = await get_result(query_id)

@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from contextlib import asynccontextmanager
 from sqlalchemy import text
 from sqlalchemy.exc import OperationalError
@@ -29,6 +29,8 @@ async def lifespan(app: FastAPI):
         env_config = validate_environment()
         app.state.engine = create_database_engine(env_config["db_creds"])
         app.state.server_url = env_config["server_url"]
+        # Initialize task tracking for query cancellation
+        app.state.running_tasks = {}
 
         # Test the connection immediately to catch credential issues early
         with get_database_connection(app.state.engine) as conn:
@@ -95,6 +97,15 @@ async def run_query(request: QueryRequest):
             # Publish success notification
             await publish_result(request.query_id, "success", data=result["data"])
 
+        except asyncio.CancelledError:
+            execution_time_ms = int((time.time() - start_time) * 1000)
+            logger.info(f"Query {request.query_id} was cancelled after {execution_time_ms}ms")
+            await set_result(
+                request.query_id, {"status": "cancelled", "error": "Query was cancelled"}
+            )
+            # Publish cancellation notification
+            await publish_result(request.query_id, "cancelled", error="Query was cancelled")
+            raise  # Re-raise to properly handle cancellation
         except QueryExecutionError as e:
             execution_time_ms = int((time.time() - start_time) * 1000)
             logger.error(f"Query {request.query_id} failed after {execution_time_ms}ms: {str(e)}")
@@ -119,8 +130,12 @@ async def run_query(request: QueryRequest):
             await set_result(request.query_id, {"status": "error", "error": str(e)})
             # Publish error notification
             await publish_result(request.query_id, "error", error=str(e))
+        finally:
+            # Clean up the task from tracking
+            app.state.running_tasks.pop(request.query_id, None)
 
-    asyncio.create_task(execute_sql_query())
+    task = asyncio.create_task(execute_sql_query())
+    app.state.running_tasks[request.query_id] = task
     return {"query_id": request.query_id, "status": "started"}
 
 
@@ -168,6 +183,28 @@ async def run_query_version(request: QueryVersionRequest):
             # Publish success notification
             await publish_result(request.query_run_id, "success", data=result["data"])
 
+        except asyncio.CancelledError:
+            execution_time_ms = int((time.time() - start_time) * 1000)
+            logger.info(f"Query {request.query_run_id} was cancelled after {execution_time_ms}ms")
+
+            # Create cancellation update request for the server
+            update_request = UpdateQueryRunRequest(
+                result_message=None,
+                row_count=0,
+                execution_time_ms=execution_time_ms,
+                error_message="Query was cancelled",
+            )
+
+            # Call the server to update the query run with cancellation
+            await _update_server_query_run(request.query_run_id, update_request)
+
+            # Update the result cache with cancellation
+            await set_result(
+                request.query_run_id, {"status": "cancelled", "error": "Query was cancelled"}
+            )
+            # Publish cancellation notification
+            await publish_result(request.query_run_id, "cancelled", error="Query was cancelled")
+            raise  # Re-raise to properly handle cancellation
         except QueryExecutionError as e:
             execution_time_ms = int((time.time() - start_time) * 1000)
             error_message = str(e)
@@ -230,8 +267,12 @@ async def run_query_version(request: QueryVersionRequest):
             await set_result(request.query_run_id, {"status": "error", "error": error_message})
             # Publish error notification
             await publish_result(request.query_run_id, "error", error=error_message)
+        finally:
+            # Clean up the task from tracking
+            app.state.running_tasks.pop(request.query_run_id, None)
 
-    asyncio.create_task(execute_sql_query())
+    task = asyncio.create_task(execute_sql_query())
+    app.state.running_tasks[request.query_run_id] = task
     return {"query_run_id": request.query_run_id, "status": "started"}
 
 
@@ -239,6 +280,49 @@ async def run_query_version(request: QueryVersionRequest):
 def get_schema():
     """Get PostgreSQL schema information"""
     return get_postgres_schemas(app.state.engine)
+
+
+@app.post("/cancel/{query_run_id}")
+async def cancel_query(query_run_id: str):
+    """Cancel a running query by query_run_id"""
+    logger.info(f"Received cancellation request for query: {query_run_id}")
+
+    # Check if the query is currently running
+    task = app.state.running_tasks.get(query_run_id)
+
+    if not task:
+        logger.warning(f"No running task found for query {query_run_id}")
+        raise HTTPException(status_code=404, detail="Query not found or already completed")
+
+    if task.done():
+        logger.info(f"Query {query_run_id} is already completed")
+        # Clean up the completed task
+        app.state.running_tasks.pop(query_run_id, None)
+        raise HTTPException(status_code=400, detail="Query is already completed")
+
+    # Cancel the task
+    try:
+        task.cancel()
+        logger.info(f"Successfully requested cancellation for query {query_run_id}")
+
+        # Wait a short time for the cancellation to be processed
+        try:
+            await asyncio.wait_for(task, timeout=1.0)
+        except asyncio.CancelledError:
+            logger.info(f"Query {query_run_id} was successfully cancelled")
+        except asyncio.TimeoutError:
+            logger.warning(
+                f"Query {query_run_id} cancellation timed out, but cancellation was requested"
+            )
+        except Exception:
+            # Task might have completed normally or with an error during cancellation
+            pass
+
+        return {"query_run_id": query_run_id, "status": "cancelled"}
+
+    except Exception as e:
+        logger.error(f"Failed to cancel query {query_run_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to cancel query: {str(e)}")
 
 
 async def _update_server_query_run(query_run_id: str, update_request: UpdateQueryRunRequest):

@@ -67,6 +67,11 @@ export const getQueryRunResults = async (run_id: string): Promise<TableRow[] | n
   }
 };
 
+// Cancel a running query
+export const cancelQueryRun = async (query_run_id: string): Promise<void> => {
+  await api.post(`/execution/cancel/${query_run_id}`);
+};
+
 // Create a new database source
 export interface CreateSourceRequest {
   name: string;
