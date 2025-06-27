@@ -14,7 +14,7 @@ import {
   useStoreConnectedSources,
   useStoreSourceSchema
 } from "@/shared/hooks/useStoreQueries";
-import { useSourceStatusQuery } from "@/shared/hooks/useSourceStatusQuery";
+import { useSourceStatus } from "@/shared/hooks/useSourceStatus";
 import { sourcesToFileTreeNodes } from "@/shared/lib/fileTreeUtils";
 import type { Source, ConnectedSource, Query } from "@/shared/lib/api";
 
@@ -29,7 +29,9 @@ function IdePage() {
     setSourceSchemaError,
     setSourceStatus,
     setSources,
-    setConnectedSourcesData
+    setConnectedSourcesData,
+    startStatusPolling,
+    stopStatusPolling
   } = useSourceStore();
   const {
     activeTabId,
@@ -39,10 +41,19 @@ function IdePage() {
     openTableFromTree
   } = useTabManagerStore();
 
-  // Initialize runtime states for query tabs on app load
+  // Initialize SSE connection and runtime states for query tabs on app load
   useEffect(() => {
     const initialize = async () => {
       try {
+        // Import SSE connection manager
+        const { sseConnectionManager } = await import("@/shared/services/SSEConnectionManager");
+
+        // Establish SSE connection first
+        console.log("Establishing SSE connection...");
+        await sseConnectionManager.connect();
+        console.log("SSE connection established successfully");
+
+        // Then initialize query tabs
         await initializeQueryTabsRuntimeStates();
       } catch (error) {
         console.error("Failed to initialize query tabs runtime states:", error);
@@ -73,16 +84,28 @@ function IdePage() {
   useEffect(() => {
     if (connectedSourcesData) {
       setConnectedSourcesData(connectedSourcesData);
+
+      // Start background status polling when connected sources are loaded
+      if (connectedSourcesData.length > 0) {
+        startStatusPolling();
+      }
     }
-  }, [connectedSourcesData, setConnectedSourcesData]);
+  }, [connectedSourcesData, setConnectedSourcesData, startStatusPolling]);
+
+  // Cleanup status polling on unmount
+  useEffect(() => {
+    return () => {
+      stopStatusPolling();
+    };
+  }, [stopStatusPolling]);
 
   // Query for selected source schemas - only if the source is connected
   const { data: sourceSchemas } = useStoreSourceSchema(
     selectedSource?.id && connectedSourceIds.has(selectedSource.id) ? selectedSource.id : undefined
   );
 
-  // Query for selected source status - only if the source is connected
-  const { data: selectedSourceStatus } = useSourceStatusQuery(
+  // Get selected source status from store (cached value)
+  const { status: selectedSourceStatus } = useSourceStatus(
     selectedSource?.id && connectedSourceIds.has(selectedSource.id) ? selectedSource.id : undefined
   );
 

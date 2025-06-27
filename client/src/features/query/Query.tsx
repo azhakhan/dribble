@@ -1,12 +1,12 @@
 import { memo } from "react";
-import { OptimizedTabContent } from "./components/QueryTabs/OptimizedTabContent";
+import { TabContent } from "./components/QueryTabs/TabContent";
 
 interface QueryProps {
   tabId: string;
 }
 
 function QueryComponent({ tabId }: QueryProps) {
-  return <OptimizedTabContent tabId={tabId} />;
+  return <TabContent tabId={tabId} />;
 }
 
 // Memoize the component to prevent unnecessary re-renders

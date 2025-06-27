@@ -67,6 +67,24 @@ export const getQueryRunResults = async (run_id: string): Promise<TableRow[] | n
   }
 };
 
+// Cancel a running query
+export const cancelQueryRun = async (query_run_id: string): Promise<void> => {
+  await api.post(`/execution/cancel/${query_run_id}`);
+};
+
+// Cancel a running query immediately (client-side cancellation)
+export const cancelQueryRunImmediate = async (
+  query_run_id: string
+): Promise<{
+  query_run_id: string;
+  status: string;
+  execution_time_ms: number;
+  message: string;
+}> => {
+  const response = await api.post(`/execution/cancel-immediate/${query_run_id}`);
+  return response.data;
+};
+
 // Create a new database source
 export interface CreateSourceRequest {
   name: string;

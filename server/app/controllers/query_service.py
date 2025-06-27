@@ -202,6 +202,16 @@ class QueryRunService:
         """Update a query run"""
         query_run = get_or_404(db, QueryRun, run_id, "Query run not found")
 
+        # Check if this run was already cancelled by user
+        if (
+            query_run.error_message
+            and "cancelled by user" in query_run.error_message
+            and query_run.execution_time_ms is not None
+        ):
+            # This run was already marked as cancelled by user, don't override it
+            # Worker results should not overwrite user cancellation data
+            return query_run
+
         if request.result_message is not None:
             query_run.result_message = request.result_message
         if request.error_message is not None:
@@ -267,3 +277,15 @@ class QueryRunService:
     def get_run_by_id(db: Session, run_id: UUID) -> QueryRun:
         """Get a specific query run by ID"""
         return get_or_404(db, QueryRun, run_id, "Query run not found")
+
+    @staticmethod
+    def get_running_runs_for_query(db: Session, query_id: UUID) -> List[QueryRun]:
+        """Get all currently running query runs for a specific query"""
+        return (
+            db.query(QueryRun)
+            .join(QueryVersion)
+            .filter(QueryVersion.query_id == query_id)
+            .filter(QueryRun.error_message.is_(None))  # No error
+            .filter(QueryRun.execution_time_ms.is_(None))  # Not completed
+            .all()
+        )

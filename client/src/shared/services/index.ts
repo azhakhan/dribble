@@ -1,4 +1,5 @@
 export { QueryExecutionService } from "./QueryExecutionService";
+export { QueryExecutionServiceSSE } from "./QueryExecutionServiceSSE";
 export { TabNavigationService } from "./TabNavigationService";
 export { QueryVersionService } from "./QueryVersionService";
 export { ErrorService, ErrorContext, ErrorSeverity } from "./ErrorService";

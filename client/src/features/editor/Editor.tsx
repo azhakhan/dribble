@@ -1,6 +1,6 @@
 import { useRef, useCallback, useMemo, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { PlayIcon, PencilIcon, CheckIcon, XIcon, Database, SaveIcon } from "lucide-react";
+import { PlayIcon, PencilIcon, CheckIcon, XIcon, Database, SaveIcon, Square } from "lucide-react";
 import { toast } from "sonner";
 import { ErrorService, ErrorContext } from "@/shared/services";
 import { useTabManagerStore } from "@/shared/store/useTabManagerStore";
@@ -30,7 +30,7 @@ export function Editor({ tabId, onQueryExecuted }: EditorProps) {
 
   // Get all needed state from the store using selectors
   const { openTabs, updateTabContent } = useTabManagerStore();
-  const { executeQuery } = useTabExecutionStore();
+  const { executeQuery, cancelQuery } = useTabExecutionStore();
   const { saveChanges } = useUnsavedChangesStore();
   const { sources, connectedSources } = useSourceStore();
   const { proposedChanges, acceptProposedChanges, rejectProposedChanges } = useChatStore();
@@ -130,6 +130,11 @@ export function Editor({ tabId, onQueryExecuted }: EditorProps) {
         return;
       }
 
+      // Prevent duplicate query runs if a query is already running
+      if (currentTab.queryRunning) {
+        return;
+      }
+
       const queryToRun =
         sqlToRun || (proposedChanges ? proposedChanges.proposedContent : localEditorContent);
       if (!queryToRun.trim()) return;
@@ -137,7 +142,7 @@ export function Editor({ tabId, onQueryExecuted }: EditorProps) {
       try {
         // executeQuery now handles saving the version automatically
         await executeQuery(tabId, queryToRun);
-        toast.success("Query executed successfully");
+        // Toast will be shown when SSE completes, not on HTTP 200 response
       } catch (error) {
         ErrorService.handleQueryError(error, "execute query", {
           queryId: currentTab?.queryId || undefined
@@ -159,6 +164,31 @@ export function Editor({ tabId, onQueryExecuted }: EditorProps) {
       onQueryExecuted
     ]
   );
+
+  // Handle query cancellation
+  const handleCancelQuery = useCallback(async () => {
+    if (!currentTab || !currentTab.queryRunning) return;
+
+    try {
+      await cancelQuery(tabId);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Unknown error";
+
+      if (errorMessage.includes("timeout")) {
+        toast.warning("Query cancellation requested - it may take a moment to complete");
+      } else if (
+        errorMessage.includes("Query not found") ||
+        errorMessage.includes("already completed")
+      ) {
+        toast.info("Query has already completed or was cancelled");
+      } else {
+        toast.error(`Failed to cancel query: ${errorMessage}`);
+      }
+    } finally {
+      // Notify parent component that query execution completed (success or failure)
+      onQueryExecuted?.();
+    }
+  }, [currentTab, cancelQuery, tabId, onQueryExecuted]);
 
   // Handle name editing
   const startEditingName = useCallback(() => {
@@ -308,16 +338,29 @@ export function Editor({ tabId, onQueryExecuted }: EditorProps) {
               Save
             </Button>
           )}
-          <Button
-            onClick={() => handleRunQuery()}
-            disabled={!canRunQueries || currentTab.queryRunning}
-            className="gap-1 text-xs cursor-pointer"
-            size="xs"
-            title={!isSourceConnected ? "Source is not connected" : ""}
-          >
-            <PlayIcon size={16} />
-            {currentTab.queryRunning ? "Running..." : "Run"}
-          </Button>
+          {currentTab.queryRunning ? (
+            <Button
+              onClick={handleCancelQuery}
+              variant="destructive"
+              className="gap-1 text-xs cursor-pointer"
+              size="xs"
+              title="Cancel running query"
+            >
+              <Square size={16} />
+              Cancel
+            </Button>
+          ) : (
+            <Button
+              onClick={() => handleRunQuery()}
+              disabled={!canRunQueries}
+              className="gap-1 text-xs cursor-pointer"
+              size="xs"
+              title={!isSourceConnected ? "Source is not connected" : ""}
+            >
+              <PlayIcon size={16} />
+              Run
+            </Button>
+          )}
         </div>
       </div>
 

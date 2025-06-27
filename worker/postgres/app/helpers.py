@@ -33,3 +33,27 @@ async def get_result(query_id):
     except Exception as e:
         logger.error(f"Failed to get result from Redis for query {query_id}: {str(e)}")
         return None
+
+
+async def publish_result(query_run_id: str, status: str, data: dict = None, error: str = None):
+    """Publish query result to Redis pub/sub channel for real-time notifications"""
+    try:
+        import time
+
+        message = {
+            "query_run_id": query_run_id,
+            "status": status,
+            "timestamp": time.time(),
+        }
+
+        if data is not None:
+            message["data"] = data
+        if error is not None:
+            message["error"] = error
+
+        channel = f"query_results:{query_run_id}"
+        await REDIS.publish(channel, orjson.dumps(message))
+        logger.debug(f"Published result for query run {query_run_id} to channel {channel}")
+    except Exception as e:
+        logger.error(f"Failed to publish result to Redis for query run {query_run_id}: {str(e)}")
+        # Don't raise - publishing is not critical to query execution

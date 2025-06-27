@@ -1,7 +1,7 @@
 import React from "react";
 import { AlertCircle } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { useSourceStatusQuery } from "@/shared/hooks/useSourceStatusQuery";
+import { useSourceStatus } from "@/shared/hooks/useSourceStatus";
 
 interface FileTreeStatusIndicatorProps {
   hasError: boolean;
@@ -19,7 +19,7 @@ export const FileTreeStatusIndicator: React.FC<FileTreeStatusIndicatorProps> = (
   sourceStatuses
 }) => {
   // Get source status if this is a source node AND it's connected
-  const { data: sourceStatus } = useSourceStatusQuery(isConnected && nodeId ? nodeId : undefined);
+  const { status: sourceStatus } = useSourceStatus(isConnected && nodeId ? nodeId : undefined);
 
   // Get status from props or from query
   const currentStatus = nodeId
@@ -51,7 +51,7 @@ export const FileTreeStatusIndicator: React.FC<FileTreeStatusIndicatorProps> = (
             <TooltipTrigger asChild>
               <div
                 className={`ml-1 w-2 h-2 rounded-full ${
-                  currentStatus === "running"
+                  currentStatus === "healthy" || currentStatus === "running"
                     ? "bg-green-500"
                     : currentStatus === "unhealthy"
                       ? "bg-red-500"
@@ -61,7 +61,7 @@ export const FileTreeStatusIndicator: React.FC<FileTreeStatusIndicatorProps> = (
             </TooltipTrigger>
             <TooltipContent>
               <p>
-                {currentStatus === "running"
+                {currentStatus === "healthy" || currentStatus === "running"
                   ? "Connected"
                   : currentStatus === "unhealthy"
                     ? "Connection error"

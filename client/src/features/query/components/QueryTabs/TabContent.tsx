@@ -10,11 +10,11 @@ const QueryEditor = lazy(() => import("../QueryEditor/QueryEditor"));
 import { useQueryExecution } from "../../hooks/useQueryExecution";
 import { useQueryVersion } from "../../hooks/useQueryVersion";
 
-interface OptimizedTabContentProps {
+interface TabContentProps {
   tabId: string;
 }
 
-const OptimizedTabContentComponent = ({ tabId }: OptimizedTabContentProps) => {
+const TabContentComponent = ({ tabId }: TabContentProps) => {
   // Get current tab with memoization to reduce lookups
   const currentTab = useTabManagerStore((state) => state.openTabs.find((tab) => tab.id === tabId));
 
@@ -92,4 +92,4 @@ const OptimizedTabContentComponent = ({ tabId }: OptimizedTabContentProps) => {
   );
 };
 
-export const OptimizedTabContent = memo(OptimizedTabContentComponent);
+export const TabContent = memo(TabContentComponent);
