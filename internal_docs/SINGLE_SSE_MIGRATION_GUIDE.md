@@ -71,7 +71,7 @@ GET /stream/events?client_id=optional
 ```json
 {
   "type": "query_result",
-  "query_id": "query-run-uuid",
+  "query_run_id": "query-run-uuid",
   "status": "success",
   "data": [...],
   "timestamp": 1234567890
@@ -191,7 +191,7 @@ const streams = useMultipleQueryStreams(["query-1", "query-2", "query-3"], {
 ✅ Global SSE connection opened
 🎉 Connected with client ID: client-abc123
 🔍 Now tracking query: query-run-uuid
-📨 SSE message received: {type: "query_result", query_id: "...", status: "success"}
+📨 SSE message received: {type: "query_result", query_run_id: "...", status: "success"}
 🏁 Query query-run-uuid completed with status: success
 ```
 

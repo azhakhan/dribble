@@ -87,52 +87,54 @@ class QueryResultsSubscriber:
             channel = message["channel"]
             data = message["data"]
 
-            # Extract query_id from channel name (query_results:query_id)
+            # Extract query_run_id from channel name (query_results:query_run_id)
             if not channel.startswith("query_results:"):
                 return
 
-            query_id = channel[14:]  # Remove "query_results:" prefix
+            query_run_id = channel[14:]  # Remove "query_results:" prefix
 
             # Parse the message
             try:
                 parsed_message = orjson.loads(data)
             except orjson.JSONDecodeError:
-                logger.error(f"Failed to parse message for query {query_id}: {data}")
+                logger.error(f"Failed to parse message for query run {query_run_id}: {data}")
                 return
 
             # Add timestamp if not present
             if "timestamp" not in parsed_message:
                 parsed_message["timestamp"] = time.time()
 
-            # Store in memory for this query
-            self.subscribers[query_id].append(parsed_message)
+            # Store in memory for this query run
+            self.subscribers[query_run_id].append(parsed_message)
 
-            logger.debug(f"Stored message for query {query_id}: {parsed_message['status']}")
+            logger.debug(f"Stored message for query run {query_run_id}: {parsed_message['status']}")
 
         except Exception as e:
             logger.error(f"Error handling Redis message: {str(e)}")
 
-    def get_messages(self, query_id: str, since_timestamp: Optional[float] = None) -> List[dict]:
-        """Get stored messages for a query, optionally since a timestamp"""
-        messages = list(self.subscribers[query_id])
+    def get_messages(
+        self, query_run_id: str, since_timestamp: Optional[float] = None
+    ) -> List[dict]:
+        """Get stored messages for a query run, optionally since a timestamp"""
+        messages = list(self.subscribers[query_run_id])
 
         if since_timestamp is not None:
             messages = [msg for msg in messages if msg.get("timestamp", 0) > since_timestamp]
 
         return messages
 
-    def get_latest_message(self, query_id: str) -> Optional[dict]:
-        """Get the latest message for a query"""
-        messages = self.subscribers[query_id]
+    def get_latest_message(self, query_run_id: str) -> Optional[dict]:
+        """Get the latest message for a query run"""
+        messages = self.subscribers[query_run_id]
         return messages[-1] if messages else None
 
-    def clear_messages(self, query_id: str):
-        """Clear stored messages for a query"""
-        if query_id in self.subscribers:
-            self.subscribers[query_id].clear()
+    def clear_messages(self, query_run_id: str):
+        """Clear stored messages for a query run"""
+        if query_run_id in self.subscribers:
+            self.subscribers[query_run_id].clear()
 
     def get_active_queries(self) -> List[str]:
-        """Get list of query IDs that have stored messages"""
+        """Get list of query run IDs that have stored messages"""
         return list(self.subscribers.keys())
 
 
@@ -150,11 +152,11 @@ async def stop_redis_subscriber():
     await query_results_subscriber.stop()
 
 
-def get_query_messages(query_id: str, since_timestamp: Optional[float] = None) -> List[dict]:
-    """Get messages for a query"""
-    return query_results_subscriber.get_messages(query_id, since_timestamp)
+def get_query_messages(query_run_id: str, since_timestamp: Optional[float] = None) -> List[dict]:
+    """Get messages for a query run"""
+    return query_results_subscriber.get_messages(query_run_id, since_timestamp)
 
 
-def get_latest_query_message(query_id: str) -> Optional[dict]:
-    """Get the latest message for a query"""
-    return query_results_subscriber.get_latest_message(query_id)
+def get_latest_query_message(query_run_id: str) -> Optional[dict]:
+    """Get the latest message for a query run"""
+    return query_results_subscriber.get_latest_message(query_run_id)

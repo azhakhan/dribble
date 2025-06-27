@@ -196,14 +196,14 @@ class SSEConnectionManager {
           break;
 
         case "query_result": {
-          const queryId = data.query_id;
-          if (queryId) {
+          const queryRunId = data.query_run_id;
+          if (queryRunId) {
             // Update query status in store
-            store.updateQueryStatus(queryId, data.status, data.data, data.error);
+            store.updateQueryStatus(queryRunId, data.status, data.data, data.error);
 
             // Create result object for handlers
             const result: QueryResult = {
-              queryId,
+              queryId: queryRunId,
               status: data.status,
               timestamp: data.timestamp || Date.now(),
               data: data.data,
@@ -212,12 +212,12 @@ class SSEConnectionManager {
 
             // Notify handlers
             this.messageHandlers.forEach((handler) => {
-              handler.onQueryResult?.(queryId, result);
+              handler.onQueryResult?.(queryRunId, result);
             });
 
             // Remove from active queries if completed
             if (data.status === "success" || data.status === "error") {
-              store.removeActiveQuery(queryId);
+              store.removeActiveQuery(queryRunId);
             }
           }
           break;

@@ -23,6 +23,9 @@ interface QueryState {
   queryRuns: Record<string, QueryRun[]>;
   queryRunsPagination: Record<string, PaginationInfo>;
 
+  // Active query run tracking
+  activeQueryRuns: Record<string, string>; // queryId -> queryRunId
+
   // Loading states
   loadingQueries: Set<string>;
   loadingVersions: Set<string>;
@@ -45,6 +48,11 @@ interface QueryState {
   setQueryRuns: (queryId: string, runs: QueryRun[]) => void;
   setQueryRunsPaginated: (queryId: string, runs: QueryRun[], pagination: PaginationInfo) => void;
   removeQuery: (queryId: string) => void;
+
+  // Active query run management
+  setActiveQueryRun: (queryId: string, queryRunId: string) => void;
+  getActiveQueryRun: (queryId: string) => string | undefined;
+  clearActiveQueryRun: (queryId: string) => void;
 
   // Query creation and management
   createNewQuery: ({ sourceId, name }: { sourceId: string; name?: string }) => Promise<Query>;
@@ -85,6 +93,7 @@ export const useQueryStore = create<QueryState>((set, get) => ({
   queryVersions: {},
   queryRuns: {},
   queryRunsPagination: {},
+  activeQueryRuns: {},
   loadingQueries: new Set(),
   loadingVersions: new Set(),
   loadingRuns: new Set(),
@@ -264,12 +273,33 @@ export const useQueryStore = create<QueryState>((set, get) => ({
       const newQueryRunsPagination = { ...state.queryRunsPagination };
       delete newQueryRunsPagination[queryId];
 
+      const newActiveQueryRuns = { ...state.activeQueryRuns };
+      delete newActiveQueryRuns[queryId];
+
       return {
         queries: newQueries,
         queryVersions: newQueryVersions,
         queryRuns: newQueryRuns,
-        queryRunsPagination: newQueryRunsPagination
+        queryRunsPagination: newQueryRunsPagination,
+        activeQueryRuns: newActiveQueryRuns
       };
+    }),
+
+  // Active query run management
+  setActiveQueryRun: (queryId, queryRunId) =>
+    set((state) => ({
+      activeQueryRuns: { ...state.activeQueryRuns, [queryId]: queryRunId }
+    })),
+
+  getActiveQueryRun: (queryId) => {
+    return get().activeQueryRuns[queryId];
+  },
+
+  clearActiveQueryRun: (queryId) =>
+    set((state) => {
+      const newActiveQueryRuns = { ...state.activeQueryRuns };
+      delete newActiveQueryRuns[queryId];
+      return { activeQueryRuns: newActiveQueryRuns };
     }),
 
   // Create new query
@@ -354,11 +384,15 @@ export const useQueryStore = create<QueryState>((set, get) => ({
         const newQueryRunsPagination = { ...state.queryRunsPagination };
         delete newQueryRunsPagination[queryId];
 
+        const newActiveQueryRuns = { ...state.activeQueryRuns };
+        delete newActiveQueryRuns[queryId];
+
         return {
           queries: newQueries,
           queryVersions: newQueryVersions,
           queryRuns: newQueryRuns,
-          queryRunsPagination: newQueryRunsPagination
+          queryRunsPagination: newQueryRunsPagination,
+          activeQueryRuns: newActiveQueryRuns
         };
       });
     } catch (error) {

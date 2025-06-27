@@ -27,14 +27,15 @@ Client (JavaScript EventSource)
 
 ### Channel Format
 
-- `query_results:{query_id}` - for `/execute/` endpoint
-- `query_results:{query_run_id}` - for `/execute/version` endpoint
+- `query_results:{query_run_id}` - for both `/execute/` and `/execute/version` endpoints
+
+All query results are now published using query_run_id for consistency.
 
 ### Message Format
 
 ```json
 {
-  "query_id": "uuid-here",
+  "query_run_id": "uuid-here",
   "status": "running" | "success" | "error",
   "timestamp": 1234567890.123,
   "data": [...],      // Only present on success

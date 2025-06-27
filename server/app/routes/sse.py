@@ -21,7 +21,7 @@ active_client_sessions: Set[str] = set()
 @router.get("/events")
 async def stream_events(client_id: Optional[str] = Query(None)):
     """
-    Single SSE connection that streams all query results multiplexed by query_id.
+    Single SSE connection that streams all query results multiplexed by query_run_id.
 
     Args:
         client_id: Optional client identifier (hardcoded for open source version)
@@ -51,17 +51,18 @@ async def stream_events(client_id: Optional[str] = Query(None)):
                 has_new_messages = False
 
                 # Get all active queries and check for new messages
-                active_queries = query_results_subscriber.get_active_queries()
+                active_query_run_ids = query_results_subscriber.get_active_queries()
 
-                for query_id in active_queries:
-                    last_timestamp = last_seen_timestamps.get(query_id, 0)
-                    new_messages = query_results_subscriber.get_messages(query_id, last_timestamp)
+                for query_run_id in active_query_run_ids:
+                    last_timestamp = last_seen_timestamps.get(query_run_id, 0)
+                    new_messages = query_results_subscriber.get_messages(
+                        query_run_id, last_timestamp
+                    )
 
                     for message in new_messages:
-                        # Add query_id to message for multiplexing
+                        # Add type field for multiplexing - query_run_id is already in the message
                         multiplexed_message = {
                             "type": "query_result",
-                            "query_id": query_id,
                             **message,
                         }
 
@@ -69,8 +70,8 @@ async def stream_events(client_id: Optional[str] = Query(None)):
 
                         # Update last seen timestamp
                         msg_timestamp = message.get("timestamp", current_time)
-                        last_seen_timestamps[query_id] = max(
-                            last_seen_timestamps.get(query_id, 0), msg_timestamp
+                        last_seen_timestamps[query_run_id] = max(
+                            last_seen_timestamps.get(query_run_id, 0), msg_timestamp
                         )
                         has_new_messages = True
 
@@ -105,16 +106,16 @@ async def stream_events(client_id: Optional[str] = Query(None)):
     )
 
 
-@router.get("/query-status/{query_id}")
-async def get_query_status(query_id: str):
+@router.get("/query-status/{query_run_id}")
+async def get_query_status(query_run_id: str):
     """
-    Get current status of a specific query (non-streaming endpoint)
+    Get current status of a specific query run (non-streaming endpoint)
     """
-    latest_message = query_results_subscriber.get_latest_message(query_id)
+    latest_message = query_results_subscriber.get_latest_message(query_run_id)
 
     if not latest_message:
         return {
-            "query_id": query_id,
+            "query_run_id": query_run_id,
             "status": "not_found",
             "timestamp": time.time(),
             "has_data": False,
@@ -122,7 +123,7 @@ async def get_query_status(query_id: str):
         }
 
     return {
-        "query_id": query_id,
+        "query_run_id": query_run_id,
         "status": latest_message.get("status", "unknown"),
         "timestamp": latest_message.get("timestamp", time.time()),
         "has_data": "data" in latest_message,
@@ -133,17 +134,17 @@ async def get_query_status(query_id: str):
 @router.get("/active-queries")
 async def get_active_queries():
     """
-    Get list of queries that have stored results
+    Get list of query runs that have stored results
     """
-    active_queries = query_results_subscriber.get_active_queries()
+    active_query_run_ids = query_results_subscriber.get_active_queries()
 
     query_summaries = []
-    for query_id in active_queries:
-        latest_message = query_results_subscriber.get_latest_message(query_id)
+    for query_run_id in active_query_run_ids:
+        latest_message = query_results_subscriber.get_latest_message(query_run_id)
         if latest_message:
             query_summaries.append(
                 {
-                    "query_id": query_id,
+                    "query_run_id": query_run_id,
                     "status": latest_message.get("status", "unknown"),
                     "timestamp": latest_message.get("timestamp", time.time()),
                 }

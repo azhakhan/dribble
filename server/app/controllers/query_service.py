@@ -267,3 +267,15 @@ class QueryRunService:
     def get_run_by_id(db: Session, run_id: UUID) -> QueryRun:
         """Get a specific query run by ID"""
         return get_or_404(db, QueryRun, run_id, "Query run not found")
+
+    @staticmethod
+    def get_running_runs_for_query(db: Session, query_id: UUID) -> List[QueryRun]:
+        """Get all currently running query runs for a specific query"""
+        return (
+            db.query(QueryRun)
+            .join(QueryVersion)
+            .filter(QueryVersion.query_id == query_id)
+            .filter(QueryRun.error_message.is_(None))  # No error
+            .filter(QueryRun.execution_time_ms.is_(None))  # Not completed
+            .all()
+        )
