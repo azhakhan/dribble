@@ -39,6 +39,7 @@ export class TabNavigationService {
         editorContent: options.editorContent || "",
         queryResults: null,
         queryRunning: false,
+        queryRunId: null,
         selectedTableData: options.selectedTableData || null,
         isLoadingQuery: options.isLoadingQuery ?? false,
         isLoadingVersions: options.isLoadingVersions ?? false,

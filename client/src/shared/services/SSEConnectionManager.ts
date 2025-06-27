@@ -216,7 +216,11 @@ class SSEConnectionManager {
             });
 
             // Remove from active queries if completed
-            if (data.status === "success" || data.status === "error") {
+            if (
+              data.status === "success" ||
+              data.status === "error" ||
+              data.status === "cancelled"
+            ) {
               store.removeActiveQuery(queryRunId);
             }
           }

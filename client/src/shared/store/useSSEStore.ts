@@ -3,7 +3,7 @@ import type { TableRow } from "@/shared/types/api";
 
 export interface QueryResult {
   queryId: string;
-  status: "running" | "success" | "error";
+  status: "running" | "success" | "error" | "cancelled";
   timestamp: number;
   data?: TableRow[];
   error?: string;

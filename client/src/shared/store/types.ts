@@ -56,6 +56,7 @@ export interface QueryTab {
   editorContent: string;
   queryResults: TableData | null;
   queryRunning: boolean;
+  queryRunId: string | null; // Track the running query run ID for cancellation
   selectedTableData: { sourceId: string; tableName: string; query: string } | null;
   isLoadingQuery: boolean;
   isLoadingVersions: boolean;
