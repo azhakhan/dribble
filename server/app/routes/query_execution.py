@@ -116,7 +116,7 @@ async def cancel_query_run_immediate(
             error_message="Query execution was cancelled by user",
             execution_time_ms=execution_time_ms,
         )
-        QueryRunService.update_run(db, query_run_id, update_request)
+        _ = QueryRunService.update_run(db, query_run_id, update_request)
 
         # Try to send cancellation to worker but don't wait for response
         # This is fire-and-forget to let worker know it can stop processing

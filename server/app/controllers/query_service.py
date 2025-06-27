@@ -202,6 +202,16 @@ class QueryRunService:
         """Update a query run"""
         query_run = get_or_404(db, QueryRun, run_id, "Query run not found")
 
+        # Check if this run was already cancelled by user
+        if (
+            query_run.error_message
+            and "cancelled by user" in query_run.error_message
+            and query_run.execution_time_ms is not None
+        ):
+            # This run was already marked as cancelled by user, don't override it
+            # Worker results should not overwrite user cancellation data
+            return query_run
+
         if request.result_message is not None:
             query_run.result_message = request.result_message
         if request.error_message is not None:
