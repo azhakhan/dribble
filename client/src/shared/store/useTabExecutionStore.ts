@@ -63,8 +63,10 @@ export const useTabExecutionStore = create<TabExecutionState>()(() => ({
         // In a real implementation, you'd use the useQueryStream hook in the component
         const checkForUpdates = () => {
           const queryLatestRun = sseStore.getQueryLatestRun(tab.queryId!);
+          const currentTab = useTabManagerStore.getState().openTabs.find((t) => t.id === tabId);
 
-          if (queryLatestRun) {
+          // Only update if we have a latest run and it matches the run we're tracking
+          if (queryLatestRun && currentTab && queryLatestRun.runId === currentTab.queryRunId) {
             const currentTabs = useTabManagerStore.getState().openTabs;
             const updatedTabs = currentTabs.map((t) => {
               if (t.id !== tabId) return t;
@@ -104,17 +106,19 @@ export const useTabExecutionStore = create<TabExecutionState>()(() => ({
           }
         };
 
-        // Check immediately and then poll for updates
-        checkForUpdates();
+        // Don't check immediately - let the query start running first
         let pollCount = 0;
         const interval = setInterval(() => {
           const queryLatestRun = sseStore.getQueryLatestRun(tab.queryId!);
+          const currentTab = useTabManagerStore.getState().openTabs.find((t) => t.id === tabId);
           checkForUpdates();
           pollCount++;
 
-          // Stop polling when query is complete
+          // Stop polling when query is complete AND it's the run we're tracking
           if (
             queryLatestRun &&
+            currentTab &&
+            queryLatestRun.runId === currentTab.queryRunId &&
             (queryLatestRun.status === "success" ||
               queryLatestRun.status === "error" ||
               queryLatestRun.status === "cancelled")

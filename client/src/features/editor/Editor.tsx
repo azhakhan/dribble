@@ -137,7 +137,7 @@ export function Editor({ tabId, onQueryExecuted }: EditorProps) {
       try {
         // executeQuery now handles saving the version automatically
         await executeQuery(tabId, queryToRun);
-        toast.success("Query executed successfully");
+        // Toast will be shown when SSE completes, not on HTTP 200 response
       } catch (error) {
         ErrorService.handleQueryError(error, "execute query", {
           queryId: currentTab?.queryId || undefined

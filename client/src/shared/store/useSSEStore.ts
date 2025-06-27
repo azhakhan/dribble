@@ -102,9 +102,8 @@ export const useSSEStore = create<SSEState>((set, get) => ({
     set((state) => {
       const existingQuery = state.queries[queryId];
 
-      // Only update if this run is what we're waiting for, or if we don't have a latest run yet
-      const shouldUpdate =
-        !existingQuery || existingQuery.awaitingRunId === runId || !existingQuery.latestRun;
+      // Only update if this run is what we're waiting for
+      const shouldUpdate = existingQuery && existingQuery.awaitingRunId === runId;
 
       if (!shouldUpdate) {
         // This might be an old run result, ignore it
