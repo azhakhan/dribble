@@ -7,7 +7,7 @@ import { useSourceStore } from "@/shared/store";
 import { useCreateQuery } from "@/shared/hooks/useCreateQuery";
 import { UnsavedChangesDialog } from "../../UnsavedChangesDialog";
 import { TabHeader } from "./TabHeader";
-import { OptimizedTabContent } from "./OptimizedTabContent";
+import { TabContent } from "./TabContent";
 import { NewQueryModal } from "./NewQueryModal";
 import { Capybara } from "@/components/Capybara";
 
@@ -97,7 +97,7 @@ function QueryTabsComponent() {
 
       {/* Active tab content */}
       <div className="flex-1 min-h-0">
-        {activeTab && <OptimizedTabContent key={activeTab.id} tabId={activeTab.id} />}
+        {activeTab && <TabContent key={activeTab.id} tabId={activeTab.id} />}
       </div>
 
       {/* Unsaved Changes Dialog */}
