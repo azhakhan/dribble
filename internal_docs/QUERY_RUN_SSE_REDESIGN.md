@@ -175,12 +175,15 @@ const queryLatestRun = sseStore.getQueryLatestRun(tab.queryId);
 #### State Updates
 
 ```typescript
-if (queryLatestRun.status === "success" && queryLatestRun.data) {
-  return {
-    ...tab,
-    queryRunning: false,
-    queryResults: convertToTableData(queryLatestRun.data) // Use latest run data
-  };
+// Only update if the result matches the run we're tracking
+if (queryLatestRun && currentTab && queryLatestRun.runId === currentTab.queryRunId) {
+  if (queryLatestRun.status === "success" && queryLatestRun.data) {
+    return {
+      ...tab,
+      queryRunning: false,
+      queryResults: convertToTableData(queryLatestRun.data) // Use latest run data
+    };
+  }
 }
 ```
 
@@ -249,6 +252,8 @@ multiplexed_message = {
 - Each query automatically tracks its most recent execution
 - Old runs don't interfere with new results
 - UI always displays the latest data for each query
+- **Strict Run Matching**: Only the awaited run can update the query's latest run data
+- **Tab State Protection**: Tab `queryRunning` state only updates for the specific run being tracked
 
 ### 3. Improved State Management
 
@@ -422,6 +427,54 @@ interface CollaborativeQuery {
   sharedLatestRun: RunResult | null;
 }
 ```
+
+## Bug Fixes & Improvements
+
+### Issue: Old Data Display & Incorrect `queryRunning` State
+
+**Problem**: The original implementation had two related issues:
+
+1. `queryRunning` state was tied to any latest run result, not the specific run being executed
+2. Old completed runs could overwrite newer run results, showing stale data
+
+**Root Cause**: The SSE store's `updateRunResult` method was too permissive:
+
+```typescript
+// PROBLEMATIC: Allowed old runs to update when no latest run existed
+const shouldUpdate =
+  !existingQuery || existingQuery.awaitingRunId === runId || !existingQuery.latestRun;
+```
+
+**Solution**: Implemented strict run matching:
+
+1. **SSE Store Fix**: Only awaited runs can update
+
+```typescript
+// Only update if this run is what we're waiting for
+const shouldUpdate = existingQuery && existingQuery.awaitingRunId === runId;
+```
+
+2. **Tab Execution Fix**: Only update tab state for the tracked run
+
+```typescript
+// Only update if the result matches the run we're tracking
+if (queryLatestRun && currentTab && queryLatestRun.runId === currentTab.queryRunId) {
+  // Update tab state...
+}
+```
+
+3. **Polling Fix**: Stop polling only for the specific run
+
+```typescript
+// Stop polling when query is complete AND it's the run we're tracking
+if (queryLatestRun && currentTab && queryLatestRun.runId === currentTab.queryRunId && ...)
+```
+
+**Result**:
+
+- `queryRunning` is now properly tied to the actual query run status
+- Old data no longer overwrites new results
+- Each execution shows the correct results in sequence
 
 ## Conclusion
 
