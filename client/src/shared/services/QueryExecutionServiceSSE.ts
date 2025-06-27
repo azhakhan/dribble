@@ -52,7 +52,9 @@ export class QueryExecutionServiceSSE {
       // Step 3: Ensure SSE connection is established and track the query
       try {
         await sseConnectionManager.connect();
-        sseConnectionManager.trackQuery(runId);
+        if (tab.queryId) {
+          sseConnectionManager.trackQueryRun(tab.queryId, runId);
+        }
       } catch {
         // SSE connection failed, but continue with execution
         // The hook will handle fallback polling if needed
@@ -98,51 +100,58 @@ export class QueryExecutionServiceSSE {
 
       const sseStore = useSSEStore.getState();
 
-      // Check if result is already available
-      const existingResult = sseStore.getQueryResult(result.queryRunId!);
-      if (existingResult && existingResult.status !== "running") {
-        clearTimeout(timeoutId);
-
-        if (existingResult.status === "success") {
-          resolve({
-            success: true,
-            results: this.processResults(existingResult.data || []),
-            queryRunId: result.queryRunId
-          });
-        } else {
-          resolve({
-            success: false,
-            error: existingResult.error || "Query execution failed",
-            queryRunId: result.queryRunId
-          });
-        }
-        return;
-      }
-
-      // Set up a polling mechanism to check for updates
-      // This is a fallback - normally the UI would use useQueryStream hook
-      const checkInterval = setInterval(() => {
-        const currentResult = sseStore.getQueryResult(result.queryRunId!);
-
-        if (currentResult && currentResult.status !== "running") {
+      // Check if result is already available (need queryId for this)
+      if (tab.queryId) {
+        const existingResult = sseStore.getQueryLatestRun(tab.queryId!);
+        if (existingResult && existingResult.status !== "running") {
           clearTimeout(timeoutId);
-          clearInterval(checkInterval);
 
-          if (currentResult.status === "success") {
+          if (existingResult.status === "success") {
             resolve({
               success: true,
-              results: this.processResults(currentResult.data || []),
+              results: this.processResults(existingResult.data || []),
               queryRunId: result.queryRunId
             });
           } else {
             resolve({
               success: false,
-              error: currentResult.error || "Query execution failed",
+              error: existingResult.error || "Query execution failed",
               queryRunId: result.queryRunId
             });
           }
+          return;
         }
-      }, 100);
+      }
+
+      // Set up a polling mechanism to check for updates
+      // This is a fallback - normally the UI would use useQueryStream hook
+      if (tab.queryId) {
+        const checkInterval = setInterval(() => {
+          const currentResult = sseStore.getQueryLatestRun(tab.queryId!);
+
+          if (currentResult && currentResult.status !== "running") {
+            clearTimeout(timeoutId);
+            clearInterval(checkInterval);
+
+            if (currentResult.status === "success") {
+              resolve({
+                success: true,
+                results: this.processResults(currentResult.data || []),
+                queryRunId: result.queryRunId
+              });
+            } else {
+              resolve({
+                success: false,
+                error: currentResult.error || "Query execution failed",
+                queryRunId: result.queryRunId
+              });
+            }
+          }
+        }, 100);
+      } else {
+        // No queryId available, reject after timeout
+        reject(new Error("No query ID available for polling results"));
+      }
     });
   }
 

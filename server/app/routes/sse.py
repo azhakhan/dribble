@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, Depends
 from fastapi.responses import StreamingResponse
 from typing import Optional, Set
 import asyncio
@@ -9,6 +9,9 @@ import uuid
 from app.core.redis_subscriber import (
     query_results_subscriber,
 )
+from app.core.db import get_db
+from app.models import QueryRun, QueryVersion
+from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
 
@@ -18,8 +21,23 @@ router = APIRouter(prefix="/stream", tags=["sse"])
 active_client_sessions: Set[str] = set()
 
 
+def get_query_id_for_run(db: Session, query_run_id: str) -> Optional[str]:
+    """Get the query_id for a given query_run_id"""
+    try:
+        query_run = db.query(QueryRun).filter(QueryRun.id == query_run_id).first()
+        if query_run:
+            query_version = (
+                db.query(QueryVersion).filter(QueryVersion.id == query_run.query_version_id).first()
+            )
+            if query_version:
+                return str(query_version.query_id)
+    except Exception as e:
+        logger.error(f"Error getting query_id for run {query_run_id}: {str(e)}")
+    return None
+
+
 @router.get("/events")
-async def stream_events(client_id: Optional[str] = Query(None)):
+async def stream_events(client_id: Optional[str] = Query(None), db: Session = Depends(get_db)):
     """
     Single SSE connection that streams all query results multiplexed by query_run_id.
 
@@ -60,9 +78,18 @@ async def stream_events(client_id: Optional[str] = Query(None)):
                     )
 
                     for message in new_messages:
-                        # Add type field for multiplexing - query_run_id is already in the message
+                        # Get the query_id for this run
+                        query_id = get_query_id_for_run(db, query_run_id)
+
+                        if not query_id:
+                            logger.warning(f"Could not find query_id for run_id: {query_run_id}")
+                            continue
+
+                        # Add type field for multiplexing and include both IDs
                         multiplexed_message = {
                             "type": "query_result",
+                            "query_run_id": query_run_id,
+                            "query_id": query_id,
                             **message,
                         }
 

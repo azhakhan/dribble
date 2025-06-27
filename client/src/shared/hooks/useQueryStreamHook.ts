@@ -1,20 +1,20 @@
 import { useEffect, useCallback, useRef } from "react";
 import { useSSEStore } from "@/shared/store/useSSEStore";
 import { sseConnectionManager } from "@/shared/services/SSEConnectionManager";
-import type { QueryResult } from "@/shared/store/useSSEStore";
+import type { RunResult } from "@/shared/store/useSSEStore";
 import type { SSEMessageHandler } from "@/shared/services/SSEConnectionManager";
 import type { TableRow } from "@/shared/types/api";
 
 export interface UseQueryStreamOptions {
   enabled?: boolean;
-  onStatusChange?: (queryId: string, status: QueryResult["status"]) => void;
+  onStatusChange?: (queryId: string, status: RunResult["status"]) => void;
   onSuccess?: (queryId: string, data: TableRow[]) => void;
   onError?: (queryId: string, error: string) => void;
-  onComplete?: (queryId: string, result: QueryResult) => void;
+  onComplete?: (queryId: string, result: RunResult) => void;
 }
 
 export interface UseQueryStreamReturn {
-  result: QueryResult | undefined;
+  result: RunResult | null;
   connectionStatus: string;
   isRunning: boolean;
   hasActiveConnection: boolean;
@@ -32,10 +32,10 @@ export function useQueryStream(
 ): UseQueryStreamReturn {
   const { enabled = true, onStatusChange, onSuccess, onError, onComplete } = options;
 
-  const { getQueryResult, getConnectionStatus, isQueryRunning } = useSSEStore();
+  const { getQueryLatestRun, getConnectionStatus, isQueryRunning } = useSSEStore();
   const handlerRef = useRef<SSEMessageHandler | null>(null);
 
-  const result = getQueryResult(queryId);
+  const result = getQueryLatestRun(queryId);
   const connectionStatus = getConnectionStatus();
 
   const startStream = useCallback(async () => {
@@ -47,31 +47,25 @@ export function useQueryStream(
       // Ensure global connection is established
       await sseConnectionManager.connect();
 
-      // Track this query
-      sseConnectionManager.trackQuery(queryId);
-
       // Set up message handler for callbacks
       const handler: SSEMessageHandler = {
-        onQueryResult: (receivedQueryId, queryResult) => {
+        onRunResult: (receivedQueryId, runId, runResult) => {
           if (receivedQueryId === queryId) {
             // Call optional callbacks
             if (onStatusChange) {
-              onStatusChange(queryId, queryResult.status);
+              onStatusChange(queryId, runResult.status);
             }
 
-            if (queryResult.status === "success" && queryResult.data && onSuccess) {
-              onSuccess(queryId, queryResult.data);
+            if (runResult.status === "success" && runResult.data && onSuccess) {
+              onSuccess(queryId, runResult.data);
             }
 
-            if (queryResult.status === "error" && queryResult.error && onError) {
-              onError(queryId, queryResult.error);
+            if (runResult.status === "error" && runResult.error && onError) {
+              onError(queryId, runResult.error);
             }
 
-            if (
-              (queryResult.status === "success" || queryResult.status === "error") &&
-              onComplete
-            ) {
-              onComplete(queryId, queryResult);
+            if ((runResult.status === "success" || runResult.status === "error") && onComplete) {
+              onComplete(queryId, runResult);
             }
           }
         },
@@ -100,8 +94,8 @@ export function useQueryStream(
       handlerRef.current = null;
     }
 
-    // Stop tracking this query
-    sseConnectionManager.untrackQuery(queryId);
+    // Note: We don't untrack the query here since other components might be using it
+    // The SSE store will manage cleanup when queries complete
   }, [queryId]);
 
   // Auto-start stream if enabled
@@ -163,9 +157,9 @@ export function useMultipleQueryStreams(
  * Simplified hook that just returns the current query result without managing streams
  * Useful for components that only need to read the current state
  */
-export function useQueryResult(queryId: string): QueryResult | undefined {
-  const { getQueryResult } = useSSEStore();
-  return getQueryResult(queryId);
+export function useQueryResult(queryId: string): RunResult | null {
+  const { getQueryLatestRun } = useSSEStore();
+  return getQueryLatestRun(queryId);
 }
 
 /**

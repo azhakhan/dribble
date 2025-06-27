@@ -46,7 +46,7 @@ export const useTabExecutionStore = create<TabExecutionState>()(() => ({
       // Delegate to the SSE service
       const result = await QueryExecutionServiceSSE.executeQuery(tab, options);
 
-      if (result.success && result.queryRunId) {
+      if (result.success && result.queryRunId && tab.queryId) {
         // Update tab with the query run ID for cancellation
         const tabsWithRunId = useTabManagerStore
           .getState()
@@ -56,43 +56,43 @@ export const useTabExecutionStore = create<TabExecutionState>()(() => ({
         useTabManagerStore.setState({ openTabs: tabsWithRunId });
 
         // The SSE connection and tracking is now handled automatically by QueryExecutionServiceSSE
-        // We just need to monitor the results in the SSE store
+        // We just need to monitor the results using the query ID
         const sseStore = useSSEStore.getState();
 
         // Set up a polling mechanism to check for results updates
         // In a real implementation, you'd use the useQueryStream hook in the component
         const checkForUpdates = () => {
-          const queryResult = sseStore.getQueryResult(result.queryRunId!);
+          const queryLatestRun = sseStore.getQueryLatestRun(tab.queryId!);
 
-          if (queryResult) {
+          if (queryLatestRun) {
             const currentTabs = useTabManagerStore.getState().openTabs;
             const updatedTabs = currentTabs.map((t) => {
               if (t.id !== tabId) return t;
 
-              if (queryResult.status === "success" && queryResult.data) {
+              if (queryLatestRun.status === "success" && queryLatestRun.data) {
                 return {
                   ...t,
                   queryRunning: false,
                   queryRunId: null,
-                  queryResults: convertToTableData(queryResult.data)
+                  queryResults: convertToTableData(queryLatestRun.data)
                 };
-              } else if (queryResult.status === "error") {
+              } else if (queryLatestRun.status === "error") {
                 return {
                   ...t,
                   queryRunning: false,
                   queryRunId: null,
-                  queryResults: errorToTableData(queryResult.error || "Query execution failed")
+                  queryResults: errorToTableData(queryLatestRun.error || "Query execution failed")
                 };
-              } else if (queryResult.status === "cancelled") {
+              } else if (queryLatestRun.status === "cancelled") {
                 return {
                   ...t,
                   queryRunning: false,
                   queryRunId: null,
                   queryResults: errorToTableData(
-                    queryResult.error || "Query execution was cancelled"
+                    queryLatestRun.error || "Query execution was cancelled"
                   )
                 };
-              } else if (queryResult.status === "running") {
+              } else if (queryLatestRun.status === "running") {
                 return {
                   ...t,
                   queryRunning: true
@@ -108,16 +108,16 @@ export const useTabExecutionStore = create<TabExecutionState>()(() => ({
         checkForUpdates();
         let pollCount = 0;
         const interval = setInterval(() => {
-          const queryResult = sseStore.getQueryResult(result.queryRunId!);
+          const queryLatestRun = sseStore.getQueryLatestRun(tab.queryId!);
           checkForUpdates();
           pollCount++;
 
           // Stop polling when query is complete
           if (
-            queryResult &&
-            (queryResult.status === "success" ||
-              queryResult.status === "error" ||
-              queryResult.status === "cancelled")
+            queryLatestRun &&
+            (queryLatestRun.status === "success" ||
+              queryLatestRun.status === "error" ||
+              queryLatestRun.status === "cancelled")
           ) {
             clearInterval(interval);
           }
@@ -200,14 +200,12 @@ export const useTabExecutionStore = create<TabExecutionState>()(() => ({
       return;
     }
 
-    const queryRunId = tab.queryRunId;
-
     try {
-      // Call the API to cancel the query
-      await cancelQueryRun(queryRunId);
+      // Cancel the query run
+      await cancelQueryRun(tab.queryRunId);
 
-      // Update tab state to reflect successful cancellation
-      const updatedTabs = useTabManagerStore.getState().openTabs.map((t) =>
+      // Update tab state to reflect cancellation
+      const updatedTabs = tabManager.openTabs.map((t) =>
         t.id === tabId
           ? {
               ...t,
@@ -220,31 +218,18 @@ export const useTabExecutionStore = create<TabExecutionState>()(() => ({
       useTabManagerStore.setState({ openTabs: updatedTabs });
     } catch (error) {
       console.error("Failed to cancel query:", error);
-
-      // Even if the API call failed (e.g., timeout), we should still reset the UI state
-      // The cancellation might have worked on the server side despite the timeout
-      const errorMessage = error instanceof Error ? error.message : "Unknown error";
-
-      // Reset the UI state regardless of the error
-      const resetTabs = useTabManagerStore.getState().openTabs.map((t) =>
+      // Update tab state even if cancellation failed
+      const updatedTabs = tabManager.openTabs.map((t) =>
         t.id === tabId
           ? {
               ...t,
               queryRunning: false,
               queryRunId: null,
-              queryResults: errorToTableData(
-                errorMessage.includes("timeout") || errorMessage.includes("Query not found")
-                  ? "Query cancellation requested (may still be processing)"
-                  : `Query cancellation failed: ${errorMessage}`
-              )
+              queryResults: errorToTableData("Failed to cancel query - it may still be running")
             }
           : t
       );
-      useTabManagerStore.setState({ openTabs: resetTabs });
-
-      // Don't re-throw the error - we've handled the UI state
-      // The error will be shown to the user via the error handling in the component
-      throw error;
+      useTabManagerStore.setState({ openTabs: updatedTabs });
     }
   }
 }));

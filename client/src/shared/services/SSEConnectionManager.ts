@@ -1,8 +1,8 @@
 import { useSSEStore } from "@/shared/store/useSSEStore";
-import type { QueryResult, GlobalSSEConnection } from "@/shared/store/useSSEStore";
+import type { RunResult, GlobalSSEConnection } from "@/shared/store/useSSEStore";
 
 export interface SSEMessageHandler {
-  onQueryResult?: (queryId: string, result: QueryResult) => void;
+  onRunResult?: (queryId: string, runId: string, result: RunResult) => void;
   onConnection?: (clientId: string) => void;
   onHeartbeat?: () => void;
   onError?: (error: string) => void;
@@ -124,19 +124,20 @@ class SSEConnectionManager {
   }
 
   /**
-   * Add a query to be tracked by this connection
+   * Register a query as awaiting a specific run
    */
-  public trackQuery(queryId: string): void {
+  public trackQueryRun(queryId: string, runId: string): void {
     const store = useSSEStore.getState();
-    store.addActiveQuery(queryId);
+    store.registerQueryAwaitingRun(queryId, runId);
+    store.addActiveRun(runId);
   }
 
   /**
-   * Remove a query from tracking
+   * Remove a run from tracking
    */
-  public untrackQuery(queryId: string): void {
+  public untrackRun(runId: string): void {
     const store = useSSEStore.getState();
-    store.removeActiveQuery(queryId);
+    store.removeActiveRun(runId);
   }
 
   /**
@@ -196,14 +197,17 @@ class SSEConnectionManager {
           break;
 
         case "query_result": {
-          const queryRunId = data.query_run_id;
-          if (queryRunId) {
-            // Update query status in store
-            store.updateQueryStatus(queryRunId, data.status, data.data, data.error);
+          const runId = data.query_run_id;
+          const queryId = data.query_id;
+
+          if (runId && queryId) {
+            // Update run result in store
+            store.updateRunResult(runId, queryId, data.status, data.data, data.error);
 
             // Create result object for handlers
-            const result: QueryResult = {
-              queryId: queryRunId,
+            const result: RunResult = {
+              runId,
+              queryId,
               status: data.status,
               timestamp: data.timestamp || Date.now(),
               data: data.data,
@@ -212,16 +216,16 @@ class SSEConnectionManager {
 
             // Notify handlers
             this.messageHandlers.forEach((handler) => {
-              handler.onQueryResult?.(queryRunId, result);
+              handler.onRunResult?.(queryId, runId, result);
             });
 
-            // Remove from active queries if completed
+            // Remove from active runs if completed
             if (
               data.status === "success" ||
               data.status === "error" ||
               data.status === "cancelled"
             ) {
-              store.removeActiveQuery(queryRunId);
+              store.removeActiveRun(runId);
             }
           }
           break;
@@ -248,26 +252,23 @@ class SSEConnectionManager {
    * Schedule a reconnection attempt
    */
   private scheduleReconnect(): void {
+    this.clearReconnectTimeout();
+
     const store = useSSEStore.getState();
     const attempts = store.connection?.reconnectAttempts || 0;
+    const delay = this.baseReconnectDelay * Math.pow(2, attempts); // Exponential backoff
 
     store.incrementReconnectAttempts();
 
-    // Exponential backoff with jitter
-    const delay = Math.min(
-      this.baseReconnectDelay * Math.pow(2, attempts) + Math.random() * 1000,
-      30000 // Max 30 seconds
-    );
-
     this.reconnectTimeout = setTimeout(() => {
       this.connect().catch(() => {
-        // Reconnection failed, but will retry on next attempt
+        // Reconnection failed, will be handled by the error handler
       });
     }, delay);
   }
 
   /**
-   * Clear reconnect timeout
+   * Clear reconnection timeout
    */
   private clearReconnectTimeout(): void {
     if (this.reconnectTimeout) {
@@ -290,7 +291,7 @@ if (typeof window !== "undefined") {
     if (document.visibilityState === "visible") {
       // Page became visible - reconnect if needed
       const store = useSSEStore.getState();
-      if (!store.hasActiveConnection() && store.activeQueries.size > 0) {
+      if (!store.hasActiveConnection() && store.activeRuns.size > 0) {
         sseConnectionManager.connect().catch(() => {
           // Failed to reconnect on visibility change
         });
