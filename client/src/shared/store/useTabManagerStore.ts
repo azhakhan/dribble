@@ -10,6 +10,9 @@ interface TabManagerState {
   openTabs: QueryTab[];
   activeTabId: string | null;
 
+  // Internal state for preventing race conditions
+  isInitializing: boolean;
+
   // Tab lifecycle actions
   openQueryTab: (tab: Omit<QueryTab, "id">) => Promise<void>;
   closeQueryTab: (tabId: string) => Promise<void>;
@@ -40,6 +43,7 @@ export const useTabManagerStore = create<TabManagerState>()(
       // Initial state
       openTabs: [],
       activeTabId: null,
+      isInitializing: true,
 
       // Open a new query tab
       openQueryTab: async (tab) => {
@@ -167,10 +171,14 @@ export const useTabManagerStore = create<TabManagerState>()(
             sourceStore.setSelectedSource(querySource);
           }
 
-          // Auto-execute if conditions are met
+          // Auto-execute if conditions are met and we're not during initialization
           const updatedState = get();
           const updatedTab = updatedState.openTabs.find((t) => t.id === tabId);
-          if (updatedTab && updatedState.shouldAutoExecuteQuery(updatedTab)) {
+          if (
+            updatedTab &&
+            updatedState.shouldAutoExecuteQuery(updatedTab) &&
+            !updatedState.isInitializing
+          ) {
             const { useTabExecutionStore } = await import("./useTabExecutionStore");
             await useTabExecutionStore.getState().executeQuery(tabId);
           }
@@ -222,35 +230,14 @@ export const useTabManagerStore = create<TabManagerState>()(
 
       // Initialize runtime states - called on app start to reset runtime states
       initializeQueryTabsRuntimeStates: async () => {
-        set((state) => ({
-          openTabs: state.openTabs.map((tab) => ({
-            ...tab,
-            // Reset runtime states to defaults on app load
-            queryResults: null,
-            queryRunning: false,
-            isLoadingQuery: false,
-            isLoadingVersions: false
-          }))
-        }));
+        // Set initialization flag to prevent auto-execution during load
+        set((state) => ({ ...state, isInitializing: true }));
 
-        // After resetting runtime states, check if active tab should auto-execute
-        // We need to wait a bit for connected sources to be loaded
-        setTimeout(async () => {
-          const currentState = get();
-          if (currentState.activeTabId) {
-            const activeTab = currentState.openTabs.find(
-              (tab) => tab.id === currentState.activeTabId
-            );
-            if (activeTab && currentState.shouldAutoExecuteQuery(activeTab)) {
-              try {
-                const { useTabExecutionStore } = await import("./useTabExecutionStore");
-                await useTabExecutionStore.getState().executeQuery(currentState.activeTabId!);
-              } catch (error) {
-                console.error("Failed to auto-execute query on page reload:", error);
-              }
-            }
-          }
-        }, 500); // Wait 500ms for connected sources to load
+        // Delegate to the TabNavigationService to avoid duplicate logic
+        await TabNavigationService.initializeQueryTabsRuntimeStates();
+
+        // Clear initialization flag after completion
+        set((state) => ({ ...state, isInitializing: false }));
       },
 
       // Unified helper to open query from tree (query double-click)

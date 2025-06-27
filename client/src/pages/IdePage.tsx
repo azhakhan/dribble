@@ -41,10 +41,19 @@ function IdePage() {
     openTableFromTree
   } = useTabManagerStore();
 
-  // Initialize runtime states for query tabs on app load
+  // Initialize SSE connection and runtime states for query tabs on app load
   useEffect(() => {
     const initialize = async () => {
       try {
+        // Import SSE connection manager
+        const { sseConnectionManager } = await import("@/shared/services/SSEConnectionManager");
+
+        // Establish SSE connection first
+        console.log("Establishing SSE connection...");
+        await sseConnectionManager.connect();
+        console.log("SSE connection established successfully");
+
+        // Then initialize query tabs
         await initializeQueryTabsRuntimeStates();
       } catch (error) {
         console.error("Failed to initialize query tabs runtime states:", error);

@@ -349,6 +349,7 @@ export class TabNavigationService {
    */
   static async initializeQueryTabsRuntimeStates(): Promise<void> {
     const { useTabManagerStore } = await import("@/shared/store/useTabManagerStore");
+    const { sseConnectionManager } = await import("@/shared/services/SSEConnectionManager");
     const tabManagerStore = useTabManagerStore.getState();
 
     useTabManagerStore.setState({
@@ -362,21 +363,32 @@ export class TabNavigationService {
       }))
     });
 
-    // After resetting runtime states, check if active tab should auto-execute
-    // We need to wait a bit for connected sources to be loaded
+    // After resetting runtime states, wait for SSE connection and connected sources
+    // before checking if active tab should auto-execute
     setTimeout(async () => {
-      const currentState = useTabManagerStore.getState();
-      if (currentState.activeTabId) {
-        const activeTab = currentState.openTabs.find((tab) => tab.id === currentState.activeTabId);
-        if (activeTab && (await this.shouldAutoExecuteQuery(activeTab))) {
-          try {
-            await this.executeQueryForTab(currentState.activeTabId);
-          } catch (error) {
-            console.error("Failed to auto-execute query on page reload:", error);
+      try {
+        // First, establish SSE connection before executing any queries
+        await sseConnectionManager.connect();
+        console.log("SSE connection established, checking for auto-execution");
+
+        const currentState = useTabManagerStore.getState();
+        if (currentState.activeTabId) {
+          const activeTab = currentState.openTabs.find(
+            (tab) => tab.id === currentState.activeTabId
+          );
+          if (activeTab && (await this.shouldAutoExecuteQuery(activeTab))) {
+            try {
+              await this.executeQueryForTab(currentState.activeTabId);
+            } catch (error) {
+              console.error("Failed to auto-execute query on page reload:", error);
+            }
           }
         }
+      } catch (error) {
+        console.error("Failed to establish SSE connection:", error);
+        // Continue without auto-execution if SSE connection fails
       }
-    }, 500); // Wait 500ms for connected sources to load
+    }, 1000); // Increased to 1000ms to give more time for SSE connection
   }
 
   /**

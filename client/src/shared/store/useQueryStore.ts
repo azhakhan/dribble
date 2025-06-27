@@ -30,6 +30,7 @@ interface QueryState {
   loadingQueries: Set<string>;
   loadingVersions: Set<string>;
   loadingRuns: Set<string>;
+  loadingLatestVersions: Set<string>;
 
   // Actions for query management
   loadQuery: (queryId: string) => Promise<void>;
@@ -97,6 +98,7 @@ export const useQueryStore = create<QueryState>((set, get) => ({
   loadingQueries: new Set(),
   loadingVersions: new Set(),
   loadingRuns: new Set(),
+  loadingLatestVersions: new Set(),
 
   // Legacy state
   queriesBySource: {},
@@ -151,13 +153,25 @@ export const useQueryStore = create<QueryState>((set, get) => ({
 
   // Load latest query version
   loadLatestQueryVersion: async (queryId) => {
+    const state = get();
+
+    // Prevent duplicate calls
+    if (state.loadingLatestVersions.has(queryId)) {
+      console.log(`Already loading latest version for query ${queryId}, skipping duplicate call`);
+      return null;
+    }
+
+    set((state) => ({
+      loadingLatestVersions: new Set(state.loadingLatestVersions).add(queryId)
+    }));
+
     try {
       const latestVersion = await getLatestQueryVersion(queryId);
 
       // Update the queryVersions cache if we have it
-      const state = get();
-      if (state.queryVersions[queryId] && latestVersion) {
-        const existingVersions = state.queryVersions[queryId];
+      const currentState = get();
+      if (currentState.queryVersions[queryId] && latestVersion) {
+        const existingVersions = currentState.queryVersions[queryId];
         const hasVersion = existingVersions.some((v) => v.id === latestVersion.id);
 
         if (!hasVersion) {
@@ -171,9 +185,20 @@ export const useQueryStore = create<QueryState>((set, get) => ({
         }
       }
 
+      set((state) => ({
+        loadingLatestVersions: new Set(
+          [...state.loadingLatestVersions].filter((id) => id !== queryId)
+        )
+      }));
+
       return latestVersion;
     } catch (error) {
       console.error(`Failed to load latest version for query ${queryId}:`, error);
+      set((state) => ({
+        loadingLatestVersions: new Set(
+          [...state.loadingLatestVersions].filter((id) => id !== queryId)
+        )
+      }));
       return null;
     }
   },

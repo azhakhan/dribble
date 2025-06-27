@@ -29,6 +29,12 @@ export const useTabExecutionStore = create<TabExecutionState>()(() => ({
       return;
     }
 
+    // Prevent duplicate executions
+    if (tab.queryRunning) {
+      console.log(`Query already running for tab ${tabId}, skipping duplicate execution`);
+      return;
+    }
+
     // Set running state
     const updatedTabs = tabManager.openTabs.map((t) =>
       t.id === tabId ? { ...t, queryRunning: true, queryRunId: null } : t
