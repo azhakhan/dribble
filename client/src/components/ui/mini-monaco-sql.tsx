@@ -1,4 +1,4 @@
-import { useRef, useEffect, useMemo } from "react";
+import { useRef, useEffect, useCallback } from "react";
 import * as monaco from "monaco-editor";
 import { useSourceStore } from "@/shared/store";
 import { useTheme } from "@/components/theme-provider";
@@ -31,6 +31,8 @@ export function MiniMonacoSQL({
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | undefined>(undefined);
   // Add flag to prevent setValue feedback loop
   const isInternalChangeRef = useRef(false);
+  // Add ref to track completion provider registration
+  const completionProviderRef = useRef<monaco.IDisposable | undefined>(undefined);
 
   // Get schema data from the store
   const { selectedSource, sourceSchemaMap } = useSourceStore();
@@ -43,8 +45,8 @@ export function MiniMonacoSQL({
     return resolvedTheme === "dark" ? "vs-dark" : "vs";
   };
 
-  // Memoize completions to prevent recalculation
-  const completions = useMemo(() => {
+  // Create a stable completion provider function that reads current state
+  const getCompletions = useCallback(() => {
     const completionItems: Omit<monaco.languages.CompletionItem, "range">[] = [];
 
     // Add provided column completions (highest priority)
@@ -133,11 +135,17 @@ export function MiniMonacoSQL({
     return completionItems;
   }, [columns, selectedSource, sourceSchemaMap, mode]);
 
-  // Register completion provider for basic SQL
+  // Register completion provider once and keep it stable
   useEffect(() => {
-    if (!editorRef.current || completions.length === 0) return;
+    if (!editorRef.current) return;
 
-    const disposable = monaco.languages.registerCompletionItemProvider("sql", {
+    // Dispose existing provider if any
+    if (completionProviderRef.current) {
+      completionProviderRef.current.dispose();
+    }
+
+    // Register new completion provider that reads current state
+    completionProviderRef.current = monaco.languages.registerCompletionItemProvider("sql", {
       provideCompletionItems: (model, position) => {
         const word = model.getWordUntilPosition(position);
         const range = {
@@ -147,6 +155,7 @@ export function MiniMonacoSQL({
           endColumn: word.endColumn
         };
 
+        const completions = getCompletions();
         return {
           suggestions: completions.map((completion) => ({
             ...completion,
@@ -156,8 +165,13 @@ export function MiniMonacoSQL({
       }
     });
 
-    return () => disposable.dispose();
-  }, [completions]);
+    return () => {
+      if (completionProviderRef.current) {
+        completionProviderRef.current.dispose();
+        completionProviderRef.current = undefined;
+      }
+    };
+  }, []); // Empty dependency array - register once
 
   // Initialize editor once
   useEffect(() => {
@@ -230,13 +244,10 @@ export function MiniMonacoSQL({
       // Listen for content changes
       editorRef.current.onDidChangeModelContent(() => {
         const newValue = editorRef.current?.getValue() || "";
-        // Set flag to indicate this is an internal change
-        isInternalChangeRef.current = true;
-        onChange(newValue);
-        // Reset flag after change is processed
-        setTimeout(() => {
-          isInternalChangeRef.current = false;
-        }, 0);
+        // Only call onChange if not an internal change
+        if (!isInternalChangeRef.current) {
+          onChange(newValue);
+        }
       });
     }
 
@@ -257,12 +268,11 @@ export function MiniMonacoSQL({
 
   // Handle value changes from outside
   useEffect(() => {
-    if (
-      editorRef.current &&
-      editorRef.current.getValue() !== value &&
-      !isInternalChangeRef.current
-    ) {
+    if (editorRef.current && editorRef.current.getValue() !== value) {
+      isInternalChangeRef.current = true;
       editorRef.current.setValue(value);
+      // Reset flag immediately since setValue is synchronous
+      isInternalChangeRef.current = false;
     }
   }, [value]);
 
