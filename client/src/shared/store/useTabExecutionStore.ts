@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { QueryExecutionServiceSSE, type QueryExecutionOptions } from "@/shared/services";
 import { errorToTableData } from "@/shared/utils/errorUtils";
-import { useSSEStore } from "@/shared/store/useSSEStore";
+import { useSSEStore } from "@/shared/store/useQuerySSEStore";
 import { convertToTableData } from "@/shared/utils/typeUtils";
 
 interface TabExecutionState {
@@ -212,7 +212,7 @@ export const useTabExecutionStore = create<TabExecutionState>()(() => ({
     try {
       // Import the new immediate cancellation API
       const { cancelQueryRunImmediate } = await import("@/shared/lib/api");
-      const { useSSEStore } = await import("./useSSEStore");
+      const { useSSEStore } = await import("./useQuerySSEStore");
 
       // Immediately mark query as cancelled in the SSE store
       const sseStore = useSSEStore.getState();

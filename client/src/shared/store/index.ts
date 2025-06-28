@@ -4,7 +4,7 @@ export { useQueryStore } from "./useQueryStore";
 export { useTreeStore } from "./useTreeStore";
 export { useChatStore } from "./useChatStore";
 export { useUIStore } from "./useUIStore";
-export { useSSEStore } from "./useSSEStore";
+export { useSSEStore, useQuerySSEStore } from "./useQuerySSEStore";
 
 // Tab management stores (recommended for new code)
 export { useTabManagerStore } from "./useTabManagerStore";

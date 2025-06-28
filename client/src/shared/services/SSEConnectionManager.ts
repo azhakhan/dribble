@@ -1,5 +1,5 @@
-import { useSSEStore } from "@/shared/store/useSSEStore";
-import type { RunResult, GlobalSSEConnection } from "@/shared/store/useSSEStore";
+import { useSSEStore } from "@/shared/store/useQuerySSEStore";
+import type { RunResult, GlobalSSEConnection } from "@/shared/store/useQuerySSEStore";
 
 export interface SSEMessageHandler {
   onRunResult?: (queryId: string, runId: string, result: RunResult) => void;

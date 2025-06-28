@@ -1,7 +1,7 @@
 import { useEffect, useCallback, useRef } from "react";
-import { useSSEStore } from "@/shared/store/useSSEStore";
+import { useSSEStore } from "@/shared/store/useQuerySSEStore";
 import { sseConnectionManager } from "@/shared/services/SSEConnectionManager";
-import type { RunResult } from "@/shared/store/useSSEStore";
+import type { RunResult } from "@/shared/store/useQuerySSEStore";
 import type { SSEMessageHandler } from "@/shared/services/SSEConnectionManager";
 import type { TableRow } from "@/shared/types/api";
 

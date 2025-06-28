@@ -4,7 +4,7 @@ import type { QueryTab } from "@/shared/store/types";
 import type { TableData, TableRow } from "@/shared/types/api";
 import { convertToTableData } from "@/shared/utils/typeUtils";
 import { createNoDataMessage } from "@/shared/utils/errorUtils";
-import { useSSEStore } from "@/shared/store/useSSEStore";
+import { useSSEStore } from "@/shared/store/useQuerySSEStore";
 import { sseConnectionManager } from "./SSEConnectionManager";
 
 export interface QueryExecutionOptions {
