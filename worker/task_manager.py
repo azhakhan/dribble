@@ -10,8 +10,7 @@ from .common.connection_manager import (
     test_database_connection,
 )
 from .common.exceptions import InvalidTaskTypeError, UnsupportedDatabaseError
-from .postgres.query_executor import execute_query
-from .postgres.sql_builder import SQLBuilder
+from .postgres.query_executor import execute_query_with_modifiers
 from .postgres.schema_inspector import get_postgres_schemas
 
 logger = logging.getLogger(__name__)
@@ -94,14 +93,12 @@ def handle_execute_task(task: TaskRequest):
         set_result(task.query_run_id, {"status": "running"})
 
         if connection_info.db_type == "postgresql":
-            sql_to_run = SQLBuilder.build_query_with_modifiers(task.sql, task.modifiers)
-            logger.info(f"Executing query with modifiers: {sql_to_run}")
-
-            result = execute_query(sql_to_run, connection_info.engine)
-            execution_time_ms = int((time.time() - start_time) * 1000)
-
-            result_message = SQLBuilder.generate_result_message(result, execution_time_ms)
-            logger.info(f"Query {task.query_run_id} executed successfully: {result_message}")
+            result = execute_query_with_modifiers(
+                sql=task.sql,
+                modifiers=task.modifiers,
+                engine=connection_info.engine,
+                query_run_id=task.query_run_id,
+            )
         else:
             raise UnsupportedDatabaseError(
                 f"Query execution not implemented for {connection_info.db_type}"

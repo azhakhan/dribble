@@ -5,9 +5,12 @@ import logging
 import datetime
 import decimal
 import uuid
+from typing import Optional
 
 from ..common.connection_manager import get_database_connection
 from ..common.exceptions import QueryExecutionError, DatabaseConnectionError
+from ..common.models import QueryRunModifiers
+from .sql_builder import SQLBuilder
 
 logger = logging.getLogger(__name__)
 
@@ -65,6 +68,10 @@ def execute_query(query: str, engine):
     - CREATE: "CREATE executed successfully in 45ms"
     - DROP: "DROP executed successfully in 12ms"
     """
+    import time
+
+    start_time = time.time()
+
     logger.info(f"[{datetime.datetime.now()}] In execute_query function")
     query_type = detect_query_type(query)
 
@@ -80,11 +87,13 @@ def execute_query(query: str, engine):
                 logger.info(f"[{datetime.datetime.now()}] Rows fetched: {len(rows)}")
 
                 if len(rows) == 0:
+                    execution_time_ms = int((time.time() - start_time) * 1000)
                     return {
                         "data": [],
                         "row_count": 0,
                         "is_select_query": True,
                         "query_type": query_type,
+                        "execution_time_ms": execution_time_ms,
                     }
 
                 for row in rows:
@@ -117,11 +126,13 @@ def execute_query(query: str, engine):
                     processed_rows.append(processed_row)
 
                 logger.info(f"[{datetime.datetime.now()}] Processed rows: {processed_rows}")
+                execution_time_ms = int((time.time() - start_time) * 1000)
                 return {
                     "data": processed_rows,
                     "row_count": len(processed_rows),
                     "is_select_query": True,
                     "query_type": query_type,
+                    "execution_time_ms": execution_time_ms,
                 }
             else:
                 # Handle non-SELECT queries (INSERT, UPDATE, DELETE, etc.)
@@ -147,11 +158,13 @@ def execute_query(query: str, engine):
                 ):
                     affected_rows = 0  # These statements don't have meaningful row counts
 
+                execution_time_ms = int((time.time() - start_time) * 1000)
                 return {
                     "data": [],
                     "row_count": affected_rows,
                     "is_select_query": False,
                     "query_type": query_type,
+                    "execution_time_ms": execution_time_ms,
                 }
 
     except OperationalError as e:
@@ -175,3 +188,41 @@ def execute_query(query: str, engine):
             query=query,
             query_type=query_type,
         )
+
+
+def execute_query_with_modifiers(
+    sql: str, modifiers: Optional[QueryRunModifiers], engine, query_run_id: str = None
+):
+    """
+    Execute a SQL query with modifiers, handling SQL building, execution, and result messaging.
+
+    Args:
+        sql: The base SQL query
+        modifiers: Optional query modifiers (limit, offset, where, order_by)
+        engine: Database engine
+        query_run_id: Optional query run ID for logging
+
+    Returns:
+        Complete result dictionary with data, timing, and formatted message
+    """
+    # Build query with modifiers
+    sql_to_run = SQLBuilder.build_query_with_modifiers(sql, modifiers)
+    logger.info(f"Executing query with modifiers: {sql_to_run}")
+    if query_run_id:
+        logger.info(f"Query {query_run_id}: {sql_to_run}")
+
+    # Execute the query
+    result = execute_query(sql_to_run, engine)
+    execution_time_ms = result.get("execution_time_ms", 0)
+
+    # Generate result message
+    result_message = SQLBuilder.generate_result_message(result, execution_time_ms)
+    if query_run_id:
+        logger.info(f"Query {query_run_id} executed successfully: {result_message}")
+    else:
+        logger.info(f"Query executed successfully: {result_message}")
+
+    # Add message to result
+    result["message"] = result_message
+
+    return result
