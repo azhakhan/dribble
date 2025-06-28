@@ -1,11 +1,10 @@
-from fastapi import APIRouter, HTTPException, Response
+from fastapi import APIRouter, HTTPException
 from app.controllers.query import (
     execute_in_worker_version,
     cancel_query_in_worker,
     cancel_query_in_worker_async,
 )
 from uuid import UUID
-from app.core._redis import get_result
 from app.schemas.query_execute import CreateQueryRunRequest
 from app.controllers.query_service import QueryRunService, QueryVersionService
 from app.schemas.query_execute import ExecuteQueryVersionRequest
@@ -151,31 +150,3 @@ async def cancel_query_run_immediate(
 
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
-
-
-@router.get("/run-results/{run_id}")
-async def get_query_run_results(run_id: UUID, response: Response):
-    """Get query run execution results"""
-    try:
-        # check for results in redis using run_id
-        result = await get_result(run_id)
-        if not result:
-            raise HTTPException(status_code=404, detail="Query run results not found")
-        if result.get("status") == "running":
-            response.status_code = 202
-            return {"status": "running"}
-        if result.get("status") == "error":
-            response.status_code = 500
-            return {"status": "error", "error": result["error"]}
-        if result.get("status") == "cancelled":
-            response.status_code = 409  # Conflict status for cancelled
-            return {"status": "cancelled", "error": result.get("error", "Query was cancelled")}
-        if result.get("status") == "success":
-            return result["data"] if result.get("data") else []
-        else:
-            response.status_code = 500
-            return {"status": "error", "error": "Unknown error"}
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e

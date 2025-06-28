@@ -1,5 +1,4 @@
 import axios from "axios";
-import type { TableRow } from "../types/api";
 
 // Create axios instance with base URL
 const api = axios.create({
@@ -51,20 +50,6 @@ export const getSourceStatus = async (sourceId: string): Promise<SourceStatus> =
 export const executeQueryVersionRun = async (request: CreateQueryRunRequest): Promise<string> => {
   const response = await api.post<{ query_run_id: string }>("/execution/version", request);
   return response.data.query_run_id;
-};
-
-// New function to get query run results
-export const getQueryRunResults = async (run_id: string): Promise<TableRow[] | null> => {
-  try {
-    const response = await api.get<TableRow[]>(`/execution/run-results/${run_id}`);
-    return response.data;
-  } catch (error) {
-    if (axios.isAxiosError(error) && error.response?.status === 202) {
-      // Still processing, return a signal that we need to keep polling
-      return null;
-    }
-    throw error;
-  }
 };
 
 // Cancel a running query
