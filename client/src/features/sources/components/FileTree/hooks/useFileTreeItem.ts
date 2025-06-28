@@ -3,6 +3,8 @@ import type { FileNode } from "@/shared/lib/fileTreeUtils";
 import { useDisconnectSourceMutation } from "@/shared/hooks/useConnectSourceMutation";
 import { useTaskSSE } from "@/shared/lib/taskUtils";
 import { useTaskSubmission } from "@/shared/hooks/useTaskSubmission";
+import { useSourceStore } from "@/shared/store/useSourceStore";
+import type { SchemaObject } from "@/shared/store/types";
 import { toast } from "sonner";
 
 interface UseFileTreeItemProps {
@@ -48,16 +50,45 @@ export const useFileTreeItem = ({
   setNodeExpanded
 }: UseFileTreeItemProps) => {
   const disconnectMutation = useDisconnectSourceMutation();
+  const { loadConnectedSources, loadSourceSchema } = useSourceStore();
 
   // Initialize SSE connection for task updates
   useTaskSSE();
 
   // Task submission hook for connecting source
-  const connectTask = useTaskSubmission<{ status: string }>({
-    onSuccess: (result: unknown) => {
-      const connectResult = result as { status: string };
+  const connectTask = useTaskSubmission<{ status: string; data?: Record<string, SchemaObject> }>({
+    onSuccess: async (result: unknown) => {
+      const connectResult = result as { status: string; data?: Record<string, SchemaObject> };
+
       if (connectResult && connectResult.status === "success") {
         toast.success("Source connected successfully");
+
+        try {
+          // Refresh connected sources to include the newly connected source
+          await loadConnectedSources();
+
+          // If schema data was returned from the connection task, use it directly
+          if (connectResult.data && node.id) {
+            // Import the schema utility functions
+            const { schemaToFileTreeNodes } = await import("@/shared/lib/fileTreeUtils");
+
+            // Set the schema data in the store
+            const { setSourceSchema, setSourceGeneratedChildren } = useSourceStore.getState();
+            setSourceSchema(node.id, connectResult.data);
+
+            // Generate and set the file tree nodes from schema data
+            const generatedChildren = schemaToFileTreeNodes(connectResult.data, node.id);
+            setSourceGeneratedChildren(node.id, generatedChildren);
+          } else {
+            // Fallback: Load schema via API if not included in task result
+            if (node.id) {
+              await loadSourceSchema(node.id);
+            }
+          }
+        } catch (error) {
+          console.error("Error loading schema after connection:", error);
+          toast.error("Connected successfully, but failed to load schema");
+        }
       } else {
         toast.error("Connection failed");
       }

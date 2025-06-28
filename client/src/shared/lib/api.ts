@@ -26,8 +26,20 @@ export const getSources = async (): Promise<Source[]> => {
 
 // Get schemas for a specific source
 export const getSourceSchemas = async (sourceId: string) => {
-  const response = await api.get(`/worker/schemas/${sourceId}`);
-  return response.data;
+  const { submitTaskAndWait } = await import("@/shared/lib/taskUtils");
+
+  const result = await submitTaskAndWait<{
+    data: Record<string, unknown>;
+  }>("/worker/schemas/" + sourceId, {});
+
+  console.log("Schema task result:", result);
+
+  if (result.status === "success" && result.result?.data) {
+    return result.result.data;
+  }
+
+  console.error("Schema task failed or no schema data:", result);
+  throw new Error("Failed to get source schema");
 };
 
 // Connect to a source
@@ -138,8 +150,32 @@ export interface ConnectedSource {
 }
 
 export const getConnectedSources = async (): Promise<ConnectedSource[]> => {
-  const response = await api.get<ConnectedSource[]>("/worker/connected/");
-  return response.data;
+  const { submitTaskAndWait } = await import("@/shared/lib/taskUtils");
+
+  const result = await submitTaskAndWait<{
+    data: {
+      sources: Record<
+        string,
+        { source_id: string; dbtype: string; connections: { role: string }[] }
+      >;
+      raw_connections: Record<string, unknown>;
+    };
+  }>("/worker/connected/", {});
+
+  console.log("Connected sources task result:", result);
+
+  if (result.status === "success" && result.result?.data?.sources) {
+    // Convert the worker response format to the expected ConnectedSource format
+    const connectedSources = Object.values(result.result.data.sources).map((source) => ({
+      id: source.source_id,
+      source_id: source.source_id
+    }));
+    console.log("Converted connected sources:", connectedSources);
+    return connectedSources;
+  }
+
+  console.error("Connected sources task failed or no sources data:", result);
+  throw new Error("Failed to get connected sources");
 };
 
 // LLM Types
