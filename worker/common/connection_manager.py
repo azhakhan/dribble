@@ -1,6 +1,6 @@
 import time
 import logging
-from typing import Dict
+from typing import Dict, List
 from sqlalchemy import create_engine, text, URL
 from sqlalchemy.exc import OperationalError
 
@@ -236,6 +236,42 @@ def remove_connection(source_key: str):
         connection_info = ENGINES[source_key]
         _dispose_single_connection(source_key, connection_info)
         logger.info(f"Removed connection {source_key}")
+
+
+def remove_connections_by_source_id(source_id: str) -> List[str]:
+    """Remove all connections for a given source_id (all roles)"""
+    removed_connections = []
+
+    # Find all connections that start with the source_id
+    connections_to_remove = [
+        source_key for source_key in ENGINES.keys() if source_key.startswith(f"{source_id}:")
+    ]
+
+    # Remove each connection
+    for source_key in connections_to_remove:
+        connection_info = ENGINES[source_key]
+        _dispose_single_connection(source_key, connection_info)
+        removed_connections.append(source_key)
+        logger.info(f"Removed connection {source_key}")
+
+    if removed_connections:
+        logger.info(f"Removed {len(removed_connections)} connections for source {source_id}")
+    else:
+        logger.info(f"No connections found for source {source_id}")
+
+    return removed_connections
+
+
+def get_all_connections() -> Dict[str, Dict]:
+    """Get detailed information about all active connections"""
+    connections = {}
+    for source_key, connection_info in ENGINES.items():
+        connections[source_key] = {
+            "source_id": connection_info.source_id,
+            "role": connection_info.role,
+            "db_type": connection_info.db_type,
+        }
+    return connections
 
 
 def cleanup_all_connections():

@@ -8,6 +8,8 @@ from common.connection_manager import (
     get_connection,
     create_database_engine,
     test_database_connection,
+    remove_connections_by_source_id,
+    get_all_connections,
 )
 from common.exceptions import InvalidTaskTypeError, UnsupportedDatabaseError
 from postgres.query_executor import execute_query_with_modifiers
@@ -145,6 +147,73 @@ def handle_schema_task(task: TaskRequest):
         publish_result(task.id, "error", error=error_message)
 
 
+def handle_disconnect_task(task: TaskRequest):
+    """Handle disconnecting all engines for a source"""
+    try:
+        set_result(task.id, {"status": "disconnecting"})
+
+        # Remove all connections for the source_id
+        removed_connections = remove_connections_by_source_id(task.source_id)
+
+        if removed_connections:
+            message = (
+                f"Disconnected {len(removed_connections)} connections for source {task.source_id}"
+            )
+            logger.info(f"Disconnect successful: {task.source_id}")
+            set_result(task.id, {"status": "success", "message": message})
+            publish_result(task.id, "success", data={"message": message})
+        else:
+            message = f"No active connections found for source {task.source_id}"
+            logger.info(f"Disconnect task: {message}")
+            set_result(task.id, {"status": "success", "message": message})
+            publish_result(task.id, "success", data={"message": message})
+
+    except Exception as e:
+        error_message = str(e)
+        logger.error(f"Disconnect task {task.id} failed for {task.source_id}: {error_message}")
+
+        set_result(task.id, {"status": "error", "error": error_message})
+        publish_result(task.id, "error", error=error_message)
+
+
+def handle_connected_task(task: TaskRequest):
+    """Handle getting all connected sources"""
+    try:
+        set_result(task.id, {"status": "fetching"})
+
+        # Get all active connections
+        all_connections = get_all_connections()
+
+        # Group by source_id for easier consumption
+        sources = {}
+        for _, connection_info in all_connections.items():
+            source_id = connection_info["source_id"]
+            if source_id not in sources:
+                sources[source_id] = {
+                    "source_id": source_id,
+                    "db_type": connection_info["db_type"],
+                    "connections": [],
+                }
+            sources[source_id]["connections"].append({"role": connection_info["role"]})
+
+        logger.info(
+            f"Connected sources fetched: {len(sources)} sources, {len(all_connections)} total connections"
+        )
+
+        set_result(
+            task.id,
+            {"status": "success", "data": {"sources": sources, "raw_connections": all_connections}},
+        )
+        publish_result(task.id, "success", data={"sources": sources})
+
+    except Exception as e:
+        error_message = str(e)
+        logger.error(f"Connected task {task.id} failed: {error_message}")
+
+        set_result(task.id, {"status": "error", "error": error_message})
+        publish_result(task.id, "error", error=error_message)
+
+
 def process_task(task_data: dict):
     """Process a task from the queue"""
     try:
@@ -174,6 +243,10 @@ def process_task(task_data: dict):
             handle_execute_task(task)
         elif task.task_type == "schema":
             handle_schema_task(task)
+        elif task.task_type == "disconnect":
+            handle_disconnect_task(task)
+        elif task.task_type == "connected":
+            handle_connected_task(task)
         else:
             raise InvalidTaskTypeError(task.task_type)
 
