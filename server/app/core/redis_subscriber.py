@@ -1,7 +1,6 @@
 import asyncio
 import logging
 from typing import Dict, List, Optional
-from collections import defaultdict, deque
 import time
 import orjson
 from app.core._redis import REDIS
@@ -9,15 +8,13 @@ from app.core._redis import REDIS
 logger = logging.getLogger(__name__)
 
 
-class QueryResultsSubscriber:
-    """Background Redis subscriber for query results with in-memory storage for SSE"""
+class TaskStatusSubscriber:
+    """Simple Redis subscriber for task status updates (no data, only status)"""
 
-    def __init__(self, max_messages_per_query: int = 100):
-        self.max_messages_per_query = max_messages_per_query
-        self.subscribers: Dict[str, deque] = defaultdict(
-            lambda: deque(maxlen=max_messages_per_query)
-        )
-        self.client_connections: Dict[str, List] = defaultdict(list)
+    def __init__(self, max_messages_per_task: int = 10):
+        self.max_messages_per_task = max_messages_per_task
+        # Only store latest status per task
+        self.task_status: Dict[str, dict] = {}
         self._subscriber_task: Optional[asyncio.Task] = None
         self._running = False
 
@@ -28,8 +25,8 @@ class QueryResultsSubscriber:
             return
 
         self._running = True
-        self._subscriber_task = asyncio.create_task(self._subscribe_to_results())
-        logger.info("Redis subscriber started for query results")
+        self._subscriber_task = asyncio.create_task(self._subscribe_to_status())
+        logger.info("Redis subscriber started for task status")
 
     async def stop(self):
         """Stop the Redis subscriber"""
@@ -46,15 +43,14 @@ class QueryResultsSubscriber:
 
         logger.info("Redis subscriber stopped")
 
-    async def _subscribe_to_results(self):
-        """Background task to subscribe to query_results:* channels"""
+    async def _subscribe_to_status(self):
+        """Subscribe to task_status:* channels"""
         pubsub_redis = None
         try:
-            # Create a separate Redis connection for pub/sub
             pubsub_redis = REDIS.pubsub()
-            await pubsub_redis.psubscribe("query_results:*")
+            await pubsub_redis.psubscribe("task_status:*")
 
-            logger.info("Subscribed to query_results:* channels")
+            logger.info("Subscribed to task_status:* channels")
 
             async for message in pubsub_redis.listen():
                 if not self._running:
@@ -72,11 +68,11 @@ class QueryResultsSubscriber:
                 # Retry after a delay
                 await asyncio.sleep(5)
                 if self._running:
-                    self._subscriber_task = asyncio.create_task(self._subscribe_to_results())
+                    self._subscriber_task = asyncio.create_task(self._subscribe_to_status())
         finally:
             if pubsub_redis:
                 try:
-                    await pubsub_redis.punsubscribe("query_results:*")
+                    await pubsub_redis.punsubscribe("task_status:*")
                     await pubsub_redis.close()
                 except Exception as e:
                     logger.error(f"Error closing pub/sub connection: {str(e)}")
@@ -87,76 +83,55 @@ class QueryResultsSubscriber:
             channel = message["channel"]
             data = message["data"]
 
-            # Extract query_run_id from channel name (query_results:query_run_id)
-            if not channel.startswith("query_results:"):
+            # Extract task_id from channel name (task_status:task_id)
+            if not channel.startswith("task_status:"):
                 return
 
-            query_run_id = channel[14:]  # Remove "query_results:" prefix
+            task_id = channel[12:]  # Remove "task_status:" prefix
 
             # Parse the message
             try:
                 parsed_message = orjson.loads(data)
             except orjson.JSONDecodeError:
-                logger.error(f"Failed to parse message for query run {query_run_id}: {data}")
+                logger.error(f"Failed to parse message for task {task_id}: {data}")
                 return
 
             # Add timestamp if not present
             if "timestamp" not in parsed_message:
                 parsed_message["timestamp"] = time.time()
 
-            # Store in memory for this query run
-            self.subscribers[query_run_id].append(parsed_message)
+            # Store only the latest status for this task
+            self.task_status[task_id] = parsed_message
 
-            logger.debug(f"Stored message for query run {query_run_id}: {parsed_message['status']}")
+            logger.debug(
+                f"Updated status for task {task_id}: {parsed_message.get('status', 'unknown')}"
+            )
 
         except Exception as e:
             logger.error(f"Error handling Redis message: {str(e)}")
 
-    def get_messages(
-        self, query_run_id: str, since_timestamp: Optional[float] = None
-    ) -> List[dict]:
-        """Get stored messages for a query run, optionally since a timestamp"""
-        messages = list(self.subscribers[query_run_id])
+    def get_status(self, task_id: str) -> Optional[dict]:
+        """Get the latest status for a task"""
+        return self.task_status.get(task_id)
 
-        if since_timestamp is not None:
-            messages = [msg for msg in messages if msg.get("timestamp", 0) > since_timestamp]
+    def get_all_active_tasks(self) -> List[str]:
+        """Get all task IDs that have status"""
+        return list(self.task_status.keys())
 
-        return messages
-
-    def get_latest_message(self, query_run_id: str) -> Optional[dict]:
-        """Get the latest message for a query run"""
-        messages = self.subscribers[query_run_id]
-        return messages[-1] if messages else None
-
-    def clear_messages(self, query_run_id: str):
-        """Clear stored messages for a query run"""
-        if query_run_id in self.subscribers:
-            self.subscribers[query_run_id].clear()
-
-    def get_active_queries(self) -> List[str]:
-        """Get list of query run IDs that have stored messages"""
-        return list(self.subscribers.keys())
+    def clear_status(self, task_id: str):
+        """Clear stored status for a task"""
+        self.task_status.pop(task_id, None)
 
 
 # Global subscriber instance
-query_results_subscriber = QueryResultsSubscriber()
+task_status_subscriber = TaskStatusSubscriber()
 
 
 async def start_redis_subscriber():
     """Start the Redis subscriber service"""
-    await query_results_subscriber.start()
+    await task_status_subscriber.start()
 
 
 async def stop_redis_subscriber():
     """Stop the Redis subscriber service"""
-    await query_results_subscriber.stop()
-
-
-def get_query_messages(query_run_id: str, since_timestamp: Optional[float] = None) -> List[dict]:
-    """Get messages for a query run"""
-    return query_results_subscriber.get_messages(query_run_id, since_timestamp)
-
-
-def get_latest_query_message(query_run_id: str) -> Optional[dict]:
-    """Get the latest message for a query run"""
-    return query_results_subscriber.get_latest_message(query_run_id)
+    await task_status_subscriber.stop()

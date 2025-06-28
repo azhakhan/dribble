@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Query, Depends
+from fastapi import APIRouter, Query
 from fastapi.responses import StreamingResponse
 from typing import Optional, Set
 import asyncio
@@ -6,104 +6,83 @@ import json
 import logging
 import time
 import uuid
-from app.core.redis_subscriber import (
-    query_results_subscriber,
-)
-from app.core.db import get_db
-from app.models import QueryRun, QueryVersion
-from sqlalchemy.orm import Session
+from app.core.redis_subscriber import task_status_subscriber
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/stream", tags=["sse"])
 
-# Store active client sessions (in production, use Redis or proper session management)
+# Store active client sessions
 active_client_sessions: Set[str] = set()
 
 
-def get_query_id_for_run(db: Session, query_run_id: str) -> Optional[str]:
-    """Get the query_id for a given query_run_id"""
-    try:
-        query_run = db.query(QueryRun).filter(QueryRun.id == query_run_id).first()
-        if query_run:
-            query_version = (
-                db.query(QueryVersion).filter(QueryVersion.id == query_run.query_version_id).first()
-            )
-            if query_version:
-                return str(query_version.query_id)
-    except Exception as e:
-        logger.error(f"Error getting query_id for run {query_run_id}: {str(e)}")
-    return None
-
-
 @router.get("/events")
-async def stream_events(client_id: Optional[str] = Query(None), db: Session = Depends(get_db)):
+async def stream_events(client_id: Optional[str] = Query(None)):
     """
-    Single SSE connection that streams all query results multiplexed by query_run_id.
-
-    Args:
-        client_id: Optional client identifier (hardcoded for open source version)
+    Simple SSE connection that streams only task status updates.
+    No data is sent via SSE - clients should use /api/tasks/{task_id}/result for data.
     """
-    # For open source version, generate a simple client ID if not provided
+    # Generate client ID if not provided
     if not client_id:
         client_id = f"client-{uuid.uuid4().hex[:8]}"
 
     # Track active session
     active_client_sessions.add(client_id)
 
-    async def generate_multiplexed_sse_events():
-        """Generate SSE events for all query results multiplexed through single connection"""
+    async def generate_status_events():
+        """Generate SSE events for task status updates only"""
         try:
             logger.info(f"Starting SSE stream for client: {client_id}")
 
             # Send initial connection confirmation
-            yield f"data: {json.dumps({'type': 'connection', 'client_id': client_id, 'status': 'connected', 'timestamp': time.time()})}\n\n"
+            connection_msg = {
+                "type": "connection",
+                "client_id": client_id,
+                "status": "connected",
+                "timestamp": time.time(),
+            }
+            yield f"data: {json.dumps(connection_msg)}\n\n"
 
-            # Keep track of last seen timestamps per query to avoid duplicates
+            # Track last seen timestamps to avoid duplicates
             last_seen_timestamps = {}
             heartbeat_interval = 30  # seconds
             last_heartbeat = time.time()
 
             while client_id in active_client_sessions:
                 current_time = time.time()
-                has_new_messages = False
+                has_new_updates = False
 
-                # Get all active queries and check for new messages
-                active_query_run_ids = query_results_subscriber.get_active_queries()
+                # Get all active tasks
+                active_task_ids = task_status_subscriber.get_all_active_tasks()
 
-                for query_run_id in active_query_run_ids:
-                    last_timestamp = last_seen_timestamps.get(query_run_id, 0)
-                    new_messages = query_results_subscriber.get_messages(
-                        query_run_id, last_timestamp
-                    )
+                for task_id in active_task_ids:
+                    # Get latest status for this task
+                    status_msg = task_status_subscriber.get_status(task_id)
+                    if not status_msg:
+                        continue
 
-                    for message in new_messages:
-                        # Get the query_id for this run
-                        query_id = get_query_id_for_run(db, query_run_id)
+                    # Check if this is a new message
+                    msg_timestamp = status_msg.get("timestamp", current_time)
+                    last_timestamp = last_seen_timestamps.get(task_id, 0)
 
-                        if not query_id:
-                            logger.warning(f"Could not find query_id for run_id: {query_run_id}")
-                            continue
-
-                        # Add type field for multiplexing and include both IDs
-                        multiplexed_message = {
-                            "type": "query_result",
-                            "query_run_id": query_run_id,
-                            "query_id": query_id,
-                            **message,
+                    if msg_timestamp > last_timestamp:
+                        # Send status update
+                        sse_message = {
+                            "type": "task_status",
+                            "task_id": task_id,
+                            "status": status_msg.get("status"),
+                            "task_type": status_msg.get("task_type"),
+                            "timestamp": msg_timestamp,
                         }
 
-                        yield f"data: {json.dumps(multiplexed_message)}\n\n"
+                        yield f"data: {json.dumps(sse_message)}\n\n"
 
                         # Update last seen timestamp
-                        msg_timestamp = message.get("timestamp", current_time)
-                        last_seen_timestamps[query_run_id] = max(
-                            last_seen_timestamps.get(query_run_id, 0), msg_timestamp
-                        )
-                        has_new_messages = True
+                        last_seen_timestamps[task_id] = msg_timestamp
+                        has_new_updates = True
 
-                # Send heartbeat if no recent messages and enough time has passed
-                if not has_new_messages and (current_time - last_heartbeat) >= heartbeat_interval:
+                # Send heartbeat if no recent updates
+                if not has_new_updates and (current_time - last_heartbeat) >= heartbeat_interval:
                     yield f"event: heartbeat\ndata: {json.dumps({'type': 'heartbeat', 'timestamp': current_time})}\n\n"
                     last_heartbeat = current_time
 
@@ -122,7 +101,7 @@ async def stream_events(client_id: Optional[str] = Query(None), db: Session = De
             logger.info(f"SSE stream closed for client {client_id}")
 
     return StreamingResponse(
-        generate_multiplexed_sse_events(),
+        generate_status_events(),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
