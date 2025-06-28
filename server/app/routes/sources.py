@@ -27,10 +27,7 @@ class UpdateWorkerStatusRequest(BaseModel):
 
 # add a source
 @router.post("/")
-async def add_source(
-    request: CreateSourceRequest,
-    db: Session = Depends(get_db),
-):
+async def add_source(request: CreateSourceRequest, db: Session = Depends(get_db)):
     source = Source(
         name=request.name,
         dbtype=request.dbtype,
@@ -49,35 +46,6 @@ async def get_sources(db: Session = Depends(get_db)):
     return sources
 
 
-# get a specific source
-@router.get("/{source_id}/")
-async def get_source(source_id: UUID, db: Session = Depends(get_db)):
-    source = get_or_404(db, Source, source_id)
-    return source
-
-
-# update source credentials
-@router.put("/{source_id}/")
-async def update_source_credentials(
-    source_id: UUID,
-    request: UpdateCredentialsRequest,
-    db: Session = Depends(get_db),
-):
-    source = get_or_404(db, Source, source_id)
-
-    if request.creds:
-        source.creds = request.creds.model_dump()
-
-    db.commit()
-    db.refresh(source)
-
-    # Invalidate the schema cache for this source
-    invalidate_source_schema_cache(source_id)
-
-    return source
-
-
-# rename source
 @router.put("/rename/{source_id}/")
 async def rename_source(
     source_id: UUID,
@@ -91,12 +59,6 @@ async def rename_source(
     db.refresh(source)
 
     return source
-
-
-# get schema for a source
-@router.get("/{source_id}/schema/")
-async def get_schema(source_id: UUID, db: Session = Depends(get_db)):
-    return await get_source_schema(str(source_id), db)
 
 
 @router.get("/credentials/{source_id}/")
@@ -125,7 +87,6 @@ async def edit_source(
     return source
 
 
-# delete a source
 @router.delete("/{source_id}/")
 async def delete_source(source_id: UUID, db: Session = Depends(get_db)):
     source = get_or_404(db, Source, source_id)
@@ -142,8 +103,6 @@ async def delete_source(source_id: UUID, db: Session = Depends(get_db)):
 
 
 # worker related endpoints
-
-
 @router.post("/test_db/")
 async def test_db(request: TestSourceRequest):
     try:
@@ -154,6 +113,20 @@ async def test_db(request: TestSourceRequest):
 
         return {"task_id": task_id}
 
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+# get schema for a source
+@router.get("/schemas/{source_id}")
+async def get_schemas(
+    source_id: UUID,
+    db: Session = Depends(get_db),
+):
+    source = get_or_404(db, Source, source_id, "Source not found")
+
+    try:
+        return await get_source_schema(str(source.id), db)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
 
@@ -192,25 +165,6 @@ async def connect(
 async def get_connected_sources():
     # TODO: get all connected sources
     return []
-
-
-@router.get("/status/{source_id}")
-async def get_status():
-    # TODO: get source status from worker
-    return {"status": "connected"}
-
-
-@router.get("/schemas/{source_id}")
-async def get_schemas(
-    source_id: UUID,
-    db: Session = Depends(get_db),
-):
-    source = get_or_404(db, Source, source_id, "Source not found")
-
-    try:
-        return await get_source_schema(str(source.id), db)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.delete("/disconnect/{source_id}")

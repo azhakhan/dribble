@@ -1,4 +1,4 @@
-from app.models import Source, Worker  # noqa
+from app.models import Source  # noqa
 from sqlalchemy import text  # noqa
 
 
@@ -10,16 +10,6 @@ def test_source_seeding(db_session):
     assert len(sources) == 1
     assert sources[0].name == "test"
     assert sources[0].dbtype == "postgres"
-
-
-def test_worker_seeding(db_session):
-    """Test that the worker is properly seeded with test data."""
-    workers = (
-        db_session.query(Worker).filter(Worker.id == "285070b9-3a8a-4143-8912-d0932fd56fc3").all()
-    )  # noqa
-    assert len(workers) == 1
-    assert workers[0].status == "healthy"
-    assert str(workers[0].source_id) == "84cd6fb6-2ad9-4f8b-8f95-b8701c09ea38"
 
 
 def test_database_connection(test_engine):

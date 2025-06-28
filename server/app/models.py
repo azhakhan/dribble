@@ -30,7 +30,6 @@ class Source(Base, SoftDeleteMixin):
     dbtype = Column(String, nullable=False)
     creds = Column(JSON, nullable=False)
     queries = relationship("Query", back_populates="source")
-    workers = relationship("Worker", back_populates="source")
     created_at = Column(DateTime, default=datetime.now)
 
 
