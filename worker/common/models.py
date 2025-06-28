@@ -43,7 +43,7 @@ class TaskRequest(BaseModel):
     """Represents a task from the Redis queue"""
 
     task_type: str  # 'connect', 'test_db', 'execute', 'schema'
-    query_run_id: str
+    id: str
 
     # For connect/test_db tasks
     source_id: Optional[str] = None
@@ -81,7 +81,7 @@ class QueryExecutionResult(BaseModel):
 
 # Response models
 class TaskResponse(BaseModel):
-    query_run_id: str
+    id: str
     status: str
     message: Optional[str] = None
     data: Optional[Dict] = None

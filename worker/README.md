@@ -32,19 +32,29 @@ No more redundant `data_source_url` in every request. Establish connections once
 // 1. Connect
 {
   "task_type": "connect",
-  "query_run_id": "uuid",
-  "source_id": "prod_db",
+  "id": "uuid",
+  "source_id": "uuid",
   "role": "reader",
   "db_type": "postgresql",
-  "creds": { "host": "...", "user": "...", "password": "..." }
+  "creds": {
+    "host": "localhost",
+    "port": 5432,
+    "user": "user",
+    "password": "pass",
+    "dbname": "db"
+  }
 }
 
 // 2. Execute queries using the connection
 {
   "task_type": "execute",
-  "query_run_id": "uuid",
-  "source_key": "prod_db:reader",
-  "sql": "SELECT * FROM users LIMIT 10"
+  "id": "uuid",
+  "source_key": "source-uuid:reader",
+  "sql": "SELECT * FROM users",
+  "modifiers": {
+    "limit": 100,
+    "offset": 0
+  }
 }
 ```
 
@@ -61,9 +71,17 @@ Test connections without storing them:
 ```json
 {
   "task_type": "test_db",
-  "query_run_id": "uuid",
+  "id": "uuid",
+  "source_id": "uuid",
+  "role": "reader",
   "db_type": "postgresql",
-  "creds": { "host": "...", "user": "...", "password": "..." }
+  "creds": {
+    "host": "localhost",
+    "port": 5432,
+    "user": "user",
+    "password": "pass",
+    "dbname": "db"
+  }
 }
 ```
 
@@ -74,8 +92,8 @@ Get comprehensive database schema information:
 ```json
 {
   "task_type": "schema",
-  "query_run_id": "uuid",
-  "source_key": "prod_db:reader"
+  "id": "uuid",
+  "source_key": "source-uuid:reader"
 }
 ```
 
@@ -86,7 +104,7 @@ Execute queries with limits, offsets, WHERE clauses, and ORDER BY:
 ```json
 {
   "task_type": "execute_version",
-  "query_run_id": "uuid",
+  "id": "uuid",
   "source_key": "prod_db:reader",
   "sql": "SELECT * FROM users",
   "modifiers": {

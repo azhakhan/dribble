@@ -14,33 +14,33 @@ QUEUE_NAME = os.getenv("REDIS_QUEUE", "query_tasks")
 r = redis.Redis.from_url(REDIS_URL, decode_responses=True)
 
 
-def set_result(query_run_id: str, result: dict, ttl: int = 900):
+def set_result(task_id: str, result: dict, ttl: int = 900):
     """Store result in Redis"""
     try:
-        r.set(f"query_run:{query_run_id}:result", json.dumps(result), ex=ttl)
-        logger.debug(f"Successfully set result for query {query_run_id}")
+        r.set(f"query_run:{task_id}:result", json.dumps(result), ex=ttl)
+        logger.debug(f"Successfully set result for task {task_id}")
     except Exception as e:
-        logger.error(f"Failed to set result in Redis for query {query_run_id}: {str(e)}")
+        logger.error(f"Failed to set result in Redis for task {task_id}: {str(e)}")
         raise
 
 
-def get_result(query_run_id: str):
+def get_result(task_id: str):
     """Get result from Redis"""
     try:
-        raw = r.get(f"query_run:{query_run_id}:result")
+        raw = r.get(f"query_run:{task_id}:result")
         if raw:
             return json.loads(raw)
         return None
     except Exception as e:
-        logger.error(f"Failed to get result from Redis for query {query_run_id}: {str(e)}")
+        logger.error(f"Failed to get result from Redis for task {task_id}: {str(e)}")
         return None
 
 
-def publish_result(query_run_id: str, status: str, data: dict = None, error: str = None):
+def publish_result(task_id: str, status: str, data: dict = None, error: str = None):
     """Publish query result to Redis pub/sub channel"""
     try:
         message = {
-            "query_run_id": query_run_id,
+            "query_run_id": task_id,
             "status": status,
             "timestamp": time.time(),
         }
@@ -50,11 +50,11 @@ def publish_result(query_run_id: str, status: str, data: dict = None, error: str
         if error is not None:
             message["error"] = error
 
-        channel = f"query_results:{query_run_id}"
+        channel = f"query_results:{task_id}"
         r.publish(channel, json.dumps(message))
-        logger.debug(f"Published result for query run {query_run_id} to channel {channel}")
+        logger.debug(f"Published result for task {task_id} to channel {channel}")
     except Exception as e:
-        logger.error(f"Failed to publish result to Redis for query run {query_run_id}: {str(e)}")
+        logger.error(f"Failed to publish result to Redis for task {task_id}: {str(e)}")
 
 
 def get_task_from_queue(timeout: int = 5):

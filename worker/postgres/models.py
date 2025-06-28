@@ -18,7 +18,7 @@ class QueryRunModifiers(BaseModel):
 
 
 class QueryVersionRequest(BaseModel):
-    query_run_id: str
+    id: str
     sql: str
     modifiers: Optional[QueryRunModifiers] = None
 

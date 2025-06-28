@@ -191,7 +191,7 @@ def execute_query(query: str, engine):
 
 
 def execute_query_with_modifiers(
-    sql: str, modifiers: Optional[QueryRunModifiers], engine, query_run_id: str = None
+    sql: str, modifiers: Optional[QueryRunModifiers], engine, id: str = None
 ):
     """
     Execute a SQL query with modifiers, handling SQL building, execution, and result messaging.
@@ -200,7 +200,7 @@ def execute_query_with_modifiers(
         sql: The base SQL query
         modifiers: Optional query modifiers (limit, offset, where, order_by)
         engine: Database engine
-        query_run_id: Optional query run ID for logging
+        id: Optional query run ID for logging
 
     Returns:
         Complete result dictionary with data, timing, and formatted message
@@ -208,8 +208,8 @@ def execute_query_with_modifiers(
     # Build query with modifiers
     sql_to_run = SQLBuilder.build_query_with_modifiers(sql, modifiers)
     logger.info(f"Executing query with modifiers: {sql_to_run}")
-    if query_run_id:
-        logger.info(f"Query {query_run_id}: {sql_to_run}")
+    if id:
+        logger.info(f"Query {id}: {sql_to_run}")
 
     # Execute the query
     result = execute_query(sql_to_run, engine)
@@ -217,8 +217,8 @@ def execute_query_with_modifiers(
 
     # Generate result message
     result_message = SQLBuilder.generate_result_message(result, execution_time_ms)
-    if query_run_id:
-        logger.info(f"Query {query_run_id} executed successfully: {result_message}")
+    if id:
+        logger.info(f"Query {id} executed successfully: {result_message}")
     else:
         logger.info(f"Query executed successfully: {result_message}")
 
