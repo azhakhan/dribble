@@ -4,7 +4,7 @@ from typing import Dict, List
 from sqlalchemy import create_engine, text, URL
 from sqlalchemy.exc import OperationalError
 
-from common.models import ConnectionInfo, SUPPORTED_DB_TYPES
+from common.models import ConnectionInfo
 from common.exceptions import DatabaseConnectionError, UnsupportedDatabaseError
 
 logger = logging.getLogger(__name__)
@@ -21,12 +21,12 @@ _connection_stats = {
 }
 
 
-def build_connection_url(db_type: str, creds: Dict) -> str:
+def build_connection_url(dbtype: str, creds: Dict) -> str:
     """Build database connection URL from credentials"""
-    if db_type not in SUPPORTED_DB_TYPES:
-        raise UnsupportedDatabaseError(db_type)
+    if dbtype not in ["postgres", "mysql"]:
+        raise UnsupportedDatabaseError(dbtype)
 
-    if db_type == "postgresql":
+    if dbtype == "postgres":
         return URL.create(
             "postgresql+psycopg",
             username=creds.get("user") or creds.get("username"),
@@ -35,7 +35,7 @@ def build_connection_url(db_type: str, creds: Dict) -> str:
             port=creds.get("port", 5432),
             database=creds.get("dbname") or creds.get("database"),
         )
-    elif db_type == "mysql":
+    elif dbtype == "mysql":
         return URL.create(
             "mysql+pymysql",
             username=creds.get("user") or creds.get("username"),
@@ -44,32 +44,11 @@ def build_connection_url(db_type: str, creds: Dict) -> str:
             port=creds.get("port", 3306),
             database=creds.get("database") or creds.get("dbname"),
         )
-    elif db_type == "sqlite":
-        # SQLite just needs the database path
-        db_path = creds.get("database") or creds.get("path")
-        return f"sqlite:///{db_path}"
-    elif db_type == "snowflake":
-        # Snowflake URL format
-        account = creds["account"]
-        warehouse = creds.get("warehouse", "")
-        database = creds.get("database", "")
-        schema = creds.get("schema", "")
-        return URL.create(
-            "snowflake",
-            username=creds["username"],
-            password=creds["password"],
-            host=f"{account}.snowflakecomputing.com",
-            database=database,
-            query={
-                "warehouse": warehouse,
-                "schema": schema,
-            },
-        )
     else:
-        raise UnsupportedDatabaseError(db_type)
+        raise UnsupportedDatabaseError(dbtype)
 
 
-def get_role_specific_config(db_type: str, role: str) -> Dict:
+def get_role_specific_config(dbtype: str, role: str) -> Dict:
     """Get role-specific database configuration"""
     base_config = {
         "pool_size": 5,
@@ -90,13 +69,13 @@ def get_role_specific_config(db_type: str, role: str) -> Dict:
         base_config["max_overflow"] = 5
 
     # Database-specific configurations
-    if db_type == "postgresql":
+    if dbtype == "postgres":
         base_config["connect_args"] = {
             "sslmode": "prefer",
             "connect_timeout": 10,
             "application_name": f"dribble_worker_{role}",
         }
-    elif db_type == "mysql":
+    elif dbtype == "mysql":
         base_config["connect_args"] = {
             "connect_timeout": 10,
             "autocommit": True,
@@ -105,13 +84,13 @@ def get_role_specific_config(db_type: str, role: str) -> Dict:
     return base_config
 
 
-def create_database_engine(db_type: str, creds: Dict, role: str):
+def create_database_engine(dbtype: str, creds: Dict, role: str):
     """Create a database engine with proper settings based on DB type and role"""
-    connection_url = build_connection_url(db_type, creds)
-    engine_config = get_role_specific_config(db_type, role)
+    connection_url = build_connection_url(dbtype, creds)
+    engine_config = get_role_specific_config(dbtype, role)
 
     engine = create_engine(connection_url, **engine_config)
-    logger.info(f"Created {db_type} engine for role {role}")
+    logger.info(f"Created {dbtype} engine for role {role}")
     _connection_stats["total_created"] += 1
     return engine, str(connection_url)
 
@@ -148,7 +127,7 @@ def get_database_connection(engine, max_retries: int = 3, retry_delay: float = 1
                 )
 
 
-def add_connection(source_id: str, role: str, db_type: str, creds: Dict) -> str:
+def add_connection(source_id: str, role: str, dbtype: str, creds: Dict) -> str:
     """Add a new database connection to the pool"""
     source_key = f"{source_id}:{role}"
 
@@ -165,7 +144,7 @@ def add_connection(source_id: str, role: str, db_type: str, creds: Dict) -> str:
             _dispose_single_connection(source_key, connection_info)
 
     # Create new engine
-    engine, connection_url = create_database_engine(db_type, creds, role)
+    engine, connection_url = create_database_engine(dbtype, creds, role)
 
     # Test the connection
     if not test_database_connection(engine):
@@ -175,7 +154,7 @@ def add_connection(source_id: str, role: str, db_type: str, creds: Dict) -> str:
 
     # Store the connection info
     connection_info = ConnectionInfo(
-        engine=engine, url=connection_url, db_type=db_type, role=role, source_id=source_id
+        engine=engine, url=connection_url, dbtype=dbtype, role=role, source_id=source_id
     )
     ENGINES[source_key] = connection_info
     _connection_stats["current_active"] = len(ENGINES)
@@ -269,7 +248,7 @@ def get_all_connections() -> Dict[str, Dict]:
         connections[source_key] = {
             "source_id": connection_info.source_id,
             "role": connection_info.role,
-            "db_type": connection_info.db_type,
+            "dbtype": connection_info.dbtype,
         }
     return connections
 

@@ -72,10 +72,10 @@ class ConnectionNotFoundError(WorkerError):
 class UnsupportedDatabaseError(WorkerError):
     """Unsupported database type"""
 
-    def __init__(self, db_type: str):
-        message = f"Unsupported database type: {db_type}"
+    def __init__(self, dbtype: str):
+        message = f"Unsupported database type: {dbtype}"
         super().__init__(message)
-        self.db_type = db_type
+        self.dbtype = dbtype
 
 
 class InvalidTaskTypeError(WorkerError):

@@ -9,8 +9,8 @@ class SourceType(str, Enum):
 
 
 class TestDBTask(BaseModel):
-    db_type: SourceType
-    role: str = "reader"
+    dbtype: SourceType
+    role: Optional[str] = "reader"
     creds: Dict[str, Any]
 
 

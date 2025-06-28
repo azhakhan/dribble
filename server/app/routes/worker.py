@@ -21,7 +21,7 @@ async def test_db(request: TestDBTask):
     try:
         task_data = {"task_type": "test_db", **request.model_dump()}
         task_id = await submit_task(task_data)
-        logger.info(f"Submitted test task {task_id} for {request.db_type}")
+        logger.info(f"Submitted test task {task_id} for {request.dbtype}")
         return {"task_id": task_id}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
