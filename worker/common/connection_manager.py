@@ -4,8 +4,8 @@ from typing import Dict
 from sqlalchemy import create_engine, text, URL
 from sqlalchemy.exc import OperationalError
 
-from .models import ConnectionInfo, SUPPORTED_DB_TYPES
-from .exceptions import DatabaseConnectionError, UnsupportedDatabaseError
+from common.models import ConnectionInfo, SUPPORTED_DB_TYPES
+from common.exceptions import DatabaseConnectionError, UnsupportedDatabaseError
 
 logger = logging.getLogger(__name__)
 

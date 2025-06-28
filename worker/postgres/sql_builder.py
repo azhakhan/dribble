@@ -1,6 +1,6 @@
 import logging
 from typing import Optional
-from ..common.models import QueryRunModifiers
+from common.models import QueryRunModifiers
 
 logger = logging.getLogger(__name__)
 

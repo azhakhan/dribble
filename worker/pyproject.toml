@@ -10,4 +10,5 @@ dependencies = [
     "redis>=6.1.0",
     "sqlalchemy>=2.0.41",
     "requests>=2.32.3",
+    "pydantic>=2.11.7",
 ]

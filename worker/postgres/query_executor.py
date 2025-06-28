@@ -7,10 +7,10 @@ import decimal
 import uuid
 from typing import Optional
 
-from ..common.connection_manager import get_database_connection
-from ..common.exceptions import QueryExecutionError, DatabaseConnectionError
-from ..common.models import QueryRunModifiers
-from .sql_builder import SQLBuilder
+from common.connection_manager import get_database_connection
+from common.exceptions import QueryExecutionError, DatabaseConnectionError
+from common.models import QueryRunModifiers
+from postgres.sql_builder import SQLBuilder
 
 logger = logging.getLogger(__name__)
 

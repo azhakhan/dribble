@@ -2,7 +2,7 @@ from sqlalchemy import text
 from sqlalchemy.exc import OperationalError
 import logging
 
-from ..common.connection_manager import get_database_connection
+from common.connection_manager import get_database_connection
 
 logger = logging.getLogger(__name__)
 

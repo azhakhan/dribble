@@ -1,17 +1,17 @@
 import time
 import logging
 
-from .common.models import TaskRequest
-from .common.redis_client import set_result, publish_result
-from .common.connection_manager import (
+from common.models import TaskRequest
+from common.redis_client import set_result, publish_result
+from common.connection_manager import (
     add_connection,
     get_connection,
     create_database_engine,
     test_database_connection,
 )
-from .common.exceptions import InvalidTaskTypeError, UnsupportedDatabaseError
-from .postgres.query_executor import execute_query_with_modifiers
-from .postgres.schema_inspector import get_postgres_schemas
+from common.exceptions import InvalidTaskTypeError, UnsupportedDatabaseError
+from postgres.query_executor import execute_query_with_modifiers
+from postgres.schema_inspector import get_postgres_schemas
 
 logger = logging.getLogger(__name__)
 
