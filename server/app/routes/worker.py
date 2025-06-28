@@ -27,26 +27,14 @@ async def test_db(request: TestDBTask):
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
-@router.get("/tasks/{task_id}/result")
-async def get_task_result_endpoint(task_id: str):
-    """Get the full result data for a completed task"""
-    try:
-        result = await get_task_result(task_id)
-        if not result:
-            raise HTTPException(status_code=404, detail="Task result not found")
-
-        return result
-    except Exception as e:
-        logger.error(f"Error fetching result for task {task_id}: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e)) from e
-
-
-@router.get("/connect/{source_id}")
+@router.post("/connect/{source_id}")
 async def connect(
     source_id: UUID,
     db: Session = Depends(get_db),
 ):
     source = get_or_404(db, Source, source_id, "Source not found")
+
+    print(source.creds)
 
     try:
         # Parse credentials based on database type
@@ -60,8 +48,8 @@ async def connect(
         task_data = {
             "task_type": "connect",
             "source_id": str(source_id),
-            "db_type": source.dbtype,
-            "creds": creds,
+            "dbtype": source.dbtype,
+            "creds": creds.model_dump(),
             "role": "reader",
         }
 
@@ -73,7 +61,7 @@ async def connect(
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
-@router.get("/connected/")
+@router.post("/connected/")
 async def get_connected_sources():
     try:
         task_data = {"task_type": "connected"}
@@ -85,7 +73,7 @@ async def get_connected_sources():
 
 
 # get schema for a source
-@router.get("/schemas/{source_id}")
+@router.post("/schemas/{source_id}")
 async def get_schemas(source_id: UUID):
     try:
         task_data = {
@@ -100,7 +88,7 @@ async def get_schemas(source_id: UUID):
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
-@router.delete("/disconnect/{source_id}")
+@router.post("/disconnect/{source_id}")
 async def disconnect_source(source_id: UUID):
     try:
         task_data = {"task_type": "disconnect", "source_id": str(source_id)}
@@ -108,4 +96,18 @@ async def disconnect_source(source_id: UUID):
         logger.info(f"Submitted disconnect task {task_id} for source {source_id}")
         return {"task_id": task_id}
     except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@router.get("/tasks/{task_id}/result")
+async def get_task_result_endpoint(task_id: str):
+    """Get the full result data for a completed task"""
+    try:
+        result = await get_task_result(task_id)
+        if not result:
+            raise HTTPException(status_code=404, detail="Task result not found")
+
+        return result
+    except Exception as e:
+        logger.error(f"Error fetching result for task {task_id}: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e)) from e

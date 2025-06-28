@@ -1,9 +1,9 @@
 import { useCallback } from "react";
 import type { FileNode } from "@/shared/lib/fileTreeUtils";
-import {
-  useConnectSourceMutation,
-  useDisconnectSourceMutation
-} from "@/shared/hooks/useConnectSourceMutation";
+import { useDisconnectSourceMutation } from "@/shared/hooks/useConnectSourceMutation";
+import { useTaskSSE } from "@/shared/lib/taskUtils";
+import { useTaskSubmission } from "@/shared/hooks/useTaskSubmission";
+import { toast } from "sonner";
 
 interface UseFileTreeItemProps {
   node: FileNode;
@@ -47,18 +47,35 @@ export const useFileTreeItem = ({
   setSelectedNodeId,
   setNodeExpanded
 }: UseFileTreeItemProps) => {
-  const connectMutation = useConnectSourceMutation();
   const disconnectMutation = useDisconnectSourceMutation();
+
+  // Initialize SSE connection for task updates
+  useTaskSSE();
+
+  // Task submission hook for connecting source
+  const connectTask = useTaskSubmission<{ status: string }>({
+    onSuccess: (result: unknown) => {
+      const connectResult = result as { status: string };
+      if (connectResult && connectResult.status === "success") {
+        toast.success("Source connected successfully");
+      } else {
+        toast.error("Connection failed");
+      }
+    },
+    onError: (error: string) => {
+      toast.error(`Connection failed: ${error}`);
+    }
+  });
 
   // Handle connect button click
   const handleConnectClick = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation();
       if (isSource && node.id) {
-        connectMutation.mutate(node.id);
+        connectTask.submit(`/worker/connect/${node.id}`, {});
       }
     },
-    [isSource, node.id, connectMutation]
+    [isSource, node.id, connectTask]
   );
 
   // Handle item selection (single click)
