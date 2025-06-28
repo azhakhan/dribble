@@ -2,7 +2,6 @@ from fastapi import APIRouter, HTTPException
 from app.controllers.query import (
     execute_in_worker_version,
     cancel_query_in_worker,
-    cancel_query_in_worker_async,
 )
 from uuid import UUID
 from app.schemas.query_execute import CreateQueryRunRequest
@@ -60,37 +59,6 @@ async def execute_query_version_run(
         return execute_in_worker_version(query_run_request, db)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
-
-
-@router.post("/cancel/{query_run_id}")
-async def cancel_query_run(
-    query_run_id: UUID,
-    db: Session = Depends(get_db),
-):
-    """Cancel a running query by query_run_id"""
-    try:
-        # Get the query run to find the source
-        query_run = get_or_404(db, QueryRun, query_run_id, "Query run not found")
-
-        # Get the query version to get the query
-        version = QueryVersionService.get_version_by_id(db, query_run.query_version_id)
-        query = get_or_404(db, Query, version.query_id, "Query not found")
-
-        # Cancel the query in the worker using async version for better timeout handling
-        result = await cancel_query_in_worker_async(query_run_id, query.source_id, db)
-
-        # Handle the case where cancellation was requested but timed out
-        if result.get("status") == "cancellation_requested":
-            # Return success with a message indicating the request was sent
-            return {
-                "query_run_id": str(query_run_id),
-                "status": "requested",
-                "message": "Cancellation request sent - query should stop soon",
-            }
-
-        return result
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
 
 
 @router.post("/cancel-immediate/{query_run_id}")

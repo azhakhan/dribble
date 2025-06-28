@@ -46,15 +46,9 @@ export const getSourceStatus = async (sourceId: string): Promise<SourceStatus> =
   return response.data.status;
 };
 
-// New function to execute query version with run
 export const executeQueryVersionRun = async (request: CreateQueryRunRequest): Promise<string> => {
   const response = await api.post<{ query_run_id: string }>("/execution/version", request);
   return response.data.query_run_id;
-};
-
-// Cancel a running query
-export const cancelQueryRun = async (query_run_id: string): Promise<void> => {
-  await api.post(`/execution/cancel/${query_run_id}`);
 };
 
 // Cancel a running query immediately (client-side cancellation)
@@ -73,8 +67,8 @@ export const cancelQueryRunImmediate = async (
 // Create a new database source
 export interface CreateSourceRequest {
   name: string;
-  dbtype: "postgres" | "mysql" | "sqlite";
-  creds: PostgresCreds | MysqlCreds | SqliteCreds;
+  dbtype: "postgres" | "mysql";
+  creds: PostgresCreds | MysqlCreds;
 }
 
 export interface PostgresCreds {
@@ -91,10 +85,6 @@ export interface MysqlCreds {
   user: string;
   password: string;
   dbname: string;
-}
-
-export interface SqliteCreds {
-  path: string;
 }
 
 export const createSource = async (sourceData: CreateSourceRequest): Promise<Source> => {
@@ -115,7 +105,7 @@ export const testSource = async (sourceData: CreateSourceRequest): Promise<TestS
 export interface SourceCredentials {
   name: string;
   dbtype: string;
-  creds: PostgresCreds | MysqlCreds | SqliteCreds;
+  creds: PostgresCreds | MysqlCreds;
 }
 
 export const getSourceCredentials = async (sourceId: string): Promise<SourceCredentials> => {
@@ -124,7 +114,7 @@ export const getSourceCredentials = async (sourceId: string): Promise<SourceCred
 };
 
 export interface UpdateCredentialsRequest {
-  creds?: PostgresCreds | MysqlCreds | SqliteCreds;
+  creds?: PostgresCreds | MysqlCreds;
 }
 
 export const updateSourceCredentials = async (
