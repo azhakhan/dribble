@@ -82,7 +82,7 @@ export async function submitTaskAndWait<T = unknown>(
 
             // Fetch the task result from the server
             api
-              .get(`/tasks/${task_id}/result`)
+              .get(`/worker/tasks/${task_id}/result`)
               .then((response) => {
                 resolve({
                   status: "success",
