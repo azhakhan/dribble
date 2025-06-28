@@ -6,7 +6,6 @@ from app.schemas.sources import (
     RenameSourceRequest,
     PostgresCreds,
     MysqlCreds,
-    SqliteCreds,
 )
 from app.controllers.sources import get_source_schema, invalidate_source_schema_cache
 from app.core.db import get_db
@@ -133,8 +132,6 @@ async def connect(
             creds = PostgresCreds(**source.creds)
         elif source.dbtype == "mysql":
             creds = MysqlCreds(**source.creds)
-        elif source.dbtype == "sqlite":
-            creds = SqliteCreds(**source.creds)
         else:
             raise ValueError(f"Unsupported database type: {source.dbtype}")
 
