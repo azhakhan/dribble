@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 
 def handle_connect_task(task: TaskRequest):
-    """Handle database connection setup"""
+    """Handle database connection setup and schema fetching"""
     try:
         set_result(task.id, {"status": "connecting"})
 
@@ -29,8 +29,34 @@ def handle_connect_task(task: TaskRequest):
         )
 
         logger.info(f"Successfully established connection {source_key}")
-        set_result(task.id, {"status": "success"})
-        publish_status(task.id, "success")
+
+        # After successful connection, fetch schema data
+        try:
+            set_result(task.id, {"status": "fetching_schema"})
+
+            # Get the connection we just created
+            connection_info = get_connection(source_key)
+
+            # Fetch schema based on database type
+            if connection_info.dbtype == "postgres":
+                schema_info = get_postgres_schemas(connection_info.engine)
+            else:
+                raise UnsupportedDatabaseError(
+                    f"Schema inspection not implemented for {connection_info.dbtype}"
+                )
+
+            logger.info(f"Connection and schema fetch completed for {task.id}")
+            set_result(task.id, {"status": "success", "data": schema_info})
+            publish_status(task.id, "success")
+
+        except Exception as schema_error:
+            # If schema fetching fails, still consider connection successful
+            # but log the schema error
+            logger.warning(
+                f"Connection successful but schema fetch failed for {task.id}: {str(schema_error)}"
+            )
+            set_result(task.id, {"status": "success", "schema_error": str(schema_error)})
+            publish_status(task.id, "success")
 
     except Exception as e:
         error_message = str(e)
@@ -116,7 +142,8 @@ def handle_schema_task(task: TaskRequest):
     """Handle schema inspection"""
     try:
         # Get connection from pool
-        connection_info = get_connection(task.source_key)
+        source_key = f"{task.source_id}:{task.role}"
+        connection_info = get_connection(source_key)
 
         set_result(task.id, {"status": "running"})
 
