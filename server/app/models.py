@@ -82,19 +82,6 @@ class QueryRun(Base):
     created_at = Column(DateTime, default=datetime.now)
 
 
-class Worker(Base, SoftDeleteMixin):
-    __tablename__ = "workers"
-
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    source_id = Column(UUID(as_uuid=True), ForeignKey("sources.id"), nullable=False)
-    source = relationship("Source", back_populates="workers")
-    container_id = Column(String, nullable=False)
-    port = Column(Integer, nullable=False)
-    host = Column(String, nullable=False)
-    status = Column(String, nullable=False)
-    created_at = Column(DateTime, default=datetime.now)
-
-
 class LLM(Base, SoftDeleteMixin):
     __tablename__ = "llms"
 
