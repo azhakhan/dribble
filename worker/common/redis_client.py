@@ -24,37 +24,15 @@ def set_result(task_id: str, result: dict, ttl: int = 900):
         raise
 
 
-def get_result(task_id: str):
-    """Get result from Redis"""
+def publish_status(task_id: str, status: str):
+    """Publish simple task status to Redis pub/sub channel (no data, only status)"""
     try:
-        raw = r.get(f"query_run:{task_id}:result")
-        if raw:
-            return json.loads(raw)
-        return None
-    except Exception as e:
-        logger.error(f"Failed to get result from Redis for task {task_id}: {str(e)}")
-        return None
-
-
-def publish_result(task_id: str, status: str, data: dict = None, error: str = None):
-    """Publish query result to Redis pub/sub channel"""
-    try:
-        message = {
-            "id": task_id,
-            "status": status,
-            "timestamp": time.time(),
-        }
-
-        if data is not None:
-            message["data"] = data
-        if error is not None:
-            message["error"] = error
-
-        channel = f"query_results:{task_id}"
+        message = {"task_id": task_id, "status": status, "timestamp": time.time()}
+        channel = f"task_status:{task_id}"
         r.publish(channel, json.dumps(message))
-        logger.debug(f"Published result for task {task_id} to channel {channel}")
+        logger.debug(f"Published status '{status}' for task {task_id}")
     except Exception as e:
-        logger.error(f"Failed to publish result to Redis for task {task_id}: {str(e)}")
+        logger.error(f"Failed to publish status to Redis for task {task_id}: {str(e)}")
 
 
 def get_task_from_queue(timeout: int = 5):

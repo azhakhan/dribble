@@ -2,7 +2,7 @@ import time
 import logging
 
 from common.models import TaskRequest
-from common.redis_client import set_result, publish_result
+from common.redis_client import set_result, publish_status
 from common.connection_manager import (
     add_connection,
     get_connection,
@@ -29,18 +29,14 @@ def handle_connect_task(task: TaskRequest):
         )
 
         logger.info(f"Successfully established connection {source_key}")
-        set_result(
-            task.id,
-            {"status": "success", "message": f"Connection established for {source_key}"},
-        )
-        publish_result(task.id, "success", data={"source_key": source_key})
+        set_result(task.id, {"status": "success"})
+        publish_status(task.id, "success")
 
     except Exception as e:
         error_message = str(e)
         logger.error(f"Connection setup failed for {task.source_id}:{task.role}: {error_message}")
-
         set_result(task.id, {"status": "error", "error": error_message})
-        publish_result(task.id, "error", error=error_message)
+        publish_status(task.id, "error")
 
 
 def handle_test_db_task(task: TaskRequest):
@@ -61,16 +57,12 @@ def handle_test_db_task(task: TaskRequest):
                 message = f"Database connection test successful in {test_time_ms}ms"
                 logger.info(f"DB test successful: {task.db_type}")
                 set_result(task.id, {"status": "success", "message": message})
-                publish_result(
-                    task.id,
-                    "success",
-                    data={"message": message, "test_time_ms": test_time_ms},
-                )
+                publish_status(task.id, "success")
             else:
                 message = f"Database connection test failed after {test_time_ms}ms"
                 logger.error(f"DB test failed: {task.db_type}")
                 set_result(task.id, {"status": "error", "error": message})
-                publish_result(task.id, "error", error=message)
+                publish_status(task.id, "error")
 
         finally:
             # Always dispose of the test engine
@@ -81,7 +73,7 @@ def handle_test_db_task(task: TaskRequest):
         logger.error(f"DB test failed for {task.db_type}: {error_message}")
 
         set_result(task.id, {"status": "error", "error": error_message})
-        publish_result(task.id, "error", error=error_message)
+        publish_status(task.id, "error")
 
 
 def handle_execute_task(task: TaskRequest):
@@ -109,7 +101,7 @@ def handle_execute_task(task: TaskRequest):
             )
 
         set_result(task.id, {"status": "success", "data": result["data"]})
-        publish_result(task.id, "success", data=result["data"])
+        publish_status(task.id, "success")
 
     except Exception as e:
         execution_time_ms = int((time.time() - start_time) * 1000)
@@ -117,7 +109,7 @@ def handle_execute_task(task: TaskRequest):
         logger.error(f"Query {task.id} failed after {execution_time_ms}ms: {error_message}")
 
         set_result(task.id, {"status": "error", "error": error_message})
-        publish_result(task.id, "error", error=error_message)
+        publish_status(task.id, "error")
 
 
 def handle_schema_task(task: TaskRequest):
@@ -139,14 +131,14 @@ def handle_schema_task(task: TaskRequest):
         logger.info(f"Schema inspection completed for {task.id}")
 
         set_result(task.id, {"status": "success", "data": schema_info})
-        publish_result(task.id, "success", data=schema_info)
+        publish_status(task.id, "success")
 
     except Exception as e:
         error_message = str(e)
         logger.error(f"Schema inspection {task.id} failed: {error_message}")
 
         set_result(task.id, {"status": "error", "error": error_message})
-        publish_result(task.id, "error", error=error_message)
+        publish_status(task.id, "error")
 
 
 def handle_disconnect_task(task: TaskRequest):
@@ -158,24 +150,21 @@ def handle_disconnect_task(task: TaskRequest):
         removed_connections = remove_connections_by_source_id(task.source_id)
 
         if removed_connections:
-            message = (
-                f"Disconnected {len(removed_connections)} connections for source {task.source_id}"
-            )
             logger.info(f"Disconnect successful: {task.source_id}")
-            set_result(task.id, {"status": "success", "message": message})
-            publish_result(task.id, "success", data={"message": message})
+            set_result(task.id, {"status": "success"})
+            publish_status(task.id, "success")
         else:
             message = f"No active connections found for source {task.source_id}"
             logger.info(f"Disconnect task: {message}")
             set_result(task.id, {"status": "success", "message": message})
-            publish_result(task.id, "success", data={"message": message})
+            publish_status(task.id, "success")
 
     except Exception as e:
         error_message = str(e)
         logger.error(f"Disconnect task {task.id} failed for {task.source_id}: {error_message}")
 
         set_result(task.id, {"status": "error", "error": error_message})
-        publish_result(task.id, "error", error=error_message)
+        publish_status(task.id, "error")
 
 
 def handle_connected_task(task: TaskRequest):
@@ -206,14 +195,14 @@ def handle_connected_task(task: TaskRequest):
             task.id,
             {"status": "success", "data": {"sources": sources, "raw_connections": all_connections}},
         )
-        publish_result(task.id, "success", data={"sources": sources})
+        publish_status(task.id, "success")
 
     except Exception as e:
         error_message = str(e)
         logger.error(f"Connected task {task.id} failed: {error_message}")
 
         set_result(task.id, {"status": "error", "error": error_message})
-        publish_result(task.id, "error", error=error_message)
+        publish_status(task.id, "error")
 
 
 def handle_cancel_task(task: TaskRequest):
@@ -231,17 +220,17 @@ def handle_cancel_task(task: TaskRequest):
 
         # Publish cancellation result directly to the query run's channel
         if task.id:
-            publish_result(task.id, "cancelled", error="Query execution was cancelled")
+            publish_status(task.id, "cancelled")
 
         set_result(task.id, {"status": "success", "message": message})
-        publish_result(task.id, "success", data={"message": message})
+        publish_status(task.id, "success")
 
     except Exception as e:
         error_message = str(e)
         logger.error(f"Cancel task {task.id} failed: {error_message}")
 
         set_result(task.id, {"status": "error", "error": error_message})
-        publish_result(task.id, "error", error=error_message)
+        publish_status(task.id, "error")
 
 
 def process_task(task: TaskRequest):
@@ -271,4 +260,4 @@ def process_task(task: TaskRequest):
         logger.error(f"Error processing task: {str(e)}")
         if task.id:
             set_result(task.id, {"status": "error", "error": str(e)})
-            publish_result(task.id, "error", error=str(e))
+            publish_status(task.id, "error", error=str(e), task_type=task.task_type)
