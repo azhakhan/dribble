@@ -1,0 +1,13 @@
+[project]
+name = "worker"
+version = "0.1.0"
+description = "Worker for Dribble"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "orjson>=3.10.18",
+    "psycopg>=3.2.9",
+    "redis>=6.1.0",
+    "sqlalchemy>=2.0.41",
+    "requests>=2.32.3",
+]

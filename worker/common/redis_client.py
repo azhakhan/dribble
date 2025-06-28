@@ -1,0 +1,92 @@
+import os
+import time
+import json
+import logging
+import redis
+
+logger = logging.getLogger(__name__)
+
+# Redis configuration
+REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379/0")
+QUEUE_NAME = os.getenv("REDIS_QUEUE", "query_tasks")
+
+# Initialize Redis client
+r = redis.Redis.from_url(REDIS_URL, decode_responses=True)
+
+
+def set_result(query_run_id: str, result: dict, ttl: int = 900):
+    """Store result in Redis"""
+    try:
+        r.set(f"query_run:{query_run_id}:result", json.dumps(result), ex=ttl)
+        logger.debug(f"Successfully set result for query {query_run_id}")
+    except Exception as e:
+        logger.error(f"Failed to set result in Redis for query {query_run_id}: {str(e)}")
+        raise
+
+
+def get_result(query_run_id: str):
+    """Get result from Redis"""
+    try:
+        raw = r.get(f"query_run:{query_run_id}:result")
+        if raw:
+            return json.loads(raw)
+        return None
+    except Exception as e:
+        logger.error(f"Failed to get result from Redis for query {query_run_id}: {str(e)}")
+        return None
+
+
+def publish_result(query_run_id: str, status: str, data: dict = None, error: str = None):
+    """Publish query result to Redis pub/sub channel"""
+    try:
+        message = {
+            "query_run_id": query_run_id,
+            "status": status,
+            "timestamp": time.time(),
+        }
+
+        if data is not None:
+            message["data"] = data
+        if error is not None:
+            message["error"] = error
+
+        channel = f"query_results:{query_run_id}"
+        r.publish(channel, json.dumps(message))
+        logger.debug(f"Published result for query run {query_run_id} to channel {channel}")
+    except Exception as e:
+        logger.error(f"Failed to publish result to Redis for query run {query_run_id}: {str(e)}")
+
+
+def get_task_from_queue(timeout: int = 5):
+    """Get a task from the Redis queue"""
+    try:
+        task = r.brpop(QUEUE_NAME, timeout=timeout)
+        if task:
+            _, task_raw = task
+            return json.loads(task_raw)
+        return None
+    except json.JSONDecodeError as e:
+        logger.error(f"Invalid JSON in task: {task_raw}, error: {e}")
+        return None
+    except Exception as e:
+        logger.error(f"Redis error getting task: {str(e)}")
+        return None
+
+
+def set_worker_heartbeat(worker_id: str, connections_count: int = 0):
+    """Set worker heartbeat in Redis"""
+    try:
+        r.set(f"worker:heartbeat:{worker_id}", int(time.time()))
+        r.set("worker:connections", connections_count)
+    except Exception as e:
+        logger.error(f"Failed to set heartbeat: {str(e)}")
+
+
+def health_check():
+    """Check Redis connectivity"""
+    try:
+        r.ping()
+        return True
+    except Exception as e:
+        logger.error(f"Redis health check failed: {str(e)}")
+        return False
