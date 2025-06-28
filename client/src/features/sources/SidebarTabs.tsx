@@ -3,10 +3,11 @@ import { SourcesPanel } from "./SourcesPanel";
 import { QueryTree } from "./components/QueryTree";
 import { useTreeStore } from "@/shared/store";
 import type { FileNode } from "@/shared/lib/fileTreeUtils";
-import type { Query } from "@/shared/lib/api";
+import type { Query, ConnectedSource } from "@/shared/lib/api";
 
 interface SidebarTabsProps {
   sources: FileNode[];
+  connectedSources: ConnectedSource[];
   sourcesLoading: boolean;
   sourcesError: unknown;
   onSourceSelect?: (source: { id: string; name: string; dbtype: string }) => void;
@@ -23,6 +24,7 @@ interface SidebarTabsProps {
 
 export const SidebarTabs = ({
   sources,
+  connectedSources,
   sourcesLoading,
   sourcesError,
   onSourceSelect,
@@ -47,6 +49,7 @@ export const SidebarTabs = ({
         return (
           <SourcesPanel
             data={sources}
+            connectedSources={connectedSources}
             onSourceSelect={onSourceSelect}
             onTableDoubleClick={onTableDoubleClick}
           />
@@ -69,6 +72,7 @@ export const SidebarTabs = ({
         return (
           <SourcesPanel
             data={sources}
+            connectedSources={connectedSources}
             onSourceSelect={onSourceSelect}
             onTableDoubleClick={onTableDoubleClick}
           />

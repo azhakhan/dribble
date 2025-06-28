@@ -2,13 +2,11 @@ import React, { useMemo } from "react";
 import type { FileNode } from "@/shared/lib/fileTreeUtils";
 import type { ConnectedSource } from "@/shared/lib/api";
 import { FileTreeItem } from "./FileTreeItem";
-import {
-  useStoreConnectedSources,
-  useStoreConnectedSourcesSchemas
-} from "@/shared/hooks/useStoreQueries";
+import { useStoreConnectedSourcesSchemas } from "@/shared/hooks/useStoreQueries";
 
 interface FileTreeProps {
   data: FileNode[];
+  connectedSources: ConnectedSource[];
   onSourceSelect?: (source: { id: string; name: string; dbtype: string }) => void;
   onTableDoubleClick?: (
     sourceId: string,
@@ -18,18 +16,20 @@ interface FileTreeProps {
   ) => void;
 }
 
-export const FileTree: React.FC<FileTreeProps> = ({ data, onSourceSelect, onTableDoubleClick }) => {
-  // Fetch connected sources on component mount
-  const { data: connectedSourcesData } = useStoreConnectedSources();
-
+export const FileTree: React.FC<FileTreeProps> = ({
+  data,
+  connectedSources,
+  onSourceSelect,
+  onTableDoubleClick
+}) => {
   // Create a set of connected source IDs for easy lookup
   const connectedSourceIds = useMemo(() => {
-    if (!connectedSourcesData) return new Set<string>();
-    return new Set(connectedSourcesData.map((source: ConnectedSource) => source.id));
-  }, [connectedSourcesData]);
+    if (!connectedSources) return new Set<string>();
+    return new Set(connectedSources.map((source: ConnectedSource) => source.id));
+  }, [connectedSources]);
 
   // Fetch schemas for all connected sources and update AppState
-  useStoreConnectedSourcesSchemas(connectedSourcesData);
+  useStoreConnectedSourcesSchemas(connectedSources);
 
   // Sort sources alphabetically by name
   const sortedData = useMemo(() => {

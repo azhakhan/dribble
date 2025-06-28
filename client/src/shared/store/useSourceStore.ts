@@ -136,7 +136,7 @@ export const useSourceStore = create<SourceState>((set, get) => ({
       set((state) => ({
         sourceSchemaMap: {
           ...state.sourceSchemaMap,
-          [sourceId]: schemas
+          [sourceId]: schemas as Record<string, SchemaObject>
         },
         loadingSchemas: new Set([...state.loadingSchemas].filter((id) => id !== sourceId))
       }));
@@ -146,7 +146,10 @@ export const useSourceStore = create<SourceState>((set, get) => ({
 
       // Generate and set children nodes from schema data
       const { schemaToFileTreeNodes } = await import("@/shared/lib/fileTreeUtils");
-      const generatedChildren = schemaToFileTreeNodes(schemas, sourceId);
+      const generatedChildren = schemaToFileTreeNodes(
+        schemas as Record<string, SchemaObject>,
+        sourceId
+      );
 
       get().setSourceGeneratedChildren(sourceId, generatedChildren);
     } catch (error) {
@@ -322,13 +325,18 @@ export const useSourceStore = create<SourceState>((set, get) => ({
     // Initial load
     get().loadAllSourceStatuses();
 
-    // Set up polling interval (every 3 seconds)
+    // Set up polling interval (every 15 seconds)
     const interval = setInterval(() => {
       const currentState = get();
-      if (currentState.statusPollingEnabled && currentState.connectedSources.size > 0) {
+      // Only poll if page is visible and we have connected sources
+      if (
+        currentState.statusPollingEnabled &&
+        currentState.connectedSources.size > 0 &&
+        !document.hidden
+      ) {
         currentState.loadAllSourceStatuses();
       }
-    }, 5000);
+    }, 15000);
 
     set({ statusPollingInterval: interval });
   },

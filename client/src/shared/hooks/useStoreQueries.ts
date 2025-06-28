@@ -30,12 +30,16 @@ export function useStoreSources() {
  */
 export function useStoreConnectedSources() {
   const { connectedSourcesData, loadingConnectedSources, loadConnectedSources } = useSourceStore();
-  const hasLoadedRef = useRef(false);
+  const hasTriedLoadingRef = useRef(false);
 
   useEffect(() => {
-    // Load connected sources only once on mount if not already loaded and not loading
-    if (!hasLoadedRef.current && connectedSourcesData.length === 0 && !loadingConnectedSources) {
-      hasLoadedRef.current = true;
+    // Only attempt to load if we haven't tried yet and we're not currently loading
+    if (
+      !hasTriedLoadingRef.current &&
+      !loadingConnectedSources &&
+      connectedSourcesData.length === 0
+    ) {
+      hasTriedLoadingRef.current = true;
       loadConnectedSources();
     }
   }, [connectedSourcesData.length, loadingConnectedSources]);
@@ -150,12 +154,33 @@ export function useStoreSourceSchema(sourceId: string | undefined) {
  */
 export function useStoreConnectedSourcesSchemas(connectedSources: ConnectedSource[] | undefined) {
   const { loadingSchemas, sourceSchemaErrors, loadConnectedSourcesSchemas } = useSourceStore();
+  const loadedSourceIdsRef = useRef<Set<string>>(new Set());
+
+  // Create a stable string representation of connected source IDs
+  const connectedSourceIds = useMemo(() => {
+    return (
+      connectedSources
+        ?.map((s) => s.id)
+        .sort()
+        .join(",") || ""
+    );
+  }, [connectedSources]);
 
   useEffect(() => {
     if (connectedSources && connectedSources.length > 0) {
-      loadConnectedSourcesSchemas(connectedSources);
+      // Only load schemas if we haven't loaded them for this exact set of sources
+      const currentIds = new Set(connectedSources.map((s) => s.id));
+      const currentIdsString = Array.from(currentIds).sort().join(",");
+
+      if (
+        loadedSourceIdsRef.current.size === 0 ||
+        Array.from(loadedSourceIdsRef.current).sort().join(",") !== currentIdsString
+      ) {
+        loadedSourceIdsRef.current = currentIds;
+        loadConnectedSourcesSchemas(connectedSources);
+      }
     }
-  }, [connectedSources]);
+  }, [connectedSourceIds, loadConnectedSourcesSchemas]);
 
   // Calculate loading state - true if any connected source is loading
   const isLoading = useMemo(() => {

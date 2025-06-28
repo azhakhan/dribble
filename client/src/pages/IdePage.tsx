@@ -86,9 +86,9 @@ function IdePage() {
       setConnectedSourcesData(connectedSourcesData);
 
       // Start background status polling when connected sources are loaded
-      if (connectedSourcesData.length > 0) {
-        startStatusPolling();
-      }
+      // if (connectedSourcesData.length > 0) {
+      //   startStatusPolling();
+      // }
     }
   }, [connectedSourcesData, setConnectedSourcesData, startStatusPolling]);
 
@@ -195,6 +195,7 @@ function IdePage() {
           <div className="h-full border-r select-none">
             <SidebarTabs
               sources={fileTreeData}
+              connectedSources={connectedSourcesData || []}
               sourcesLoading={sourcesLoading}
               sourcesError={sourcesError}
               onSourceSelect={handleSourceSelect}
