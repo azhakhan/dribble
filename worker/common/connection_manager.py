@@ -12,6 +12,14 @@ logger = logging.getLogger(__name__)
 # Active connection pools: { f"{source_id}:{role}": ConnectionInfo }
 ENGINES: Dict[str, ConnectionInfo] = {}
 
+# Connection statistics for monitoring
+_connection_stats = {
+    "total_created": 0,
+    "total_disposed": 0,
+    "current_active": 0,
+    "failed_connections": 0,
+}
+
 
 def build_connection_url(db_type: str, creds: Dict) -> str:
     """Build database connection URL from credentials"""
@@ -104,6 +112,7 @@ def create_database_engine(db_type: str, creds: Dict, role: str):
 
     engine = create_engine(connection_url, **engine_config)
     logger.info(f"Created {db_type} engine for role {role}")
+    _connection_stats["total_created"] += 1
     return engine, str(connection_url)
 
 
@@ -115,6 +124,7 @@ def test_database_connection(engine) -> bool:
         return True
     except Exception as e:
         logger.error(f"Connection test failed: {str(e)}")
+        _connection_stats["failed_connections"] += 1
         return False
 
 
@@ -152,8 +162,7 @@ def add_connection(source_id: str, role: str, db_type: str, creds: Dict) -> str:
         else:
             logger.warning(f"Existing connection {source_key} is unhealthy, recreating...")
             # Remove the bad connection
-            ENGINES[source_key].engine.dispose()
-            del ENGINES[source_key]
+            _dispose_single_connection(source_key, connection_info)
 
     # Create new engine
     engine, connection_url = create_database_engine(db_type, creds, role)
@@ -161,6 +170,7 @@ def add_connection(source_id: str, role: str, db_type: str, creds: Dict) -> str:
     # Test the connection
     if not test_database_connection(engine):
         engine.dispose()
+        _connection_stats["total_disposed"] += 1
         raise DatabaseConnectionError("Failed to establish database connection")
 
     # Store the connection info
@@ -168,6 +178,7 @@ def add_connection(source_id: str, role: str, db_type: str, creds: Dict) -> str:
         engine=engine, url=connection_url, db_type=db_type, role=role, source_id=source_id
     )
     ENGINES[source_key] = connection_info
+    _connection_stats["current_active"] = len(ENGINES)
 
     logger.info(f"Successfully established connection {source_key}")
     return source_key
@@ -185,8 +196,7 @@ def get_connection(source_key: str) -> ConnectionInfo:
     # Test connection health
     if not test_database_connection(connection_info.engine):
         logger.warning(f"Connection {source_key} is unhealthy, removing from pool")
-        connection_info.engine.dispose()
-        del ENGINES[source_key]
+        _dispose_single_connection(source_key, connection_info)
         raise DatabaseConnectionError(f"Connection {source_key} is unhealthy and has been removed")
 
     return connection_info
@@ -197,22 +207,76 @@ def get_connections_count() -> int:
     return len(ENGINES)
 
 
+def get_connection_stats() -> Dict:
+    """Get connection statistics for monitoring"""
+    return {
+        **_connection_stats,
+        "current_active": len(ENGINES),
+        "active_connections": list(ENGINES.keys()),
+    }
+
+
+def _dispose_single_connection(source_key: str, connection_info: ConnectionInfo):
+    """Dispose a single connection safely"""
+    try:
+        connection_info.engine.dispose()
+        logger.info(f"Disposed connection {source_key}")
+        _connection_stats["total_disposed"] += 1
+    except Exception as e:
+        logger.error(f"Error disposing connection {source_key}: {str(e)}")
+    finally:
+        if source_key in ENGINES:
+            del ENGINES[source_key]
+            _connection_stats["current_active"] = len(ENGINES)
+
+
 def remove_connection(source_key: str):
     """Remove a connection from the pool"""
     if source_key in ENGINES:
-        ENGINES[source_key].engine.dispose()
-        del ENGINES[source_key]
+        connection_info = ENGINES[source_key]
+        _dispose_single_connection(source_key, connection_info)
         logger.info(f"Removed connection {source_key}")
 
 
 def cleanup_all_connections():
     """Clean up all connections (for shutdown)"""
-    for source_key, connection_info in ENGINES.items():
-        try:
-            connection_info.engine.dispose()
-            logger.info(f"Disposed connection {source_key}")
-        except Exception as e:
-            logger.error(f"Error disposing connection {source_key}: {str(e)}")
+    if not ENGINES:
+        logger.info("No connections to clean up")
+        return
 
+    logger.info(f"Cleaning up {len(ENGINES)} connections...")
+
+    # Log current connection stats before cleanup
+    stats = get_connection_stats()
+    logger.info(f"Connection stats before cleanup: {stats}")
+
+    # Dispose all connections
+    connections_to_cleanup = list(ENGINES.items())
+    for source_key, connection_info in connections_to_cleanup:
+        _dispose_single_connection(source_key, connection_info)
+
+    # Final cleanup
     ENGINES.clear()
-    logger.info("All connections cleaned up")
+    _connection_stats["current_active"] = 0
+
+    logger.info("All connections cleaned up successfully")
+    logger.info(f"Final connection stats: {get_connection_stats()}")
+
+
+def health_check_connections() -> Dict:
+    """Health check all active connections"""
+    healthy_connections = []
+    unhealthy_connections = []
+
+    for source_key, connection_info in ENGINES.items():
+        if test_database_connection(connection_info.engine):
+            healthy_connections.append(source_key)
+        else:
+            unhealthy_connections.append(source_key)
+
+    return {
+        "total_connections": len(ENGINES),
+        "healthy_connections": healthy_connections,
+        "unhealthy_connections": unhealthy_connections,
+        "health_percentage": len(healthy_connections) / len(ENGINES) * 100 if ENGINES else 100,
+    }

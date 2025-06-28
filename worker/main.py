@@ -17,6 +17,8 @@ import uuid
 import logging
 import signal
 import sys
+import atexit
+import threading
 
 from common.redis_client import get_task_from_queue, set_worker_heartbeat, health_check
 from common.connection_manager import get_connections_count, cleanup_all_connections
@@ -32,6 +34,16 @@ logger = logging.getLogger(__name__)
 HEARTBEAT_INTERVAL = 5  # seconds
 WORKER_ID = str(uuid.uuid4())
 RUNNING = True
+SHUTDOWN_TIMEOUT = 30  # seconds to wait for graceful shutdown
+_cleanup_done = threading.Event()
+
+
+def cleanup_handler():
+    """Cleanup handler that ensures connections are always cleaned up"""
+    if not _cleanup_done.is_set():
+        logger.info("Running cleanup handler...")
+        cleanup_all_connections()
+        _cleanup_done.set()
 
 
 def signal_handler(signum, frame):
@@ -40,46 +52,69 @@ def signal_handler(signum, frame):
     logger.info(f"Received signal {signum}, shutting down gracefully...")
     RUNNING = False
 
+    # Give the main loop a chance to exit gracefully
+    if not _cleanup_done.wait(timeout=SHUTDOWN_TIMEOUT):
+        logger.warning("Graceful shutdown timeout, forcing cleanup...")
+        cleanup_handler()
+
+
+def setup_signal_handlers():
+    """Setup signal handlers for graceful shutdown"""
+    # Register cleanup to always run on exit
+    atexit.register(cleanup_handler)
+
+    # Handle common termination signals
+    signal.signal(signal.SIGINT, signal_handler)  # Ctrl+C
+    signal.signal(signal.SIGTERM, signal_handler)  # Termination request
+
+    # Handle additional signals on Unix systems
+    if hasattr(signal, "SIGHUP"):
+        signal.signal(signal.SIGHUP, signal_handler)  # Terminal hangup
+    if hasattr(signal, "SIGQUIT"):
+        signal.signal(signal.SIGQUIT, signal_handler)  # Quit signal
+
 
 def main_loop():
     """Main worker loop"""
     logger.info(f"Starting Dribble worker {WORKER_ID}")
     logger.info("Supported databases: PostgreSQL")
-    logger.info("Supported task types: connect, test_db, execute, execute_version, schema")
+    logger.info("Supported task types: connect, test_db, execute, schema")
 
     last_heartbeat = 0
 
-    while RUNNING:
-        try:
-            # Heartbeat
-            now = time.time()
-            if now - last_heartbeat > HEARTBEAT_INTERVAL:
-                connections_count = get_connections_count()
-                set_worker_heartbeat(WORKER_ID, connections_count)
-                last_heartbeat = now
+    try:
+        while RUNNING:
+            try:
+                # Heartbeat
+                now = time.time()
+                if now - last_heartbeat > HEARTBEAT_INTERVAL:
+                    connections_count = get_connections_count()
+                    set_worker_heartbeat(WORKER_ID, connections_count)
+                    last_heartbeat = now
 
-                if connections_count > 0:
-                    logger.debug(f"Worker heartbeat: {connections_count} active connections")
+                    if connections_count > 0:
+                        logger.debug(f"Worker heartbeat: {connections_count} active connections")
 
-            # Get and process tasks
-            task_data = get_task_from_queue(timeout=5)
-            if task_data:
-                process_task(task_data)
-            else:
-                # No task received, continue loop
-                continue
+                # Get and process tasks
+                task_data = get_task_from_queue(timeout=5)
+                if task_data:
+                    process_task(task_data)
+                else:
+                    # No task received, continue loop
+                    continue
 
-        except KeyboardInterrupt:
-            logger.info("Received keyboard interrupt, shutting down...")
-            break
-        except Exception:
-            logger.exception("Worker loop error")
-            time.sleep(1)  # Avoid tight loop on persistent errors
+            except KeyboardInterrupt:
+                logger.info("Received keyboard interrupt, shutting down...")
+                break
+            except Exception:
+                logger.exception("Worker loop error")
+                time.sleep(1)  # Avoid tight loop on persistent errors
 
-    # Cleanup
-    logger.info("Cleaning up connections...")
-    cleanup_all_connections()
-    logger.info("Worker shutdown complete")
+    finally:
+        # Always cleanup, even if an exception occurred
+        logger.info("Main loop ended, cleaning up connections...")
+        cleanup_handler()
+        logger.info("Worker shutdown complete")
 
 
 def health_check_worker():
@@ -114,13 +149,12 @@ if __name__ == "__main__":
             sys.exit(0)
 
     # Set up signal handlers
-    signal.signal(signal.SIGINT, signal_handler)
-    signal.signal(signal.SIGTERM, signal_handler)
+    setup_signal_handlers()
 
     # Start the main loop
     try:
         main_loop()
     except Exception:
         logger.exception("Fatal error in main loop")
-        cleanup_all_connections()
+        cleanup_handler()
         sys.exit(1)

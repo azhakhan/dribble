@@ -1,0 +1,14 @@
+[project]
+name = "mysql-worker"
+version = "0.1.0"
+description = "MySQL worker for Dribble"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "fastapi[standard]>=0.115.12",
+    "orjson>=3.10.18",
+    "mysqlclient>=2.2.7",
+    "redis>=6.1.0",
+    "sqlalchemy>=2.0.41",
+    "requests>=2.32.3",
+]

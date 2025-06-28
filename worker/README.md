@@ -129,6 +129,37 @@ python main.py health
 - Active connection count tracking
 - Automatic connection health checks
 - Connection recovery on failure
+- Connection lifecycle statistics
+- Comprehensive cleanup on shutdown
+
+### Connection Cleanup & Safety
+
+The worker ensures **zero connection pollution** through multiple safety mechanisms:
+
+#### 🛡️ **Multiple Cleanup Triggers**
+
+- **Normal shutdown**: Cleanup after main loop ends
+- **Signal handlers**: SIGINT, SIGTERM, SIGHUP, SIGQUIT
+- **Exception handling**: Cleanup on fatal errors
+- **atexit handler**: Python exit cleanup as final fallback
+- **Graceful timeout**: Force cleanup if graceful shutdown takes too long (30s)
+
+#### 📊 **Connection Statistics**
+
+- Total connections created/disposed
+- Currently active connections
+- Failed connection attempts
+- Health check results
+
+#### 🔍 **Connection Health Monitoring**
+
+```python
+# Automatic health checks for:
+- Connection validity before use
+- Periodic health verification
+- Automatic removal of unhealthy connections
+- Detailed logging of connection lifecycle
+```
 
 ## Usage
 
@@ -208,4 +239,5 @@ The worker handles `SIGINT` and `SIGTERM` signals gracefully:
 ✅ **Reliability** - Health checks, error recovery  
 ✅ **Security** - Role-based access, SQL injection prevention  
 ✅ **Monitoring** - Comprehensive logging and metrics  
-✅ **Extensible** - Easy to add new database types
+✅ **Extensible** - Easy to add new database types  
+✅ **Zero Pollution** - Multiple cleanup mechanisms prevent connection leaks
