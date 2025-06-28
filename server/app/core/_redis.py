@@ -1,5 +1,4 @@
 import redis.asyncio as redis
-import orjson
 import os
 import logging
 import json
@@ -20,26 +19,6 @@ REDIS = redis.from_url(
 
 # Redis queue configuration
 QUEUE_NAME = os.environ.get("REDIS_QUEUE", "query_tasks")
-
-
-async def set_result(query_id, result: dict, ttl=900):
-    try:
-        await REDIS.set(f"query:{query_id}", orjson.dumps(result), ex=ttl)
-        logger.debug(f"Successfully set result for query {query_id}")
-    except Exception as e:
-        logger.error(f"Failed to set result in Redis for query {query_id}: {str(e)}")
-        raise
-
-
-async def get_result(query_id):
-    try:
-        result = await REDIS.get(f"query:{query_id}")
-        if result:
-            return orjson.loads(result)
-        return None
-    except Exception as e:
-        logger.error(f"Failed to get result from Redis for query {query_id}: {str(e)}")
-        return None
 
 
 async def submit_task(task_data: Dict[str, Any]) -> str:

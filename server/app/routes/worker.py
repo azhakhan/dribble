@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from app.models import Source
 from uuid import UUID
 from app.core.db_utils import get_or_404
-from app.core._redis import submit_task
+from app.core._redis import submit_task, get_task_result
 import logging
 
 from app.schemas.worker import TestDBTask
@@ -24,6 +24,20 @@ async def test_db(request: TestDBTask):
         logger.info(f"Submitted test task {task_id} for {request.db_type}")
         return {"task_id": task_id}
     except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+@router.get("/tasks/{task_id}/result")
+async def get_task_result_endpoint(task_id: str):
+    """Get the full result data for a completed task"""
+    try:
+        result = await get_task_result(task_id)
+        if not result:
+            raise HTTPException(status_code=404, detail="Task result not found")
+
+        return result
+    except Exception as e:
+        logger.error(f"Error fetching result for task {task_id}: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
