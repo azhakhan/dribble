@@ -48,7 +48,7 @@ class TaskRequest(BaseModel):
     # For connect/test_db tasks
     source_id: Optional[str] = None
     role: Optional[str] = None  # 'reader', 'writer', 'admin'
-    db_type: Optional[str] = None
+    dbtype: Optional[str] = None
     creds: Optional[Dict] = None
 
     # For execute tasks (use existing connection)
@@ -64,7 +64,7 @@ class ConnectionInfo:
 
     engine: Any
     url: str
-    db_type: str
+    dbtype: str
     role: str
     source_id: str
 
@@ -87,14 +87,6 @@ class TaskResponse(BaseModel):
     data: Optional[Dict] = None
     error: Optional[str] = None
 
-
-# Supported database types
-SUPPORTED_DB_TYPES = {
-    "postgresql": "postgresql+psycopg",
-    "mysql": "mysql+pymysql",
-    "sqlite": "sqlite",
-    "snowflake": "snowflake",
-}
 
 # Supported roles
 SUPPORTED_ROLES = ["reader", "writer", "admin"]

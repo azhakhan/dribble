@@ -22,6 +22,7 @@ import threading
 
 from common.redis_client import get_task_from_queue, set_worker_heartbeat, health_check
 from common.connection_manager import get_connections_count, cleanup_all_connections
+from common.models import TaskRequest
 from task_manager import process_task
 
 # Configure logging
@@ -98,7 +99,9 @@ def main_loop():
                 # Get and process tasks
                 task_data = get_task_from_queue(timeout=5)
                 if task_data:
-                    process_task(task_data)
+                    # Convert dictionary to TaskRequest object
+                    task = TaskRequest(**task_data)
+                    process_task(task)
                 else:
                     # No task received, continue loop
                     continue

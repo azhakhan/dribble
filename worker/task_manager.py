@@ -25,7 +25,7 @@ def handle_connect_task(task: TaskRequest):
 
         # Add connection to pool
         source_key = add_connection(
-            source_id=task.source_id, role=task.role, db_type=task.db_type, creds=task.creds
+            source_id=task.source_id, role=task.role, dbtype=task.dbtype, creds=task.creds
         )
 
         logger.info(f"Successfully established connection {source_key}")
@@ -45,7 +45,7 @@ def handle_test_db_task(task: TaskRequest):
         set_result(task.id, {"status": "testing"})
 
         # Create temporary engine for testing
-        engine, _ = create_database_engine(task.db_type, task.creds, task.role or "reader")
+        engine, _ = create_database_engine(task.dbtype, task.creds, task.role or "reader")
 
         try:
             # Test the connection
@@ -55,12 +55,12 @@ def handle_test_db_task(task: TaskRequest):
 
             if connection_healthy:
                 message = f"Database connection test successful in {test_time_ms}ms"
-                logger.info(f"DB test successful: {task.db_type}")
+                logger.info(f"DB test successful: {task.dbtype}")
                 set_result(task.id, {"status": "success", "message": message})
                 publish_status(task.id, "success")
             else:
                 message = f"Database connection test failed after {test_time_ms}ms"
-                logger.error(f"DB test failed: {task.db_type}")
+                logger.error(f"DB test failed: {task.dbtype}")
                 set_result(task.id, {"status": "error", "error": message})
                 publish_status(task.id, "error")
 
@@ -70,7 +70,7 @@ def handle_test_db_task(task: TaskRequest):
 
     except Exception as e:
         error_message = str(e)
-        logger.error(f"DB test failed for {task.db_type}: {error_message}")
+        logger.error(f"DB test failed for {task.dbtype}: {error_message}")
 
         set_result(task.id, {"status": "error", "error": error_message})
         publish_status(task.id, "error")
@@ -88,7 +88,7 @@ def handle_execute_task(task: TaskRequest):
 
         set_result(task.id, {"status": "running"})
 
-        if connection_info.db_type == "postgresql":
+        if connection_info.dbtype == "postgres":
             result = execute_query_with_modifiers(
                 sql=task.sql,
                 modifiers=task.modifiers,
@@ -97,7 +97,7 @@ def handle_execute_task(task: TaskRequest):
             )
         else:
             raise UnsupportedDatabaseError(
-                f"Query execution not implemented for {connection_info.db_type}"
+                f"Query execution not implemented for {connection_info.dbtype}"
             )
 
         set_result(task.id, {"status": "success", "data": result["data"]})
@@ -121,11 +121,11 @@ def handle_schema_task(task: TaskRequest):
         set_result(task.id, {"status": "running"})
 
         # For now, only PostgreSQL is supported
-        if connection_info.db_type == "postgresql":
+        if connection_info.dbtype == "postgres":
             schema_info = get_postgres_schemas(connection_info.engine)
         else:
             raise UnsupportedDatabaseError(
-                f"Schema inspection not implemented for {connection_info.db_type}"
+                f"Schema inspection not implemented for {connection_info.dbtype}"
             )
 
         logger.info(f"Schema inspection completed for {task.id}")
@@ -182,7 +182,7 @@ def handle_connected_task(task: TaskRequest):
             if source_id not in sources:
                 sources[source_id] = {
                     "source_id": source_id,
-                    "db_type": connection_info["db_type"],
+                    "dbtype": connection_info["dbtype"],
                     "connections": [],
                 }
             sources[source_id]["connections"].append({"role": connection_info["role"]})
