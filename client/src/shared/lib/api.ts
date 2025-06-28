@@ -26,7 +26,7 @@ export const getSources = async (): Promise<Source[]> => {
 
 // Get schemas for a specific source
 export const getSourceSchemas = async (sourceId: string) => {
-  const response = await api.get(`/sources/schemas/${sourceId}`);
+  const response = await api.get(`/worker/schemas/${sourceId}`);
   return response.data;
 };
 
@@ -37,7 +37,7 @@ export const connectSource = async (sourceId: string): Promise<void> => {
 
 // Disconnect from a source
 export const disconnectSource = async (sourceId: string): Promise<void> => {
-  await api.delete(`/sources/disconnect/${sourceId}`);
+  await api.delete(`/worker/disconnect/${sourceId}`);
 };
 
 export const executeQueryVersionRun = async (request: CreateQueryRunRequest): Promise<string> => {
@@ -92,7 +92,7 @@ export interface TestSourceResponse {
 }
 
 export const testSource = async (sourceData: CreateSourceRequest): Promise<TestSourceResponse> => {
-  const response = await api.post<TestSourceResponse>("/sources/test_db/", sourceData);
+  const response = await api.post<TestSourceResponse>("/worker/test_db/", sourceData);
   return response.data;
 };
 
@@ -138,7 +138,7 @@ export interface ConnectedSource {
 }
 
 export const getConnectedSources = async (): Promise<ConnectedSource[]> => {
-  const response = await api.get<ConnectedSource[]>("/sources/connected/");
+  const response = await api.get<ConnectedSource[]>("/worker/connected/");
   return response.data;
 };
 

@@ -31,11 +31,6 @@ class CreateSourceRequest(BaseModel):
     creds: PostgresCreds | MysqlCreds
 
 
-class TestSourceRequest(BaseModel):
-    dbtype: SourceType
-    creds: PostgresCreds | MysqlCreds
-
-
 class UpdateCredentialsRequest(BaseModel):
     creds: PostgresCreds | MysqlCreds | None = None
 

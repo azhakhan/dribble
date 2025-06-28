@@ -1,9 +1,8 @@
 from uuid import UUID
-import requests
 import logging
 import time
 import orjson
-from app.core._redis import get_result, REDIS
+from app.core._redis import get_result, REDIS, submit_execute_task, submit_cancel_task
 from app.schemas.query_execute import ExecuteQueryVersionRequest
 from sqlalchemy.orm import Session
 from app.models import Source
@@ -38,38 +37,39 @@ async def publish_cancellation_result(query_run_id: str, query_id: str = None, e
         # Don't raise - publishing is not critical to cancellation
 
 
-def execute_in_worker(source_id: UUID, query: str, db: Session):
-    # Get the source to determine the database type
-    source = db.query(Source).filter(Source.id == source_id).first()
-    if not source:
-        raise Exception(f"Source {source_id} not found")
-
-    container_name = f"dribble-worker-{source.dbtype}-{source_id}"
-    response = requests.post(
-        f"http://{container_name}:8000/execute/",
-        json={"query": query, "query_id": str(source_id)},
-        timeout=5,
-    )
-    return response.json()
-
-
-def execute_in_worker_version(request: ExecuteQueryVersionRequest, db: Session):
+async def execute_in_worker_version(request: ExecuteQueryVersionRequest, db: Session):
+    """Submit query execution task to Redis worker and return task ID"""
     # Get the source to determine the database type
     source = db.query(Source).filter(Source.id == request.source_id).first()
     if not source:
         raise Exception(f"Source {request.source_id} not found")
 
-    container_name = f"dribble-worker-{source.dbtype}-{request.source_id}"
-    response = requests.post(
-        f"http://{container_name}:8000/execute/version",
-        json={
-            "query_run_id": str(request.query_run_id),
-            "sql": request.sql,
-            "modifiers": request.modifiers.model_dump() if request.modifiers else None,
-        },
-        timeout=5,
+    # Submit execution task to Redis queue
+    task_id = await submit_execute_task(
+        source_id=str(request.source_id),
+        db_type=source.dbtype,
+        sql=request.sql,
+        modifiers=request.modifiers.model_dump() if request.modifiers else None,
     )
-    return response.json()
+
+    return {"task_id": task_id}
+
+
+async def cancel_query_in_worker(query_run_id: UUID, source_id: UUID, db: Session):
+    """Submit query cancellation task to Redis worker"""
+    # Get the source to determine the database type
+    source = db.query(Source).filter(Source.id == source_id).first()
+    if not source:
+        raise Exception(f"Source {source_id} not found")
+
+    # Submit cancellation task to Redis queue
+    task_id = await submit_cancel_task(
+        query_run_id=str(query_run_id),
+        source_id=str(source_id),
+        db_type=source.dbtype,
+    )
+
+    return {"task_id": task_id}
 
 
 async def get_query_results(query_id: UUID):

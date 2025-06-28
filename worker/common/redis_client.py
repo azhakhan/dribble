@@ -40,7 +40,7 @@ def publish_result(task_id: str, status: str, data: dict = None, error: str = No
     """Publish query result to Redis pub/sub channel"""
     try:
         message = {
-            "query_run_id": task_id,
+            "id": task_id,
             "status": status,
             "timestamp": time.time(),
         }

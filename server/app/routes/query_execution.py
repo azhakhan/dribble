@@ -13,8 +13,6 @@ from sqlalchemy.orm import Session
 from fastapi import Depends
 from app.core.db_utils import get_or_404
 from datetime import datetime
-import asyncio
-import requests
 from app.schemas.query_run import UpdateQueryRunRequest
 from app.controllers.query import publish_cancellation_result
 
@@ -40,7 +38,7 @@ async def execute_query_version_run(
     existing_runs = QueryRunService.get_running_runs_for_query(db, query.id)
     for existing_run in existing_runs:
         try:
-            cancel_query_in_worker(existing_run.id, query.source_id, db)
+            await cancel_query_in_worker(existing_run.id, query.source_id, db)
         except Exception:
             # If cancellation fails, continue anyway - the new run will take precedence
             pass
@@ -56,7 +54,7 @@ async def execute_query_version_run(
             sql=version.sql,
             modifiers=request.modifiers,
         )
-        return execute_in_worker_version(query_run_request, db)
+        return await execute_in_worker_version(query_run_request, db)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
 
@@ -66,7 +64,7 @@ async def cancel_query_run_immediate(
     query_run_id: UUID,
     db: Session = Depends(get_db),
 ):
-    """Immediately mark a query run as cancelled without waiting for worker response"""
+    """Immediately mark a query run as cancelled and submit cancellation task to worker"""
     try:
         # Get the query run
         query_run = get_or_404(db, QueryRun, query_run_id, "Query run not found")
@@ -83,26 +81,15 @@ async def cancel_query_run_immediate(
             error_message="Query execution was cancelled by user",
             execution_time_ms=execution_time_ms,
         )
-        _ = QueryRunService.update_run(db, query_run_id, update_request)
+        QueryRunService.update_run(db, query_run_id, update_request)
 
-        # Try to send cancellation to worker but don't wait for response
-        # This is fire-and-forget to let worker know it can stop processing
+        # Submit cancellation task to Redis worker
         try:
-            source = get_or_404(db, Source, query.source_id, "Source not found")
-            container_name = f"dribble-worker-{source.dbtype}-{query.source_id}"
-            asyncio.create_task(
-                asyncio.wait_for(
-                    asyncio.to_thread(
-                        lambda: requests.post(
-                            f"http://{container_name}:8000/cancel/{query_run_id}", timeout=1
-                        )
-                    ),
-                    timeout=1.5,
-                )
-            )
+            result = await cancel_query_in_worker(query_run_id, query.source_id, db)
+            cancel_task_id = result.get("task_id")
         except Exception:
-            # Ignore worker communication errors - cancellation is already marked in DB
-            pass
+            # Continue even if worker cancellation fails
+            cancel_task_id = None
 
         # Publish cancellation result to SSE
         await publish_cancellation_result(
@@ -114,6 +101,7 @@ async def cancel_query_run_immediate(
             "status": "cancelled",
             "execution_time_ms": execution_time_ms,
             "message": "Query marked as cancelled",
+            "cancel_task_id": cancel_task_id,
         }
 
     except Exception as e:

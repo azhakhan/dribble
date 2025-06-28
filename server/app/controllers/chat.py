@@ -17,7 +17,6 @@ from app.controllers.messages import ChatMessageService, ChatMessage
 from app.core.db_utils import safe_create, get_or_404
 from app.controllers.llm import LLMProviderFactory, BaseLLMProvider
 from app.controllers.chat_types import ChatResponse, ContextQuery
-from app.controllers.sources import get_source_schema
 
 
 class ChatContextService:
@@ -151,7 +150,8 @@ class ChatContextService:
         # Load schema for each unique source
         for source_id in unique_source_ids:
             try:
-                schema_data = await get_source_schema(source_id, self.db)
+                # TODO: use worker to get schema
+                schema_data = {}
                 schemas[source_id] = schema_data
             except Exception as e:
                 # If schema loading fails, log it but don't break the chat

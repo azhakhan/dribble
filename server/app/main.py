@@ -8,6 +8,7 @@ from app.routes.query_execution import router as query_execution_router
 from app.routes.llm import router as llm_router
 from app.routes.chat import router as chat_router
 from app.routes.sse import router as sse_router
+from app.routes.worker import router as worker_router
 from app.core.session_naming import start_session_naming, stop_session_naming
 from app.core.redis_subscriber import start_redis_subscriber, stop_redis_subscriber
 import logging
@@ -46,3 +47,4 @@ app.include_router(query_execution_router)
 app.include_router(llm_router)
 app.include_router(chat_router)
 app.include_router(sse_router)
+app.include_router(worker_router)

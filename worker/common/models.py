@@ -42,7 +42,7 @@ class QueryRunModifiers(BaseModel):
 class TaskRequest(BaseModel):
     """Represents a task from the Redis queue"""
 
-    task_type: str  # 'connect', 'test_db', 'execute', 'schema'
+    task_type: str  # 'connect', 'test_db', 'execute', 'schema', 'cancel'
     id: str
 
     # For connect/test_db tasks

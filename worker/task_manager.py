@@ -89,8 +89,10 @@ def handle_execute_task(task: TaskRequest):
     start_time = time.time()
 
     try:
+        source_key = f"{task.source_id}:{task.role}"
+
         # Get connection from pool
-        connection_info = get_connection(task.source_key)
+        connection_info = get_connection(source_key)
 
         set_result(task.id, {"status": "running"})
 
@@ -99,7 +101,7 @@ def handle_execute_task(task: TaskRequest):
                 sql=task.sql,
                 modifiers=task.modifiers,
                 engine=connection_info.engine,
-                query_run_id=task.id,
+                id=task.id,
             )
         else:
             raise UnsupportedDatabaseError(
@@ -214,24 +216,37 @@ def handle_connected_task(task: TaskRequest):
         publish_result(task.id, "error", error=error_message)
 
 
-def process_task(task_data: dict):
+def handle_cancel_task(task: TaskRequest):
+    """Handle query cancellation"""
+    try:
+        set_result(task.id, {"status": "cancelling"})
+
+        # Note: In a real implementation, this would need to track running queries
+        # and actually cancel them. For now, we just acknowledge the cancellation.
+        # The actual cancellation logic would depend on the specific database
+        # implementation and how queries are being tracked.
+
+        message = f"Cancel request received for query run {task.id}"
+        logger.info(f"Cancel task: {message}")
+
+        # Publish cancellation result directly to the query run's channel
+        if task.id:
+            publish_result(task.id, "cancelled", error="Query execution was cancelled")
+
+        set_result(task.id, {"status": "success", "message": message})
+        publish_result(task.id, "success", data={"message": message})
+
+    except Exception as e:
+        error_message = str(e)
+        logger.error(f"Cancel task {task.id} failed: {error_message}")
+
+        set_result(task.id, {"status": "error", "error": error_message})
+        publish_result(task.id, "error", error=error_message)
+
+
+def process_task(task: TaskRequest):
     """Process a task from the queue"""
     try:
-        # Parse task data
-        task = TaskRequest(
-            task_type=task_data["task_type"],
-            id=task_data["id"],
-            # For connect/test_db tasks
-            source_id=task_data.get("source_id"),
-            role=task_data.get("role", "reader"),
-            db_type=task_data.get("db_type"),
-            creds=task_data.get("creds"),
-            # For execute tasks
-            source_key=task_data.get("source_key"),
-            sql=task_data.get("sql"),
-            modifiers=task_data.get("modifiers"),
-        )
-
         logger.info(f"Processing {task.task_type} task: {task.id}")
 
         # Route to appropriate handler
@@ -247,11 +262,13 @@ def process_task(task_data: dict):
             handle_disconnect_task(task)
         elif task.task_type == "connected":
             handle_connected_task(task)
+        elif task.task_type == "cancel":
+            handle_cancel_task(task)
         else:
             raise InvalidTaskTypeError(task.task_type)
 
     except Exception as e:
         logger.error(f"Error processing task: {str(e)}")
-        if "id" in task_data:
-            set_result(task_data["id"], {"status": "error", "error": str(e)})
-            publish_result(task_data["id"], "error", error=str(e))
+        if task.id:
+            set_result(task.id, {"status": "error", "error": str(e)})
+            publish_result(task.id, "error", error=str(e))
