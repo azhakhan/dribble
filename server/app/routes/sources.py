@@ -49,14 +49,6 @@ async def get_sources(db: Session = Depends(get_db)):
     return sources
 
 
-@router.get("/connected/")
-async def get_connected_sources(
-    db: Session = Depends(get_db),
-):
-    # TODO: get all connected sources
-    return []
-
-
 # get a specific source
 @router.get("/{source_id}/")
 async def get_source(source_id: UUID, db: Session = Depends(get_db)):
@@ -107,6 +99,48 @@ async def get_schema(source_id: UUID, db: Session = Depends(get_db)):
     return await get_source_schema(str(source_id), db)
 
 
+@router.get("/credentials/{source_id}/")
+async def get_credentials(
+    source_id: UUID,
+    db: Session = Depends(get_db),
+):
+    source = get_or_404(db, Source, source_id, "Source not found")
+    # Remove sensitive data before returning
+    creds = source.creds.copy()
+    if "password" in creds:
+        creds["password"] = "***"
+    return {"name": source.name, "dbtype": source.dbtype, "creds": creds}
+
+
+@router.put("/credentials/{source_id}/")
+async def edit_source(
+    source_id: UUID,
+    request: UpdateCredentialsRequest,
+    db: Session = Depends(get_db),
+):
+    source = get_or_404(db, Source, source_id, "Source not found")
+    source.creds = request.creds.model_dump()
+    db.commit()
+    db.refresh(source)
+    return source
+
+
+# delete a source
+@router.delete("/{source_id}/")
+async def delete_source(source_id: UUID, db: Session = Depends(get_db)):
+    source = get_or_404(db, Source, source_id)
+
+    # TODO: remove source connections in worker
+
+    # Invalidate the schema cache for this source
+    invalidate_source_schema_cache(source_id)
+
+    # Delete the source using soft delete
+    safe_delete(db, source)
+
+    return {"message": "Source deleted"}
+
+
 # worker related endpoints
 
 
@@ -154,27 +188,14 @@ async def connect(
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
-# delete a source
-@router.delete("/{source_id}/")
-async def delete_source(source_id: UUID, db: Session = Depends(get_db)):
-    source = get_or_404(db, Source, source_id)
-
-    # TODO: remove source connections in worker
-
-    # Invalidate the schema cache for this source
-    invalidate_source_schema_cache(source_id)
-
-    # Delete the source using soft delete
-    safe_delete(db, source)
-
-    return {"message": "Source deleted"}
+@router.get("/connected/")
+async def get_connected_sources():
+    # TODO: get all connected sources
+    return []
 
 
 @router.get("/status/{source_id}")
-async def get_status(
-    source_id: UUID,
-    db: Session = Depends(get_db),
-):
+async def get_status():
     # TODO: get source status from worker
     return {"status": "connected"}
 
@@ -192,37 +213,7 @@ async def get_schemas(
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
-# add disconnect source
 @router.delete("/disconnect/{source_id}")
-async def disconnect_source(
-    source_id: UUID,
-    db: Session = Depends(get_db),
-):
+async def disconnect_source(source_id: UUID):
     # TODO: disconnect source in worker
     return {"message": "Disconnected"}
-
-
-@router.get("/credentials/{source_id}/")
-async def get_credentials(
-    source_id: UUID,
-    db: Session = Depends(get_db),
-):
-    source = get_or_404(db, Source, source_id, "Source not found")
-    # Remove sensitive data before returning
-    creds = source.creds.copy()
-    if "password" in creds:
-        creds["password"] = "***"
-    return {"name": source.name, "dbtype": source.dbtype, "creds": creds}
-
-
-@router.put("/credentials/{source_id}/")
-async def edit_source(
-    source_id: UUID,
-    request: UpdateCredentialsRequest,
-    db: Session = Depends(get_db),
-):
-    source = get_or_404(db, Source, source_id, "Source not found")
-    source.creds = request.creds.model_dump()
-    db.commit()
-    db.refresh(source)
-    return source

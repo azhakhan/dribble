@@ -40,12 +40,6 @@ export const disconnectSource = async (sourceId: string): Promise<void> => {
   await api.delete(`/sources/disconnect/${sourceId}`);
 };
 
-// Get source status
-export const getSourceStatus = async (sourceId: string): Promise<SourceStatus> => {
-  const response = await api.get<{ status: SourceStatus }>(`/sources/status/${sourceId}`);
-  return response.data.status;
-};
-
 export const executeQueryVersionRun = async (request: CreateQueryRunRequest): Promise<string> => {
   const response = await api.post<{ query_run_id: string }>("/execution/", request);
   return response.data.query_run_id;
