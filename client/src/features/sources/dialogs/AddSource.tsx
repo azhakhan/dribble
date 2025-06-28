@@ -9,11 +9,18 @@ import {
   DialogFooter,
   DialogTrigger
 } from "@/components/ui/dialog";
-import { createSource, testSource } from "@/shared/lib/api";
-import type { PostgresCreds, MysqlCreds, CreateSourceRequest } from "@/shared/lib/api";
+import { createSource } from "@/shared/lib/api";
+import type {
+  PostgresCreds,
+  MysqlCreds,
+  CreateSourceRequest,
+  TestSourceResponse
+} from "@/shared/lib/api";
 import { Button } from "@/components/ui/button";
 import { useSourceStore } from "@/shared/store";
 import { toast } from "sonner";
+import { useTaskSSE } from "@/shared/lib/taskUtils";
+import { useTaskSubmission } from "@/shared/hooks/useTaskSubmission";
 
 interface AddSourceProps {
   className?: string;
@@ -23,12 +30,32 @@ interface AddSourceProps {
 export const AddSource = ({ onSourceAdded }: AddSourceProps) => {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [testing, setTesting] = useState(false);
   const [connectionTested, setConnectionTested] = useState(false);
   const [sourceType, setSourceType] = useState<"postgres" | "mysql" | "">("");
   const [sourceName, setSourceName] = useState("");
   const [formError, setFormError] = useState("");
   const { loadSources } = useSourceStore();
+
+  // Initialize SSE connection for task updates
+  useTaskSSE();
+
+  // Task submission hook for testing connection
+  const testTask = useTaskSubmission<TestSourceResponse>({
+    onSuccess: (result) => {
+      const testResult = result as TestSourceResponse;
+      if (testResult && testResult.status === "success") {
+        setConnectionTested(true);
+        toast.success("Connection test successful");
+      } else {
+        setConnectionTested(false);
+        toast.error(testResult?.message || "Connection test failed");
+      }
+    },
+    onError: (error) => {
+      setConnectionTested(false);
+      toast.error(`Connection test failed: ${error}`);
+    }
+  });
 
   // PostgreSQL form state
   const [postgresConfig, setPostgresConfig] = useState<PostgresCreds>({
@@ -153,32 +180,15 @@ export const AddSource = ({ onSourceAdded }: AddSourceProps) => {
       credentials = mysqlConfig;
     }
 
-    try {
-      setTesting(true);
-      setFormError("");
+    setFormError("");
 
-      const sourceData: CreateSourceRequest = {
-        name: sourceName || "Test Connection",
-        dbtype: sourceType,
-        creds: credentials!
-      };
+    const sourceData: CreateSourceRequest = {
+      name: sourceName || "Test Connection",
+      dbtype: sourceType,
+      creds: credentials!
+    };
 
-      const testResult = await testSource(sourceData);
-
-      if (testResult.status === "success") {
-        setConnectionTested(true);
-        toast.success("Connection test successful");
-      } else {
-        setConnectionTested(false);
-        throw new Error(testResult.message);
-      }
-    } catch (error) {
-      console.error("Failed to test source:", error);
-      setConnectionTested(false);
-      toast.error("Connection test failed. Please check your connection details.");
-    } finally {
-      setTesting(false);
-    }
+    await testTask.submit("/worker/test_db/", sourceData);
   };
 
   // Helper function to reset connection test when form changes
@@ -189,7 +199,7 @@ export const AddSource = ({ onSourceAdded }: AddSourceProps) => {
   };
 
   // Helper for form field disabled state
-  const isFormDisabled = loading || testing;
+  const isFormDisabled = loading || testTask.loading;
 
   return (
     <Dialog
@@ -457,7 +467,7 @@ export const AddSource = ({ onSourceAdded }: AddSourceProps) => {
             Cancel
           </Button>
           <Button onClick={handleTest} disabled={isFormDisabled}>
-            {testing ? (
+            {testTask.loading ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin" />
                 Testing...

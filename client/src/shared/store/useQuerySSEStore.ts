@@ -24,7 +24,7 @@ export interface GlobalSSEConnection {
   reconnectAttempts: number;
 }
 
-interface SSEState {
+interface QuerySSEState {
   // Queries with their latest run data, keyed by queryId
   queries: Record<string, QueryWithLatestRun>;
 
@@ -83,7 +83,7 @@ interface SSEState {
   };
 }
 
-export const useSSEStore = create<SSEState>((set, get) => ({
+export const useQuerySSEStore = create<QuerySSEState>((set, get) => ({
   queries: {},
   connection: null,
   activeRuns: new Set(),
@@ -332,3 +332,6 @@ export const useSSEStore = create<SSEState>((set, get) => ({
     };
   }
 }));
+
+// For backward compatibility, also export as useSSEStore
+export const useSSEStore = useQuerySSEStore;

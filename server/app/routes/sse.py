@@ -65,6 +65,8 @@ async def stream_events(client_id: Optional[str] = Query(None)):
                     msg_timestamp = status_msg.get("timestamp", current_time)
                     last_timestamp = last_seen_timestamps.get(task_id, 0)
 
+                    # TODO: AZ remove tasks that are not active
+
                     if msg_timestamp > last_timestamp:
                         # Send status update
                         sse_message = {
