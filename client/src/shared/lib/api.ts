@@ -47,7 +47,7 @@ export const getSourceStatus = async (sourceId: string): Promise<SourceStatus> =
 };
 
 export const executeQueryVersionRun = async (request: CreateQueryRunRequest): Promise<string> => {
-  const response = await api.post<{ query_run_id: string }>("/execution/version", request);
+  const response = await api.post<{ query_run_id: string }>("/execution/", request);
   return response.data.query_run_id;
 };
 
@@ -60,7 +60,7 @@ export const cancelQueryRunImmediate = async (
   execution_time_ms: number;
   message: string;
 }> => {
-  const response = await api.post(`/execution/cancel-immediate/${query_run_id}`);
+  const response = await api.post(`/execution/cancel/${query_run_id}`);
   return response.data;
 };
 
@@ -98,7 +98,7 @@ export interface TestSourceResponse {
 }
 
 export const testSource = async (sourceData: CreateSourceRequest): Promise<TestSourceResponse> => {
-  const response = await api.post<TestSourceResponse>("/sources/test/", sourceData);
+  const response = await api.post<TestSourceResponse>("/sources/test_db/", sourceData);
   return response.data;
 };
 

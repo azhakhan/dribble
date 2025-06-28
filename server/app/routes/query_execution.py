@@ -22,7 +22,7 @@ from app.controllers.query import publish_cancellation_result
 router = APIRouter(prefix="/execution", tags=["query-execution"])
 
 
-@router.post("/version")
+@router.post("/")
 async def execute_query_version_run(
     request: CreateQueryRunRequest,
     db: Session = Depends(get_db),
@@ -61,7 +61,7 @@ async def execute_query_version_run(
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
-@router.post("/cancel-immediate/{query_run_id}")
+@router.post("/cancel/{query_run_id}")
 async def cancel_query_run_immediate(
     query_run_id: UUID,
     db: Session = Depends(get_db),

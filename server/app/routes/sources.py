@@ -12,12 +12,18 @@ from app.core.db import get_db
 from sqlalchemy.orm import Session
 from app.models import Source
 from uuid import UUID
-from app.core.spawn_worker import create_worker_container, stop_worker
-from uuid import uuid4
+from app.core._redis import submit_test_db_task, submit_connect_task
 from app.models import Worker
 from app.core.db_utils import get_or_404, safe_delete, get_all_active
+from pydantic import BaseModel
 
 router = APIRouter(prefix="/sources", tags=["sources"])
+
+
+class UpdateWorkerStatusRequest(BaseModel):
+    task_id: str
+    status: str  # "success" or "error"
+    error_message: str = None
 
 
 # add a source
@@ -37,12 +43,16 @@ async def add_source(
     return source
 
 
-@router.post("/test/")
-async def test(request: TestSourceRequest):
+@router.post("/test_db/")
+async def test_db(request: TestSourceRequest):
     try:
-        source_id = str(uuid4())
-        worker = create_worker_container(source_id, request.dbtype, request.creds)
-        return worker.test()
+        # Submit test task to Redis queue and return task ID
+        task_id = await submit_test_db_task(
+            db_type=request.dbtype, creds=request.creds.model_dump()
+        )
+
+        return {"task_id": task_id}
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
 
@@ -135,44 +145,40 @@ async def connect(
         else:
             raise ValueError(f"Unsupported database type: {source.dbtype}")
 
-        worker = None
+        # Check if worker connection already exists
+        db_worker = db.query(Worker).filter_by(source_id=source_id).first()
 
-        try:
-            worker = create_worker_container(source.id, source.dbtype, creds)
-            container_exists = worker.already_exists()
+        if db_worker and db_worker.status in ["healthy", "running"]:
+            # Connection already exists and is healthy
+            await invalidate_source_schema_cache(str(source_id))
+            return {"message": "Already connected", "status": "connected"}
 
-            # Check if worker record exists in the database
-            db_worker = db.query(Worker).filter_by(source_id=source_id).first()
+        # Submit connect task to Redis queue
+        task_id = await submit_connect_task(
+            source_id=str(source_id), db_type=source.dbtype, creds=creds.model_dump(), role="reader"
+        )
 
-            if not container_exists:
-                # Container doesn't exist, start it and create worker record
-                worker.start(db)
-            else:
-                # Container exists, ensure worker record exists and is up-to-date
-                if not db_worker:
-                    worker.save_worker(db)
-                else:
-                    # Update existing worker record with current container info
-                    db_worker.container_id = worker.container_id
-                    db_worker.port = worker.port
-                    db_worker.host = worker.container_url
-                    db_worker.status = "running"
-                    db.commit()
-                    db.refresh(db_worker)
+        # Create or update worker record with "connecting" status
+        if db_worker:
+            db_worker.status = "connecting"
+            db_worker.container_id = None  # No container for Redis workers
+            db_worker.port = None
+            db_worker.host = f"redis-worker-{source_id}"
+            db.commit()
+            db.refresh(db_worker)
+        else:
+            worker = Worker(
+                source_id=source_id,
+                container_id=None,  # No container for Redis workers
+                port=None,
+                host=f"redis-worker-{source_id}",
+                status="connecting",
+            )
+            db.add(worker)
+            db.commit()
+            db.refresh(worker)
 
-        except Exception as e:
-            # Clean up worker if it was created but failed
-            if worker and worker.container_id:
-                try:
-                    worker.stop()
-                except Exception:
-                    pass  # Ignore cleanup errors
-            raise HTTPException(status_code=500, detail=str(e)) from e
-
-        # invalidate source schema cache to ensure fresh data after connection
-        await invalidate_source_schema_cache(str(source_id))
-
-        return {"message": "Connected"}
+        return {"task_id": task_id}
 
     except HTTPException:
         # Re-raise HTTP exceptions as-is
@@ -186,14 +192,12 @@ async def connect(
 async def delete_source(source_id: UUID, db: Session = Depends(get_db)):
     source = get_or_404(db, Source, source_id)
 
-    # Stop any running workers for this source
+    # Clean up any workers for this source
     workers = db.query(Worker).filter_by(source_id=source_id).all()
     for worker in workers:
-        try:
-            stop_worker(worker.container_id)
-        except Exception:
-            # Log the error but don't fail the deletion
-            pass
+        # For Redis workers, connections will be cleaned up automatically
+        # No need to stop containers since Redis workers manage connections internally
+
         # Remove worker from database
         db.delete(worker)
 
@@ -245,9 +249,11 @@ async def disconnect_source(
     if not worker:
         raise HTTPException(status_code=404, detail="Worker not found")
 
-    # stop the worker
-    stop_worker(worker.container_id)
-    # delete the worker
+    # For Redis workers, we just need to clean up the connection pool
+    # The worker will handle connection cleanup automatically
+    # No need to stop containers since Redis workers manage connections internally
+
+    # Delete the worker record
     db.delete(worker)
     db.commit()
     return {"message": "Disconnected"}
