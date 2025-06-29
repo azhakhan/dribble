@@ -189,9 +189,12 @@ class QueryVersionService:
 
 class QueryRunService:
     @staticmethod
-    def create_run(db: Session, query_version_id: UUID, modifiers: QueryRunModifiers) -> QueryRun:
+    def create_run(
+        db: Session, id: UUID, query_version_id: UUID, modifiers: QueryRunModifiers
+    ) -> QueryRun:
         """Create a new query run"""
         run = QueryRun(
+            id=id,
             query_version_id=query_version_id,
             modifiers=modifiers.model_dump() if modifiers else None,
         )

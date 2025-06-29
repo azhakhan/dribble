@@ -17,7 +17,6 @@ class CreateQueryRunRequest(BaseModel):
 
 
 class ExecuteQueryVersionRequest(BaseModel):
-    query_run_id: UUID
     source_id: UUID
     sql: str
     modifiers: Optional[QueryRunModifiers] = None

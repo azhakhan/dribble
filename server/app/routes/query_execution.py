@@ -32,20 +32,25 @@ async def execute_query_version_run(
     query = get_or_404(db, Query, version.query_id, "Query not found")
 
     # check if source exists
+    # NOTE: note sure if this is needed
     get_or_404(db, Source, query.source_id, "Source not found")
-
-    # create a run
-    run = QueryRunService.create_run(db, request.query_version_id, request.modifiers)
 
     """Execute a query run"""
     try:
         query_run_request = ExecuteQueryVersionRequest(
-            query_run_id=run.id,
             source_id=query.source_id,
             sql=version.sql,
             modifiers=request.modifiers,
         )
-        return await execute_in_worker_version(query_run_request, db)
+        result = await execute_in_worker_version(query_run_request, db)
+        # create query run
+        QueryRunService.create_run(
+            db,
+            result.get("task_id"),
+            request.query_version_id,
+            request.modifiers,
+        )
+        return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
 

@@ -10,6 +10,8 @@ from app.core.redis_subscriber import task_status_subscriber
 import asyncio
 import logging
 from typing import Dict, Any
+from app.controllers.query_service import QueryRunService
+from app.schemas.query_run import UpdateQueryRunRequest
 
 from app.schemas.worker import TestDBTask
 
@@ -153,14 +155,20 @@ async def disconnect_source(source_id: UUID):
 
 
 @router.get("/result/{task_id}")
-async def get_task_result_endpoint(task_id: str):
+async def get_task_result_endpoint(task_id: str, db: Session = Depends(get_db)):
     """Get the full result data for a completed task"""
     try:
         result = await get_task_result(task_id)
         if not result:
             raise HTTPException(status_code=404, detail="Task result not found")
 
-        return result
+        # update query run if it's a query run
+        if result.get("type") == "query_run":
+            # update query run
+            update_request = UpdateQueryRunRequest(**result.get("stats"))
+            QueryRunService.update_run(db, task_id, update_request)
+
+        return result.get("data")
     except Exception as e:
         logger.error(f"Error fetching result for task {task_id}: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e)) from e

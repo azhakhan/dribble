@@ -56,6 +56,7 @@ async def delete_query_run(run_id: UUID, db: Session = Depends(get_db)):
 
 
 # called by worker
+# TODO: remove
 @router.put("/{run_id}")
 async def update_query_run(run_id: UUID, run: UpdateQueryRunRequest, db: Session = Depends(get_db)):
     """Update a query run"""

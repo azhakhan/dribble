@@ -223,6 +223,6 @@ def execute_query_with_modifiers(
         logger.info(f"Query executed successfully: {result_message}")
 
     # Add message to result
-    result["message"] = result_message
+    result["result_message"] = result_message
 
     return result

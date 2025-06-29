@@ -89,3 +89,10 @@ class TaskResponse(BaseModel):
 
 # Supported roles
 SUPPORTED_ROLES = ["reader", "writer", "admin"]
+
+
+class UpdateQueryRunRequest(BaseModel):
+    result_message: Optional[str] = None
+    error_message: Optional[str] = None
+    row_count: Optional[int] = None
+    execution_time_ms: Optional[int] = None

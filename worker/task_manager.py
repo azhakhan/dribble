@@ -14,6 +14,7 @@ from common.connection_manager import (
 from common.exceptions import InvalidTaskTypeError, UnsupportedDatabaseError
 from postgres.query_executor import execute_query_with_modifiers
 from postgres.schema_inspector import get_postgres_schemas
+from common.models import UpdateQueryRunRequest
 
 logger = logging.getLogger(__name__)
 
@@ -99,7 +100,20 @@ def handle_execute_task(task: TaskRequest):
                 f"Query execution not implemented for {connection_info.dbtype}"
             )
 
-        set_result(task.id, {"status": "success", "data": result["data"]})
+        update_request = UpdateQueryRunRequest(
+            result_message=result.get("result_message"),
+            row_count=result.get("row_count"),
+            execution_time_ms=result.get("execution_time_ms"),
+        )
+        set_result(
+            task.id,
+            {
+                "status": "success",
+                "type": "query_run",
+                "stats": update_request.model_dump(),
+                "data": result.get("data"),
+            },
+        )
         publish_status(task.id, "success")
 
     except Exception as e:
