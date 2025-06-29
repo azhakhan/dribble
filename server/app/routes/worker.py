@@ -6,6 +6,8 @@ from app.models import Source
 from uuid import UUID
 from app.core.db_utils import get_or_404
 from app.core._redis import submit_task, get_task_result
+from app.core.redis_subscriber import task_status_subscriber
+import asyncio
 import logging
 
 from app.schemas.worker import TestDBTask
@@ -22,8 +24,53 @@ async def test_db(request: TestDBTask):
         task_data = {"task_type": "test_db", **request.model_dump()}
         task_id = await submit_task(task_data)
         logger.info(f"Submitted test task {task_id} for {request.dbtype}")
-        return {"task_id": task_id}
+
+        # Wait for task completion
+        max_wait_time = 30  # 30 seconds timeout
+        poll_interval = 0.5  # Poll every 500ms
+        elapsed_time = 0
+
+        while elapsed_time < max_wait_time:
+            # Check task status
+            status_msg = task_status_subscriber.get_status(task_id)
+
+            if status_msg:
+                status = status_msg.get("status")
+                logger.debug(f"Task {task_id} status: {status}")
+
+                if status in ["success", "error", "cancelled"]:
+                    # Task completed, get the result
+                    result = await get_task_result(task_id)
+
+                    if not result:
+                        raise HTTPException(status_code=404, detail="Task result not found")
+
+                    # Clean up status tracking
+                    task_status_subscriber.clear_status(task_id)
+
+                    # Return the result directly based on status
+                    if status == "success":
+                        return result
+                    elif status == "error":
+                        error_message = result.get("error", "Task failed")
+                        raise HTTPException(status_code=400, detail=error_message)
+                    else:  # cancelled
+                        raise HTTPException(status_code=408, detail="Task was cancelled")
+
+            # Wait before next poll
+            await asyncio.sleep(poll_interval)
+            elapsed_time += poll_interval
+
+        # Timeout reached
+        logger.error(f"Task {task_id} timed out after {max_wait_time} seconds")
+        task_status_subscriber.clear_status(task_id)
+        raise HTTPException(status_code=408, detail="Task timed out")
+
+    except HTTPException:
+        # Re-raise HTTP exceptions as they are already properly formatted
+        raise
     except Exception as e:
+        logger.error(f"Error in test_db endpoint: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
