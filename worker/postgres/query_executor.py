@@ -125,7 +125,7 @@ def execute_query(query: str, engine):
                             processed_row[key] = value
                     processed_rows.append(processed_row)
 
-                logger.info(f"[{datetime.datetime.now()}] Processed rows: {processed_rows}")
+                logger.info(f"[{datetime.datetime.now()}] Processed rows: {len(processed_rows)}")
                 execution_time_ms = int((time.time() - start_time) * 1000)
                 return {
                     "data": processed_rows,

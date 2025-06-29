@@ -45,6 +45,25 @@ export const executeQueryVersionRun = async (request: CreateQueryRunRequest): Pr
   return response.data.query_run_id;
 };
 
+// New worker-based execution that returns task_id
+export const executeQueryVersionTask = async (request: CreateQueryRunRequest): Promise<string> => {
+  const response = await api.post<{ task_id: string }>("/execution/", request);
+  return response.data.task_id;
+};
+
+// Worker task result interface
+export interface WorkerTaskResult {
+  status: "success" | "error" | "running" | "cancelled";
+  data?: Record<string, unknown>[];
+  error?: string;
+}
+
+// Get task result from worker
+export const getWorkerTaskResult = async (taskId: string): Promise<WorkerTaskResult> => {
+  const response = await api.get<WorkerTaskResult>(`/worker/result/${taskId}`);
+  return response.data;
+};
+
 // Cancel a running query immediately (client-side cancellation)
 export const cancelQueryRunImmediate = async (
   query_run_id: string

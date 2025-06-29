@@ -1,5 +1,5 @@
 import type { CreateQueryRunRequest } from "@/shared/lib/api";
-import { executeQueryVersionRun } from "@/shared/lib/api";
+import { executeQueryVersionTask } from "@/shared/lib/api";
 import type { QueryTab } from "@/shared/store/types";
 import type { TableData, TableRow } from "@/shared/types/api";
 import { convertToTableData } from "@/shared/utils/typeUtils";
@@ -46,25 +46,25 @@ export class QueryExecutionServiceSSE {
         };
       }
 
-      // Step 2: Create and start the query run
-      const runId = await this.createQueryRun(tab, versionId, options.overrideFilters);
+      // Step 2: Create and start the query task
+      const taskId = await this.createQueryTask(tab, versionId, options.overrideFilters);
 
       // Step 3: Ensure SSE connection is established and track the query
       try {
         await sseConnectionManager.connect();
         if (tab.queryId) {
-          sseConnectionManager.trackQueryRun(tab.queryId, runId);
+          sseConnectionManager.trackQueryTask(tab.queryId, taskId);
         }
       } catch {
         // SSE connection failed, but continue with execution
         // The hook will handle fallback polling if needed
       }
 
-      // Step 4: Return immediately with the run ID
+      // Step 4: Return immediately with the task ID
       // The SSE stream will be managed by the useQueryStream hook
       return {
         success: true,
-        queryRunId: runId,
+        queryRunId: taskId, // Keep the same field name for compatibility
         results: undefined // Results will come via SSE
       };
     } catch (error) {
@@ -102,7 +102,7 @@ export class QueryExecutionServiceSSE {
 
       // Check if result is already available (need queryId for this)
       if (tab.queryId) {
-        const existingResult = sseStore.getQueryLatestRun(tab.queryId!);
+        const existingResult = sseStore.getQueryLatestTask(tab.queryId!);
         if (existingResult && existingResult.status !== "running") {
           clearTimeout(timeoutId);
 
@@ -127,7 +127,7 @@ export class QueryExecutionServiceSSE {
       // This is a fallback - normally the UI would use useQueryStream hook
       if (tab.queryId) {
         const checkInterval = setInterval(() => {
-          const currentResult = sseStore.getQueryLatestRun(tab.queryId!);
+          const currentResult = sseStore.getQueryLatestTask(tab.queryId!);
 
           if (currentResult && currentResult.status !== "running") {
             clearTimeout(timeoutId);
@@ -246,9 +246,9 @@ export class QueryExecutionServiceSSE {
   }
 
   /**
-   * Create a query run with filters
+   * Create a query task with filters
    */
-  private static async createQueryRun(
+  private static async createQueryTask(
     tab: QueryTab,
     versionId: string,
     overrideFilters?: { where?: string; order_by?: string }
@@ -265,12 +265,12 @@ export class QueryExecutionServiceSSE {
       order_by: overrideFilters?.order_by ?? (tabFilters.orderByInput.trim() || undefined)
     };
 
-    const runRequest: CreateQueryRunRequest = {
+    const taskRequest: CreateQueryRunRequest = {
       query_version_id: versionId,
       modifiers: finalFilters
     };
 
-    return await executeQueryVersionRun(runRequest);
+    return await executeQueryVersionTask(taskRequest);
   }
 
   /**

@@ -152,7 +152,7 @@ async def disconnect_source(source_id: UUID):
     return await submit_and_wait_for_task(task_data)
 
 
-@router.get("/tasks/{task_id}/result")
+@router.get("/result/{task_id}")
 async def get_task_result_endpoint(task_id: str):
     """Get the full result data for a completed task"""
     try:

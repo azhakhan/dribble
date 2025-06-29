@@ -1,8 +1,8 @@
 import { create } from "zustand";
 import type { TableRow } from "@/shared/types/api";
 
-export interface RunResult {
-  runId: string;
+export interface TaskResult {
+  taskId: string;
   queryId: string;
   status: "running" | "success" | "error" | "cancelled";
   timestamp: number;
@@ -10,10 +10,10 @@ export interface RunResult {
   error?: string;
 }
 
-export interface QueryWithLatestRun {
+export interface QueryWithLatestTask {
   queryId: string;
-  latestRun: RunResult | null;
-  awaitingRunId: string | null; // Track which run we're waiting for
+  latestTask: TaskResult | null;
+  awaitingTaskId: string | null; // Track which task we're waiting for
 }
 
 export interface GlobalSSEConnection {
@@ -25,21 +25,21 @@ export interface GlobalSSEConnection {
 }
 
 interface SSEState {
-  // Queries with their latest run data, keyed by queryId
-  queries: Record<string, QueryWithLatestRun>;
+  // Queries with their latest task data, keyed by queryId
+  queries: Record<string, QueryWithLatestTask>;
 
   // Single global SSE connection
   connection: GlobalSSEConnection | null;
 
-  // Active runs being tracked (for cleanup), keyed by runId
-  activeRuns: Set<string>;
+  // Active tasks being tracked (for cleanup), keyed by taskId
+  activeTasks: Set<string>;
 
-  // Actions for query/run management
-  registerQueryAwaitingRun: (queryId: string, runId: string) => void;
-  updateRunResult: (
-    runId: string,
+  // Actions for query/task management
+  registerQueryAwaitingTask: (queryId: string, taskId: string) => void;
+  updateTaskResult: (
+    taskId: string,
     queryId: string,
-    status: RunResult["status"],
+    status: TaskResult["status"],
     data?: TableRow[],
     error?: string
   ) => void;
@@ -51,34 +51,34 @@ interface SSEState {
   resetReconnectAttempts: () => void;
   closeConnection: () => void;
 
-  // Run tracking management
-  addActiveRun: (runId: string) => void;
-  removeActiveRun: (runId: string) => void;
+  // Task tracking management
+  addActiveTask: (taskId: string) => void;
+  removeActiveTask: (taskId: string) => void;
   clearQueryData: (queryId: string) => void;
 
   // Utility functions
-  getQueryData: (queryId: string) => QueryWithLatestRun | undefined;
-  getQueryLatestRun: (queryId: string) => RunResult | null;
+  getQueryData: (queryId: string) => QueryWithLatestTask | undefined;
+  getQueryLatestTask: (queryId: string) => TaskResult | null;
   isQueryRunning: (queryId: string) => boolean;
   hasActiveConnection: () => boolean;
-  isRunActive: (runId: string) => boolean;
+  isTaskActive: (taskId: string) => boolean;
   getConnectionStatus: () => GlobalSSEConnection["status"] | "disconnected";
 
   // Cleanup functions
   clearAllData: () => void;
 
   // Mark query as cancelled immediately (client-side cancellation)
-  markQueryCancelled: (queryId: string, runId: string, error?: string) => void;
+  markQueryCancelled: (queryId: string, taskId: string, error?: string) => void;
 
   // Debug helper method
   getDebugInfo: () => {
     queryCount: number;
-    activeRunCount: number;
+    activeTaskCount: number;
     queries: {
       queryId: string;
-      latestRunId: string | undefined;
-      latestRunStatus: RunResult["status"] | undefined;
-      awaitingRunId: string | null;
+      latestTaskId: string | undefined;
+      latestTaskStatus: TaskResult["status"] | undefined;
+      awaitingTaskId: string | null;
     }[];
   };
 }
@@ -86,56 +86,56 @@ interface SSEState {
 export const useSSEStore = create<SSEState>((set, get) => ({
   queries: {},
   connection: null,
-  activeRuns: new Set(),
+  activeTasks: new Set(),
 
-  registerQueryAwaitingRun: (queryId, runId) => {
+  registerQueryAwaitingTask: (queryId, taskId) => {
     set((state) => ({
       queries: {
         ...state.queries,
         [queryId]: {
           queryId,
-          latestRun: state.queries[queryId]?.latestRun || null,
-          awaitingRunId: runId
+          latestTask: state.queries[queryId]?.latestTask || null,
+          awaitingTaskId: taskId
         }
       }
     }));
   },
 
-  updateRunResult: (runId, queryId, status, data, error) => {
+  updateTaskResult: (taskId, queryId, status, data, error) => {
     set((state) => {
       const existingQuery = state.queries[queryId];
 
-      // Only update if this run is what we're waiting for
-      const shouldUpdate = existingQuery && existingQuery.awaitingRunId === runId;
+      // Only update if this task is what we're waiting for
+      const shouldUpdate = existingQuery && existingQuery.awaitingTaskId === taskId;
 
       if (!shouldUpdate) {
-        // This might be an old run result, ignore it
+        // This might be an old task result, ignore it
         return state;
       }
 
-      // If the current latest run for this query is already cancelled,
-      // ignore any subsequent results from this run
+      // If the current latest task for this query is already cancelled,
+      // ignore any subsequent results from this task
       if (
-        existingQuery?.latestRun?.status === "cancelled" &&
-        existingQuery?.latestRun?.runId === runId
+        existingQuery?.latestTask?.status === "cancelled" &&
+        existingQuery?.latestTask?.taskId === taskId
       ) {
-        // Run was cancelled, ignore worker results
+        // Task was cancelled, ignore worker results
         return state;
       }
 
-      const newRunResult: RunResult = {
-        runId,
+      const newTaskResult: TaskResult = {
+        taskId,
         queryId,
         status,
         timestamp: Date.now(),
-        data: data || existingQuery?.latestRun?.data,
-        error: error || existingQuery?.latestRun?.error
+        data: data || existingQuery?.latestTask?.data,
+        error: error || existingQuery?.latestTask?.error
       };
 
-      const updatedQuery: QueryWithLatestRun = {
+      const updatedQuery: QueryWithLatestTask = {
         queryId,
-        latestRun: newRunResult,
-        awaitingRunId: status === "running" ? runId : null // Clear awaiting if completed
+        latestTask: newTaskResult,
+        awaitingTaskId: status === "running" ? taskId : null // Clear awaiting if completed
       };
 
       return {
@@ -160,28 +160,28 @@ export const useSSEStore = create<SSEState>((set, get) => ({
     }
   },
 
-  markQueryCancelled: (queryId, runId, error) => {
+  markQueryCancelled: (queryId, taskId, error) => {
     set((state) => {
       const existingQuery = state.queries[queryId];
 
-      // Only update if this run is what we're waiting for
-      if (!existingQuery || existingQuery.awaitingRunId !== runId) {
+      // Only update if this task is what we're waiting for
+      if (!existingQuery || existingQuery.awaitingTaskId !== taskId) {
         return state;
       }
 
-      const cancelledRunResult: RunResult = {
-        runId,
+      const cancelledTaskResult: TaskResult = {
+        taskId,
         queryId,
         status: "cancelled",
         timestamp: Date.now(),
-        data: existingQuery?.latestRun?.data || undefined, // Keep existing data
+        data: existingQuery?.latestTask?.data || undefined, // Keep existing data
         error: error || "Query execution was cancelled"
       };
 
-      const updatedQuery: QueryWithLatestRun = {
+      const updatedQuery: QueryWithLatestTask = {
         queryId,
-        latestRun: cancelledRunResult,
-        awaitingRunId: null // Clear awaiting since we're marking as cancelled
+        latestTask: cancelledTaskResult,
+        awaitingTaskId: null // Clear awaiting since we're marking as cancelled
       };
 
       return {
@@ -204,76 +204,43 @@ export const useSSEStore = create<SSEState>((set, get) => ({
   },
 
   setConnection: (connection) => {
-    set({ connection });
+    set(() => ({ connection }));
   },
 
   updateConnectionStatus: (status) => {
-    set((state) => {
-      if (!state.connection) return state;
-
-      return {
-        connection: {
-          ...state.connection,
-          status,
-          lastMessageTime: Date.now()
-        }
-      };
-    });
+    set((state) => ({
+      connection: state.connection ? { ...state.connection, status } : null
+    }));
   },
 
   incrementReconnectAttempts: () => {
-    set((state) => {
-      if (!state.connection) return state;
-
-      return {
-        connection: {
-          ...state.connection,
-          reconnectAttempts: state.connection.reconnectAttempts + 1
-        }
-      };
-    });
+    set((state) => ({
+      connection: state.connection
+        ? { ...state.connection, reconnectAttempts: state.connection.reconnectAttempts + 1 }
+        : null
+    }));
   },
 
   resetReconnectAttempts: () => {
-    set((state) => {
-      if (!state.connection) return state;
-
-      return {
-        connection: {
-          ...state.connection,
-          reconnectAttempts: 0
-        }
-      };
-    });
+    set((state) => ({
+      connection: state.connection ? { ...state.connection, reconnectAttempts: 0 } : null
+    }));
   },
 
   closeConnection: () => {
-    const state = get();
-
-    if (state.connection?.eventSource) {
-      state.connection.eventSource.close();
-    }
-
-    set({
-      connection: null,
-      activeRuns: new Set() // Clear active runs when connection closes
-    });
+    set(() => ({ connection: null }));
   },
 
-  addActiveRun: (runId) => {
-    set((state) => {
-      const newActiveRuns = new Set(state.activeRuns);
-      newActiveRuns.add(runId);
-      return { activeRuns: newActiveRuns };
-    });
+  addActiveTask: (taskId) => {
+    set((state) => ({
+      activeTasks: new Set(state.activeTasks).add(taskId)
+    }));
   },
 
-  removeActiveRun: (runId) => {
-    set((state) => {
-      const newActiveRuns = new Set(state.activeRuns);
-      newActiveRuns.delete(runId);
-      return { activeRuns: newActiveRuns };
-    });
+  removeActiveTask: (taskId) => {
+    set((state) => ({
+      activeTasks: new Set([...state.activeTasks].filter((id) => id !== taskId))
+    }));
   },
 
   clearQueryData: (queryId) => {
@@ -285,49 +252,53 @@ export const useSSEStore = create<SSEState>((set, get) => ({
   },
 
   getQueryData: (queryId) => {
-    return get().queries[queryId];
+    const state = get();
+    return state.queries[queryId];
   },
 
-  getQueryLatestRun: (queryId) => {
-    return get().queries[queryId]?.latestRun;
+  getQueryLatestTask: (queryId) => {
+    const state = get();
+    return state.queries[queryId]?.latestTask || null;
   },
 
   isQueryRunning: (queryId) => {
-    const queryData = get().queries[queryId];
-    return queryData?.latestRun?.status === "running" || !!queryData?.awaitingRunId;
+    const state = get();
+    const query = state.queries[queryId];
+    return query?.latestTask?.status === "running" || query?.awaitingTaskId !== null;
   },
 
   hasActiveConnection: () => {
-    const connection = get().connection;
-    return connection?.status === "connected";
+    const state = get();
+    return state.connection?.status === "connected";
   },
 
-  isRunActive: (runId) => {
-    return get().activeRuns.has(runId);
+  isTaskActive: (taskId) => {
+    const state = get();
+    return state.activeTasks.has(taskId);
   },
 
   getConnectionStatus: () => {
-    return get().connection?.status || "disconnected";
+    const state = get();
+    return state.connection?.status || "disconnected";
   },
 
   clearAllData: () => {
-    set({
+    set(() => ({
       queries: {},
-      activeRuns: new Set()
-    });
+      activeTasks: new Set()
+    }));
   },
 
-  // Debug helper method
   getDebugInfo: () => {
     const state = get();
     return {
       queryCount: Object.keys(state.queries).length,
-      activeRunCount: state.activeRuns.size,
+      activeTaskCount: state.activeTasks.size,
       queries: Object.values(state.queries).map((q) => ({
         queryId: q.queryId,
-        latestRunId: q.latestRun?.runId,
-        latestRunStatus: q.latestRun?.status,
-        awaitingRunId: q.awaitingRunId
+        latestTaskId: q.latestTask?.taskId,
+        latestTaskStatus: q.latestTask?.status,
+        awaitingTaskId: q.awaitingTaskId
       }))
     };
   }

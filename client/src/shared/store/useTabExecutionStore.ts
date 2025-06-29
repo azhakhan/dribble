@@ -67,39 +67,39 @@ export const useTabExecutionStore = create<TabExecutionState>()(() => ({
         // Set up a polling mechanism to check for results updates
         // In a real implementation, you'd use the useQueryStream hook in the component
         const checkForUpdates = () => {
-          const queryLatestRun = sseStore.getQueryLatestRun(tab.queryId!);
+          const queryLatestTask = sseStore.getQueryLatestTask(tab.queryId!);
           const currentTab = useTabManagerStore.getState().openTabs.find((t) => t.id === tabId);
 
-          // Only update if we have a latest run and it matches the run we're tracking
-          if (queryLatestRun && currentTab && queryLatestRun.runId === currentTab.queryRunId) {
+          // Only update if we have a latest task and it matches the task we're tracking
+          if (queryLatestTask && currentTab && queryLatestTask.taskId === currentTab.queryRunId) {
             const currentTabs = useTabManagerStore.getState().openTabs;
             const updatedTabs = currentTabs.map((t) => {
               if (t.id !== tabId) return t;
 
-              if (queryLatestRun.status === "success" && queryLatestRun.data) {
+              if (queryLatestTask.status === "success" && queryLatestTask.data) {
                 return {
                   ...t,
                   queryRunning: false,
                   queryRunId: null,
-                  queryResults: convertToTableData(queryLatestRun.data)
+                  queryResults: convertToTableData(queryLatestTask.data)
                 };
-              } else if (queryLatestRun.status === "error") {
+              } else if (queryLatestTask.status === "error") {
                 return {
                   ...t,
                   queryRunning: false,
                   queryRunId: null,
-                  queryResults: errorToTableData(queryLatestRun.error || "Query execution failed")
+                  queryResults: errorToTableData(queryLatestTask.error || "Query execution failed")
                 };
-              } else if (queryLatestRun.status === "cancelled") {
+              } else if (queryLatestTask.status === "cancelled") {
                 return {
                   ...t,
                   queryRunning: false,
                   queryRunId: null,
                   queryResults: errorToTableData(
-                    queryLatestRun.error || "Query execution was cancelled"
+                    queryLatestTask.error || "Query execution was cancelled"
                   )
                 };
-              } else if (queryLatestRun.status === "running") {
+              } else if (queryLatestTask.status === "running") {
                 return {
                   ...t,
                   queryRunning: true
@@ -114,19 +114,19 @@ export const useTabExecutionStore = create<TabExecutionState>()(() => ({
         // Don't check immediately - let the query start running first
         let pollCount = 0;
         const interval = setInterval(() => {
-          const queryLatestRun = sseStore.getQueryLatestRun(tab.queryId!);
+          const queryLatestTask = sseStore.getQueryLatestTask(tab.queryId!);
           const currentTab = useTabManagerStore.getState().openTabs.find((t) => t.id === tabId);
           checkForUpdates();
           pollCount++;
 
-          // Stop polling when query is complete AND it's the run we're tracking
+          // Stop polling when query is complete AND it's the task we're tracking
           if (
-            queryLatestRun &&
+            queryLatestTask &&
             currentTab &&
-            queryLatestRun.runId === currentTab.queryRunId &&
-            (queryLatestRun.status === "success" ||
-              queryLatestRun.status === "error" ||
-              queryLatestRun.status === "cancelled")
+            queryLatestTask.taskId === currentTab.queryRunId &&
+            (queryLatestTask.status === "success" ||
+              queryLatestTask.status === "error" ||
+              queryLatestTask.status === "cancelled")
           ) {
             clearInterval(interval);
           }

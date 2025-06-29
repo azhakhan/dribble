@@ -1,8 +1,10 @@
 import { useSSEStore } from "@/shared/store/useSSEStore";
-import type { RunResult, GlobalSSEConnection } from "@/shared/store/useSSEStore";
+import type { TaskResult, GlobalSSEConnection } from "@/shared/store/useSSEStore";
+import { getWorkerTaskResult } from "@/shared/lib/api";
+import type { TableRow } from "@/shared/types/api";
 
 export interface SSEMessageHandler {
-  onRunResult?: (queryId: string, runId: string, result: RunResult) => void;
+  onTaskResult?: (queryId: string, taskId: string, result: TaskResult) => void;
   onConnection?: (clientId: string) => void;
   onHeartbeat?: () => void;
   onError?: (error: string) => void;
@@ -124,20 +126,20 @@ class SSEConnectionManager {
   }
 
   /**
-   * Register a query as awaiting a specific run
+   * Register a query as awaiting a specific task
    */
-  public trackQueryRun(queryId: string, runId: string): void {
+  public trackQueryTask(queryId: string, taskId: string): void {
     const store = useSSEStore.getState();
-    store.registerQueryAwaitingRun(queryId, runId);
-    store.addActiveRun(runId);
+    store.registerQueryAwaitingTask(queryId, taskId);
+    store.addActiveTask(taskId);
   }
 
   /**
-   * Remove a run from tracking
+   * Remove a task from tracking
    */
-  public untrackRun(runId: string): void {
+  public untrackTask(taskId: string): void {
     const store = useSSEStore.getState();
-    store.removeActiveRun(runId);
+    store.removeActiveTask(taskId);
   }
 
   /**
@@ -173,7 +175,7 @@ class SSEConnectionManager {
   /**
    * Handle incoming SSE messages
    */
-  private handleMessage(event: MessageEvent): void {
+  private async handleMessage(event: MessageEvent): Promise<void> {
     try {
       const data = JSON.parse(event.data);
       const store = useSSEStore.getState();
@@ -196,36 +198,64 @@ class SSEConnectionManager {
           });
           break;
 
-        case "query_result": {
-          const runId = data.query_run_id;
-          const queryId = data.query_id;
+        case "task_status": {
+          const taskId = data.task_id;
+          const status = data.status;
 
-          if (runId && queryId) {
-            // Update run result in store
-            store.updateRunResult(runId, queryId, data.status, data.data, data.error);
+          if (taskId && status) {
+            // Find query ID for this task from our tracked queries
+            const queries = store.queries;
+            let queryId: string | null = null;
 
-            // Create result object for handlers
-            const result: RunResult = {
-              runId,
-              queryId,
-              status: data.status,
-              timestamp: data.timestamp || Date.now(),
-              data: data.data,
-              error: data.error
-            };
+            for (const [qId, queryData] of Object.entries(queries)) {
+              if (queryData.awaitingTaskId === taskId) {
+                queryId = qId;
+                break;
+              }
+            }
 
-            // Notify handlers
-            this.messageHandlers.forEach((handler) => {
-              handler.onRunResult?.(queryId, runId, result);
-            });
+            if (queryId) {
+              if (status === "success") {
+                // Task completed successfully, fetch the actual data
+                try {
+                  const taskResult = await getWorkerTaskResult(taskId);
+                  store.updateTaskResult(
+                    taskId,
+                    queryId,
+                    status,
+                    taskResult.data as TableRow[],
+                    taskResult.error
+                  );
+                } catch (error) {
+                  // Failed to fetch results, mark as error
+                  const errorMessage =
+                    error instanceof Error ? error.message : "Failed to fetch task results";
+                  store.updateTaskResult(taskId, queryId, "error", undefined, errorMessage);
+                }
+              } else {
+                // For running, error, or cancelled states, update without fetching data
+                store.updateTaskResult(taskId, queryId, status, undefined, data.error);
+              }
 
-            // Remove from active runs if completed
-            if (
-              data.status === "success" ||
-              data.status === "error" ||
-              data.status === "cancelled"
-            ) {
-              store.removeActiveRun(runId);
+              // Create result object for handlers
+              const result: TaskResult = {
+                taskId,
+                queryId,
+                status,
+                timestamp: data.timestamp || Date.now(),
+                data: undefined, // Data will be fetched separately for success cases
+                error: data.error
+              };
+
+              // Notify handlers
+              this.messageHandlers.forEach((handler) => {
+                handler.onTaskResult?.(queryId, taskId, result);
+              });
+
+              // Remove from active tasks if completed
+              if (status === "success" || status === "error" || status === "cancelled") {
+                store.removeActiveTask(taskId);
+              }
             }
           }
           break;
@@ -291,7 +321,7 @@ if (typeof window !== "undefined") {
     if (document.visibilityState === "visible") {
       // Page became visible - reconnect if needed
       const store = useSSEStore.getState();
-      if (!store.hasActiveConnection() && store.activeRuns.size > 0) {
+      if (!store.hasActiveConnection() && store.activeTasks.size > 0) {
         sseConnectionManager.connect().catch(() => {
           // Failed to reconnect on visibility change
         });
