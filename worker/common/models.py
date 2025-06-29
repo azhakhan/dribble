@@ -52,7 +52,6 @@ class TaskRequest(BaseModel):
     creds: Optional[Dict] = None
 
     # For execute tasks (use existing connection)
-    source_key: Optional[str] = None  # "{source_id}:{role}"
     sql: Optional[str] = None
     modifiers: Optional[QueryRunModifiers] = None
 

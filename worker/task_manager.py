@@ -82,7 +82,6 @@ def handle_execute_task(task: TaskRequest):
 
     try:
         source_key = f"{task.source_id}:{task.role}"
-
         # Get connection from pool
         connection_info = get_connection(source_key)
 
@@ -116,7 +115,8 @@ def handle_schema_task(task: TaskRequest):
     """Handle schema inspection"""
     try:
         # Get connection from pool
-        connection_info = get_connection(task.source_key)
+        source_key = f"{task.source_id}:{task.role}"
+        connection_info = get_connection(source_key)
 
         set_result(task.id, {"status": "running"})
 

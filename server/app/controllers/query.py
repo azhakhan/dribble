@@ -30,7 +30,7 @@ async def execute_in_worker_version(request: ExecuteQueryVersionRequest, db: Ses
     task_data = {
         "task_type": "execute",
         "source_id": str(request.source_id),
-        "db_type": source.dbtype,
+        "dbtype": source.dbtype,
         "sql": request.sql,
         "modifiers": request.modifiers.model_dump() if request.modifiers else None,
     }
@@ -49,7 +49,7 @@ async def cancel_query_in_worker(query_run_id: UUID, source_id: UUID, db: Sessio
         "task_type": "cancel_query",
         "query_run_id": str(query_run_id),
         "source_id": str(source_id),
-        "db_type": source.dbtype,
+        "dbtype": source.dbtype,
     }
     task_id = await submit_task(task_data)
     return {"task_id": task_id}

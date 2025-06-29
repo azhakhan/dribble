@@ -32,7 +32,7 @@ export const getSourceSchemas = async (sourceId: string) => {
 
 // Connect to a source
 export const connectSource = async (sourceId: string): Promise<void> => {
-  await api.get(`/sources/connect/${sourceId}`);
+  await api.get(`/worker/connect/${sourceId}`);
 };
 
 // Disconnect from a source
