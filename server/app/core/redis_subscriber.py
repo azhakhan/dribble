@@ -3,7 +3,11 @@ import logging
 from typing import Dict, List, Optional
 import time
 import orjson
-from app.core._redis import REDIS
+from uuid import UUID
+from app.core._redis import REDIS, get_task_result
+from app.core.db import SessionLocal
+from app.controllers.query_service import QueryRunService
+from app.schemas.query_run import UpdateQueryRunRequest
 
 logger = logging.getLogger(__name__)
 
@@ -101,6 +105,10 @@ class TaskStatusSubscriber:
             if "timestamp" not in parsed_message:
                 parsed_message["timestamp"] = time.time()
 
+            # Check if this is a success status and if we need to update query run
+            if parsed_message.get("status") == "success":
+                await self._maybe_update_query_run(task_id)
+
             # Store only the latest status for this task
             self.task_status[task_id] = parsed_message
 
@@ -110,6 +118,38 @@ class TaskStatusSubscriber:
 
         except Exception as e:
             logger.error(f"Error handling Redis message: {str(e)}")
+
+    async def _maybe_update_query_run(self, task_id: str):
+        """Check if task result contains query_run data and update database if so"""
+        try:
+            # Get the full result from Redis
+            result = await get_task_result(task_id)
+            if not result:
+                return
+
+            # Check if this is a query_run result
+            if result.get("type") != "query_run":
+                return
+
+            # Get the stats for query run update
+            stats = result.get("stats")
+            if not stats:
+                return
+
+            # Create database session and update query run
+            db = SessionLocal()
+            try:
+                update_request = UpdateQueryRunRequest(**stats)
+                QueryRunService.update_run(db, UUID(task_id), update_request)
+                logger.debug(f"Updated query run {task_id} from SSE flow")
+            except Exception as e:
+                db.rollback()
+                logger.error(f"Failed to update query run {task_id}: {str(e)}")
+            finally:
+                db.close()
+
+        except Exception as e:
+            logger.error(f"Error updating query run for task {task_id}: {str(e)}")
 
     def get_status(self, task_id: str) -> Optional[dict]:
         """Get the latest status for a task"""
