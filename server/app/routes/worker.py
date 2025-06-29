@@ -107,16 +107,62 @@ async def connect(
         task_data = {
             "task_type": "connect",
             "source_id": str(source_id),
-            "db_type": source.dbtype,
-            "creds": creds,
+            "dbtype": source.dbtype,
+            "creds": creds.model_dump(),
             "role": "reader",
         }
 
+        print("task_data", task_data)
+
         task_id = await submit_task(task_data)
         logger.info(f"Submitted connect task {task_id} for source {source_id}")
-        return {"task_id": task_id}
 
+        # Wait for task completion
+        max_wait_time = 30  # 30 seconds timeout
+        poll_interval = 0.5  # Poll every 500ms
+        elapsed_time = 0
+
+        while elapsed_time < max_wait_time:
+            # Check task status
+            status_msg = task_status_subscriber.get_status(task_id)
+
+            if status_msg:
+                status = status_msg.get("status")
+                logger.debug(f"Task {task_id} status: {status}")
+
+                if status in ["success", "error", "cancelled"]:
+                    # Task completed, get the result
+                    result = await get_task_result(task_id)
+
+                    if not result:
+                        raise HTTPException(status_code=404, detail="Task result not found")
+
+                    # Clean up status tracking
+                    task_status_subscriber.clear_status(task_id)
+
+                    # Return the result directly based on status
+                    if status == "success":
+                        return result
+                    elif status == "error":
+                        error_message = result.get("error", "Task failed")
+                        raise HTTPException(status_code=400, detail=error_message)
+                    else:  # cancelled
+                        raise HTTPException(status_code=408, detail="Task was cancelled")
+
+            # Wait before next poll
+            await asyncio.sleep(poll_interval)
+            elapsed_time += poll_interval
+
+        # Timeout reached
+        logger.error(f"Task {task_id} timed out after {max_wait_time} seconds")
+        task_status_subscriber.clear_status(task_id)
+        raise HTTPException(status_code=408, detail="Task timed out")
+
+    except HTTPException:
+        # Re-raise HTTP exceptions as they are already properly formatted
+        raise
     except Exception as e:
+        logger.error(f"Error in connect endpoint: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
@@ -126,8 +172,53 @@ async def get_connected_sources():
         task_data = {"task_type": "connected"}
         task_id = await submit_task(task_data)
         logger.info(f"Submitted connected task {task_id}")
-        return {"task_id": task_id}
+
+        # Wait for task completion
+        max_wait_time = 30  # 30 seconds timeout
+        poll_interval = 0.5  # Poll every 500ms
+        elapsed_time = 0
+
+        while elapsed_time < max_wait_time:
+            # Check task status
+            status_msg = task_status_subscriber.get_status(task_id)
+
+            if status_msg:
+                status = status_msg.get("status")
+                logger.debug(f"Task {task_id} status: {status}")
+
+                if status in ["success", "error", "cancelled"]:
+                    # Task completed, get the result
+                    result = await get_task_result(task_id)
+
+                    if not result:
+                        raise HTTPException(status_code=404, detail="Task result not found")
+
+                    # Clean up status tracking
+                    task_status_subscriber.clear_status(task_id)
+
+                    # Return the result directly based on status
+                    if status == "success":
+                        return result
+                    elif status == "error":
+                        error_message = result.get("error", "Task failed")
+                        raise HTTPException(status_code=400, detail=error_message)
+                    else:  # cancelled
+                        raise HTTPException(status_code=408, detail="Task was cancelled")
+
+            # Wait before next poll
+            await asyncio.sleep(poll_interval)
+            elapsed_time += poll_interval
+
+        # Timeout reached
+        logger.error(f"Task {task_id} timed out after {max_wait_time} seconds")
+        task_status_subscriber.clear_status(task_id)
+        raise HTTPException(status_code=408, detail="Task timed out")
+
+    except HTTPException:
+        # Re-raise HTTP exceptions as they are already properly formatted
+        raise
     except Exception as e:
+        logger.error(f"Error in get_connected_sources endpoint: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
@@ -142,8 +233,53 @@ async def get_schemas(source_id: UUID):
         }
         task_id = await submit_task(task_data)
         logger.info(f"Submitted schema task {task_id} for source {source_id}")
-        return {"task_id": task_id}
+
+        # Wait for task completion
+        max_wait_time = 30  # 30 seconds timeout
+        poll_interval = 0.5  # Poll every 500ms
+        elapsed_time = 0
+
+        while elapsed_time < max_wait_time:
+            # Check task status
+            status_msg = task_status_subscriber.get_status(task_id)
+
+            if status_msg:
+                status = status_msg.get("status")
+                logger.debug(f"Task {task_id} status: {status}")
+
+                if status in ["success", "error", "cancelled"]:
+                    # Task completed, get the result
+                    result = await get_task_result(task_id)
+
+                    if not result:
+                        raise HTTPException(status_code=404, detail="Task result not found")
+
+                    # Clean up status tracking
+                    task_status_subscriber.clear_status(task_id)
+
+                    # Return the result directly based on status
+                    if status == "success":
+                        return result.get("data")
+                    elif status == "error":
+                        error_message = result.get("error", "Task failed")
+                        raise HTTPException(status_code=400, detail=error_message)
+                    else:  # cancelled
+                        raise HTTPException(status_code=408, detail="Task was cancelled")
+
+            # Wait before next poll
+            await asyncio.sleep(poll_interval)
+            elapsed_time += poll_interval
+
+        # Timeout reached
+        logger.error(f"Task {task_id} timed out after {max_wait_time} seconds")
+        task_status_subscriber.clear_status(task_id)
+        raise HTTPException(status_code=408, detail="Task timed out")
+
+    except HTTPException:
+        # Re-raise HTTP exceptions as they are already properly formatted
+        raise
     except Exception as e:
+        logger.error(f"Error in get_schemas endpoint: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
@@ -153,6 +289,51 @@ async def disconnect_source(source_id: UUID):
         task_data = {"task_type": "disconnect", "source_id": str(source_id)}
         task_id = await submit_task(task_data)
         logger.info(f"Submitted disconnect task {task_id} for source {source_id}")
-        return {"task_id": task_id}
+
+        # Wait for task completion
+        max_wait_time = 30  # 30 seconds timeout
+        poll_interval = 0.5  # Poll every 500ms
+        elapsed_time = 0
+
+        while elapsed_time < max_wait_time:
+            # Check task status
+            status_msg = task_status_subscriber.get_status(task_id)
+
+            if status_msg:
+                status = status_msg.get("status")
+                logger.debug(f"Task {task_id} status: {status}")
+
+                if status in ["success", "error", "cancelled"]:
+                    # Task completed, get the result
+                    result = await get_task_result(task_id)
+
+                    if not result:
+                        raise HTTPException(status_code=404, detail="Task result not found")
+
+                    # Clean up status tracking
+                    task_status_subscriber.clear_status(task_id)
+
+                    # Return the result directly based on status
+                    if status == "success":
+                        return result
+                    elif status == "error":
+                        error_message = result.get("error", "Task failed")
+                        raise HTTPException(status_code=400, detail=error_message)
+                    else:  # cancelled
+                        raise HTTPException(status_code=408, detail="Task was cancelled")
+
+            # Wait before next poll
+            await asyncio.sleep(poll_interval)
+            elapsed_time += poll_interval
+
+        # Timeout reached
+        logger.error(f"Task {task_id} timed out after {max_wait_time} seconds")
+        task_status_subscriber.clear_status(task_id)
+        raise HTTPException(status_code=408, detail="Task timed out")
+
+    except HTTPException:
+        # Re-raise HTTP exceptions as they are already properly formatted
+        raise
     except Exception as e:
+        logger.error(f"Error in disconnect_source endpoint: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e)) from e
