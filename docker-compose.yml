@@ -33,21 +33,21 @@ services:
       timeout: 5s
       retries: 5
 
-  migrations:
-    image: dribble-migrations:latest
-    build:
-      context: ./server
-      dockerfile: Dockerfile.migrations
-    volumes:
-      - ./server/app/alembic:/app/app/alembic:cached
-    environment:
-      - DATABASE_URL=postgresql+psycopg://postgres:postgres@postgres:5432/postgres
-    depends_on:
-      postgres:
-        condition: service_healthy
-    networks:
-      - dribble-network
-    command: upgrade head
+  # migrations:
+  #   image: dribble-migrations:latest
+  #   build:
+  #     context: ./server
+  #     dockerfile: Dockerfile.migrations
+  #   volumes:
+  #     - ./server/app/alembic:/app/app/alembic:cached
+  #   environment:
+  #     - DATABASE_URL=postgresql+psycopg://postgres:postgres@postgres:5432/postgres
+  #   depends_on:
+  #     postgres:
+  #       condition: service_healthy
+  #   networks:
+  #     - dribble-network
+  #   command: upgrade head
 
   server:
     image: dribble-server:latest
@@ -73,8 +73,8 @@ services:
     networks:
       - dribble-network
     depends_on:
-      migrations:
-        condition: service_completed_successfully
+      # migrations:
+      #   condition: service_completed_successfully
       postgres:
         condition: service_healthy
       redis:

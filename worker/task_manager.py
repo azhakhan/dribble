@@ -175,25 +175,28 @@ def handle_connected_task(task: TaskRequest):
         # Get all active connections
         all_connections = get_all_connections()
 
-        # Group by source_id for easier consumption
-        sources = {}
+        # Convert to array format expected by client
+        connected_sources = []
+        processed_sources = set()
+
         for _, connection_info in all_connections.items():
             source_id = connection_info["source_id"]
-            if source_id not in sources:
-                sources[source_id] = {
-                    "source_id": source_id,
-                    "dbtype": connection_info["dbtype"],
-                    "connections": [],
-                }
-            sources[source_id]["connections"].append({"role": connection_info["role"]})
+            if source_id not in processed_sources:
+                connected_sources.append(
+                    {
+                        "id": source_id,
+                        "source_id": source_id,
+                    }
+                )
+                processed_sources.add(source_id)
 
         logger.info(
-            f"Connected sources fetched: {len(sources)} sources, {len(all_connections)} total connections"
+            f"Connected sources fetched: {len(connected_sources)} sources, {len(all_connections)} total connections"
         )
 
         set_result(
             task.id,
-            {"status": "success", "data": {"sources": sources, "raw_connections": all_connections}},
+            {"status": "success", "data": connected_sources},
         )
         publish_status(task.id, "success")
 

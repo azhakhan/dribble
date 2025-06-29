@@ -146,7 +146,7 @@ async def connect(
 @router.get("/connected/")
 async def get_connected_sources():
     task_data = {"task_type": "connected"}
-    return await submit_and_wait_for_task(task_data)
+    return await submit_and_wait_for_task(task_data, return_data_only=True)
 
 
 # get schema for a source
