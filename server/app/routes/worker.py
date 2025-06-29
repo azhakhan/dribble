@@ -160,7 +160,8 @@ async def get_task_result_endpoint(task_id: str):
         if not result:
             raise HTTPException(status_code=404, detail="Task result not found")
 
-        return result.get("data")
+        # Return the full result object with status, data, and error
+        return result
     except Exception as e:
         logger.error(f"Error fetching result for task {task_id}: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e)) from e

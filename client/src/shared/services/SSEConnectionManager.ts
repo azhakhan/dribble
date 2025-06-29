@@ -236,26 +236,26 @@ class SSEConnectionManager {
                 // For running, error, or cancelled states, update without fetching data
                 store.updateTaskResult(taskId, queryId, status, undefined, data.error);
               }
+            }
 
-              // Create result object for handlers
-              const result: TaskResult = {
-                taskId,
-                queryId,
-                status,
-                timestamp: data.timestamp || Date.now(),
-                data: undefined, // Data will be fetched separately for success cases
-                error: data.error
-              };
+            // Create result object for handlers
+            const result: TaskResult = {
+              taskId,
+              queryId: queryId || "unknown",
+              status,
+              timestamp: data.timestamp || Date.now(),
+              data: undefined, // Data will be fetched separately for success cases
+              error: data.error
+            };
 
-              // Notify handlers
-              this.messageHandlers.forEach((handler) => {
-                handler.onTaskResult?.(queryId, taskId, result);
-              });
+            // Notify handlers
+            this.messageHandlers.forEach((handler) => {
+              handler.onTaskResult?.(queryId, taskId, result);
+            });
 
-              // Remove from active tasks if completed
-              if (status === "success" || status === "error" || status === "cancelled") {
-                store.removeActiveTask(taskId);
-              }
+            // Remove from active tasks if completed
+            if (status === "success" || status === "error" || status === "cancelled") {
+              store.removeActiveTask(taskId);
             }
           }
           break;

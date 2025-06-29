@@ -9,12 +9,14 @@ from app.models import Source
 logger = logging.getLogger(__name__)
 
 
-async def publish_cancellation_result(task_id: str):
+async def publish_cancellation_result(query_run_id: str, query_id: str, message: str):
     # TODO: AZ implement using new worker
     """Publish query cancellation to Redis pub/sub channel for real-time notifications"""
     task_data = {
         "task_type": "cancel",
-        "query_run_id": task_id,
+        "query_run_id": query_run_id,
+        "query_id": query_id,
+        "message": message,
     }
     task_id = await submit_task(task_data)
     return {"task_id": task_id}
