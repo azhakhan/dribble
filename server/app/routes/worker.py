@@ -9,6 +9,7 @@ from app.core._redis import submit_task, get_task_result
 from app.core.redis_subscriber import task_status_subscriber
 import asyncio
 import logging
+from typing import Dict, Any
 
 from app.schemas.worker import TestDBTask
 
@@ -17,16 +18,29 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/worker", tags=["worker"])
 
 
-# worker related endpoints
-@router.post("/test_db/")
-async def test_db(request: TestDBTask):
+async def submit_and_wait_for_task(
+    task_data: Dict[str, Any], max_wait_time: int = 30, return_data_only: bool = False
+) -> Dict[str, Any]:
+    """
+    Submit a task and wait for its completion.
+
+    Args:
+        task_data: The task data to submit
+        max_wait_time: Maximum time to wait in seconds (default: 30)
+        return_data_only: If True, return only the 'data' field from successful results
+
+    Returns:
+        The task result
+
+    Raises:
+        HTTPException: On task failure, timeout, or other errors
+    """
     try:
-        task_data = {"task_type": "test_db", **request.model_dump()}
         task_id = await submit_task(task_data)
-        logger.info(f"Submitted test task {task_id} for {request.dbtype}")
+        task_type = task_data.get("task_type", "unknown")
+        logger.info(f"Submitted {task_type} task {task_id}")
 
         # Wait for task completion
-        max_wait_time = 30  # 30 seconds timeout
         poll_interval = 0.5  # Poll every 500ms
         elapsed_time = 0
 
@@ -48,9 +62,9 @@ async def test_db(request: TestDBTask):
                     # Clean up status tracking
                     task_status_subscriber.clear_status(task_id)
 
-                    # Return the result directly based on status
+                    # Return the result based on status
                     if status == "success":
-                        return result
+                        return result.get("data") if return_data_only else result
                     elif status == "error":
                         error_message = result.get("error", "Task failed")
                         raise HTTPException(status_code=400, detail=error_message)
@@ -70,8 +84,15 @@ async def test_db(request: TestDBTask):
         # Re-raise HTTP exceptions as they are already properly formatted
         raise
     except Exception as e:
-        logger.error(f"Error in test_db endpoint: {str(e)}")
+        logger.error(f"Error in task submission and polling: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+# worker related endpoints
+@router.post("/test_db/")
+async def test_db(request: TestDBTask):
+    task_data = {"task_type": "test_db", **request.model_dump()}
+    return await submit_and_wait_for_task(task_data)
 
 
 @router.get("/tasks/{task_id}/result")
@@ -113,53 +134,9 @@ async def connect(
         }
 
         print("task_data", task_data)
-
-        task_id = await submit_task(task_data)
-        logger.info(f"Submitted connect task {task_id} for source {source_id}")
-
-        # Wait for task completion
-        max_wait_time = 30  # 30 seconds timeout
-        poll_interval = 0.5  # Poll every 500ms
-        elapsed_time = 0
-
-        while elapsed_time < max_wait_time:
-            # Check task status
-            status_msg = task_status_subscriber.get_status(task_id)
-
-            if status_msg:
-                status = status_msg.get("status")
-                logger.debug(f"Task {task_id} status: {status}")
-
-                if status in ["success", "error", "cancelled"]:
-                    # Task completed, get the result
-                    result = await get_task_result(task_id)
-
-                    if not result:
-                        raise HTTPException(status_code=404, detail="Task result not found")
-
-                    # Clean up status tracking
-                    task_status_subscriber.clear_status(task_id)
-
-                    # Return the result directly based on status
-                    if status == "success":
-                        return result
-                    elif status == "error":
-                        error_message = result.get("error", "Task failed")
-                        raise HTTPException(status_code=400, detail=error_message)
-                    else:  # cancelled
-                        raise HTTPException(status_code=408, detail="Task was cancelled")
-
-            # Wait before next poll
-            await asyncio.sleep(poll_interval)
-            elapsed_time += poll_interval
-
-        # Timeout reached
-        logger.error(f"Task {task_id} timed out after {max_wait_time} seconds")
-        task_status_subscriber.clear_status(task_id)
-        raise HTTPException(status_code=408, detail="Task timed out")
+        return await submit_and_wait_for_task(task_data)
 
     except HTTPException:
-        # Re-raise HTTP exceptions as they are already properly formatted
         raise
     except Exception as e:
         logger.error(f"Error in connect endpoint: {str(e)}")
@@ -168,172 +145,22 @@ async def connect(
 
 @router.get("/connected/")
 async def get_connected_sources():
-    try:
-        task_data = {"task_type": "connected"}
-        task_id = await submit_task(task_data)
-        logger.info(f"Submitted connected task {task_id}")
-
-        # Wait for task completion
-        max_wait_time = 30  # 30 seconds timeout
-        poll_interval = 0.5  # Poll every 500ms
-        elapsed_time = 0
-
-        while elapsed_time < max_wait_time:
-            # Check task status
-            status_msg = task_status_subscriber.get_status(task_id)
-
-            if status_msg:
-                status = status_msg.get("status")
-                logger.debug(f"Task {task_id} status: {status}")
-
-                if status in ["success", "error", "cancelled"]:
-                    # Task completed, get the result
-                    result = await get_task_result(task_id)
-
-                    if not result:
-                        raise HTTPException(status_code=404, detail="Task result not found")
-
-                    # Clean up status tracking
-                    task_status_subscriber.clear_status(task_id)
-
-                    # Return the result directly based on status
-                    if status == "success":
-                        return result
-                    elif status == "error":
-                        error_message = result.get("error", "Task failed")
-                        raise HTTPException(status_code=400, detail=error_message)
-                    else:  # cancelled
-                        raise HTTPException(status_code=408, detail="Task was cancelled")
-
-            # Wait before next poll
-            await asyncio.sleep(poll_interval)
-            elapsed_time += poll_interval
-
-        # Timeout reached
-        logger.error(f"Task {task_id} timed out after {max_wait_time} seconds")
-        task_status_subscriber.clear_status(task_id)
-        raise HTTPException(status_code=408, detail="Task timed out")
-
-    except HTTPException:
-        # Re-raise HTTP exceptions as they are already properly formatted
-        raise
-    except Exception as e:
-        logger.error(f"Error in get_connected_sources endpoint: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e)) from e
+    task_data = {"task_type": "connected"}
+    return await submit_and_wait_for_task(task_data)
 
 
 # get schema for a source
 @router.get("/schemas/{source_id}")
 async def get_schemas(source_id: UUID):
-    try:
-        task_data = {
-            "task_type": "schema",
-            "source_id": str(source_id),
-            "role": "reader",
-        }
-        task_id = await submit_task(task_data)
-        logger.info(f"Submitted schema task {task_id} for source {source_id}")
-
-        # Wait for task completion
-        max_wait_time = 30  # 30 seconds timeout
-        poll_interval = 0.5  # Poll every 500ms
-        elapsed_time = 0
-
-        while elapsed_time < max_wait_time:
-            # Check task status
-            status_msg = task_status_subscriber.get_status(task_id)
-
-            if status_msg:
-                status = status_msg.get("status")
-                logger.debug(f"Task {task_id} status: {status}")
-
-                if status in ["success", "error", "cancelled"]:
-                    # Task completed, get the result
-                    result = await get_task_result(task_id)
-
-                    if not result:
-                        raise HTTPException(status_code=404, detail="Task result not found")
-
-                    # Clean up status tracking
-                    task_status_subscriber.clear_status(task_id)
-
-                    # Return the result directly based on status
-                    if status == "success":
-                        return result.get("data")
-                    elif status == "error":
-                        error_message = result.get("error", "Task failed")
-                        raise HTTPException(status_code=400, detail=error_message)
-                    else:  # cancelled
-                        raise HTTPException(status_code=408, detail="Task was cancelled")
-
-            # Wait before next poll
-            await asyncio.sleep(poll_interval)
-            elapsed_time += poll_interval
-
-        # Timeout reached
-        logger.error(f"Task {task_id} timed out after {max_wait_time} seconds")
-        task_status_subscriber.clear_status(task_id)
-        raise HTTPException(status_code=408, detail="Task timed out")
-
-    except HTTPException:
-        # Re-raise HTTP exceptions as they are already properly formatted
-        raise
-    except Exception as e:
-        logger.error(f"Error in get_schemas endpoint: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e)) from e
+    task_data = {
+        "task_type": "schema",
+        "source_id": str(source_id),
+        "role": "reader",
+    }
+    return await submit_and_wait_for_task(task_data, return_data_only=True)
 
 
 @router.delete("/disconnect/{source_id}")
 async def disconnect_source(source_id: UUID):
-    try:
-        task_data = {"task_type": "disconnect", "source_id": str(source_id)}
-        task_id = await submit_task(task_data)
-        logger.info(f"Submitted disconnect task {task_id} for source {source_id}")
-
-        # Wait for task completion
-        max_wait_time = 30  # 30 seconds timeout
-        poll_interval = 0.5  # Poll every 500ms
-        elapsed_time = 0
-
-        while elapsed_time < max_wait_time:
-            # Check task status
-            status_msg = task_status_subscriber.get_status(task_id)
-
-            if status_msg:
-                status = status_msg.get("status")
-                logger.debug(f"Task {task_id} status: {status}")
-
-                if status in ["success", "error", "cancelled"]:
-                    # Task completed, get the result
-                    result = await get_task_result(task_id)
-
-                    if not result:
-                        raise HTTPException(status_code=404, detail="Task result not found")
-
-                    # Clean up status tracking
-                    task_status_subscriber.clear_status(task_id)
-
-                    # Return the result directly based on status
-                    if status == "success":
-                        return result
-                    elif status == "error":
-                        error_message = result.get("error", "Task failed")
-                        raise HTTPException(status_code=400, detail=error_message)
-                    else:  # cancelled
-                        raise HTTPException(status_code=408, detail="Task was cancelled")
-
-            # Wait before next poll
-            await asyncio.sleep(poll_interval)
-            elapsed_time += poll_interval
-
-        # Timeout reached
-        logger.error(f"Task {task_id} timed out after {max_wait_time} seconds")
-        task_status_subscriber.clear_status(task_id)
-        raise HTTPException(status_code=408, detail="Task timed out")
-
-    except HTTPException:
-        # Re-raise HTTP exceptions as they are already properly formatted
-        raise
-    except Exception as e:
-        logger.error(f"Error in disconnect_source endpoint: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e)) from e
+    task_data = {"task_type": "disconnect", "source_id": str(source_id)}
+    return await submit_and_wait_for_task(task_data)
