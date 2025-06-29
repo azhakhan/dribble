@@ -37,8 +37,9 @@ class TaskStatusSubscriber:
         if self._subscriber_task and not self._subscriber_task.done():
             self._subscriber_task.cancel()
             try:
-                await self._subscriber_task
-            except asyncio.CancelledError:
+                # Add timeout to prevent hanging during shutdown
+                await asyncio.wait_for(self._subscriber_task, timeout=2.0)
+            except (asyncio.CancelledError, asyncio.TimeoutError):
                 pass
 
         logger.info("Redis subscriber stopped")

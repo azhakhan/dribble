@@ -16,6 +16,12 @@ router = APIRouter(prefix="/stream", tags=["sse"])
 active_client_sessions: Set[str] = set()
 
 
+def cleanup_sse_connections():
+    """Close all active SSE connections - useful during shutdown/reload"""
+    logger.info(f"Cleaning up {len(active_client_sessions)} active SSE connections")
+    active_client_sessions.clear()
+
+
 @router.get("/events")
 async def stream_events(client_id: Optional[str] = Query(None)):
     """
