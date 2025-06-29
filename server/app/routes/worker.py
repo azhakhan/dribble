@@ -95,20 +95,6 @@ async def test_db(request: TestDBTask):
     return await submit_and_wait_for_task(task_data)
 
 
-@router.get("/tasks/{task_id}/result")
-async def get_task_result_endpoint(task_id: str):
-    """Get the full result data for a completed task"""
-    try:
-        result = await get_task_result(task_id)
-        if not result:
-            raise HTTPException(status_code=404, detail="Task result not found")
-
-        return result
-    except Exception as e:
-        logger.error(f"Error fetching result for task {task_id}: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e)) from e
-
-
 @router.get("/connect/{source_id}")
 async def connect(
     source_id: UUID,
@@ -164,3 +150,17 @@ async def get_schemas(source_id: UUID):
 async def disconnect_source(source_id: UUID):
     task_data = {"task_type": "disconnect", "source_id": str(source_id)}
     return await submit_and_wait_for_task(task_data)
+
+
+@router.get("/tasks/{task_id}/result")
+async def get_task_result_endpoint(task_id: str):
+    """Get the full result data for a completed task"""
+    try:
+        result = await get_task_result(task_id)
+        if not result:
+            raise HTTPException(status_code=404, detail="Task result not found")
+
+        return result
+    except Exception as e:
+        logger.error(f"Error fetching result for task {task_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e)) from e

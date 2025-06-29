@@ -34,15 +34,6 @@ async def execute_query_version_run(
     # check if source exists
     get_or_404(db, Source, query.source_id, "Source not found")
 
-    # Cancel any existing running query runs for this query
-    existing_runs = QueryRunService.get_running_runs_for_query(db, query.id)
-    for existing_run in existing_runs:
-        try:
-            await cancel_query_in_worker(existing_run.id, query.source_id, db)
-        except Exception:
-            # If cancellation fails, continue anyway - the new run will take precedence
-            pass
-
     # create a run
     run = QueryRunService.create_run(db, request.query_version_id, request.modifiers)
 

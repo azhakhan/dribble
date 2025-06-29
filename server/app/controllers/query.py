@@ -30,6 +30,7 @@ async def execute_in_worker_version(request: ExecuteQueryVersionRequest, db: Ses
     task_data = {
         "task_type": "execute",
         "source_id": str(request.source_id),
+        "role": "reader",
         "dbtype": source.dbtype,
         "sql": request.sql,
         "modifiers": request.modifiers.model_dump() if request.modifiers else None,
