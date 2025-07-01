@@ -1,145 +1,93 @@
 import { useSSEStore } from "@/shared/store/useSSEStore";
-import type { TaskResult, GlobalSSEConnection } from "@/shared/store/useSSEStore";
+import type { TaskResult } from "@/shared/store/useSSEStore";
 import { getWorkerTaskResult } from "@/shared/lib/api";
 import type { TableRow } from "@/shared/types/api";
 
 export interface SSEMessageHandler {
-  onTaskResult?: (queryId: string, taskId: string, result: TaskResult) => void;
+  onTaskResult?: (queryId: string, result: TaskResult) => void;
   onConnection?: (clientId: string) => void;
   onHeartbeat?: () => void;
   onError?: (error: string) => void;
 }
 
 class SSEConnectionManager {
-  private static instance: SSEConnectionManager | null = null;
   private eventSource: EventSource | null = null;
-  private clientId: string | null = null;
+  private messageHandlers = new Set<SSEMessageHandler>();
   private reconnectTimeout: NodeJS.Timeout | null = null;
-  private maxReconnectAttempts = 5;
-  private baseReconnectDelay = 1000; // 1 second
-  private messageHandlers: Set<SSEMessageHandler> = new Set();
+  private readonly MAX_RECONNECT_ATTEMPTS = 5;
+  private readonly RECONNECT_DELAY = 1000;
 
-  private constructor() {}
-
-  static getInstance(): SSEConnectionManager {
-    if (!SSEConnectionManager.instance) {
-      SSEConnectionManager.instance = new SSEConnectionManager();
-    }
-    return SSEConnectionManager.instance;
-  }
+  // Track query to task mapping
+  private queryTaskMap = new Map<string, string>();
 
   /**
-   * Start the SSE connection if not already connected
+   * Connect to the SSE endpoint
    */
-  public connect(): Promise<string> {
-    return new Promise((resolve, reject) => {
-      const store = useSSEStore.getState();
+  public async connect(): Promise<void> {
+    // Already connected
+    if (this.eventSource && this.eventSource.readyState === EventSource.OPEN) {
+      return;
+    }
 
-      // If already connected, return existing client ID
-      if (store.hasActiveConnection() && this.clientId) {
-        resolve(this.clientId);
-        return;
-      }
+    // Clean up any existing connection
+    this.disconnect();
 
-      // Close existing connection if any
-      this.disconnect();
+    const store = useSSEStore.getState();
+    store.updateConnectionStatus("connecting");
 
-      try {
-        // Connect to the multiplexed events endpoint
-        this.eventSource = new EventSource("/api/stream/events");
+    try {
+      // Create SSE connection
+      this.eventSource = new EventSource("/api/stream/events", {
+        withCredentials: true
+      });
 
-        // Set up connection in store
-        const connection: GlobalSSEConnection = {
-          clientId: "", // Will be set after connection message
-          eventSource: this.eventSource,
-          status: "connecting",
-          lastMessageTime: Date.now(),
+      this.eventSource.onopen = () => {
+        store.updateConnectionStatus("connected");
+        store.setConnection({
+          status: "connected",
           reconnectAttempts: 0
-        };
+        });
+      };
 
-        store.setConnection(connection);
+      this.eventSource.onerror = (error) => {
+        console.error("SSE connection error:", error);
+        store.updateConnectionStatus("error");
+        this.handleReconnect();
+      };
 
-        this.eventSource.onopen = () => {
-          store.updateConnectionStatus("connected");
-          store.resetReconnectAttempts();
-          this.clearReconnectTimeout();
-        };
-
-        this.eventSource.onmessage = (event) => {
-          this.handleMessage(event);
-        };
-
-        this.eventSource.onerror = () => {
-          store.updateConnectionStatus("error");
-
-          const currentConnection = store.connection;
-          const attempts = currentConnection?.reconnectAttempts || 0;
-
-          if (attempts < this.maxReconnectAttempts) {
-            this.scheduleReconnect();
-          } else {
-            this.disconnect();
-            reject(new Error("Failed to establish SSE connection after multiple attempts"));
-          }
-        };
-
-        // Set up a timeout for initial connection
-        const connectionTimeout = setTimeout(() => {
-          if (!this.clientId) {
-            reject(new Error("SSE connection timeout"));
-          }
-        }, 10000); // 10 second timeout
-
-        // Wait for connection message to get client ID
-        const connectionHandler: SSEMessageHandler = {
-          onConnection: (clientId: string) => {
-            this.clientId = clientId;
-            clearTimeout(connectionTimeout);
-            this.removeMessageHandler(connectionHandler);
-            resolve(clientId);
-          }
-        };
-
-        this.addMessageHandler(connectionHandler);
-      } catch (error) {
-        reject(error);
-      }
-    });
+      this.eventSource.onmessage = (event) => {
+        this.handleMessage(event);
+      };
+    } catch (error) {
+      console.error("Failed to create SSE connection:", error);
+      store.updateConnectionStatus("error");
+      throw error;
+    }
   }
 
   /**
-   * Disconnect the SSE connection
+   * Disconnect from SSE
    */
   public disconnect(): void {
-    this.clearReconnectTimeout();
-
     if (this.eventSource) {
       this.eventSource.close();
       this.eventSource = null;
     }
 
-    this.clientId = null;
-    this.messageHandlers.clear();
+    if (this.reconnectTimeout) {
+      clearTimeout(this.reconnectTimeout);
+      this.reconnectTimeout = null;
+    }
 
     const store = useSSEStore.getState();
-    store.closeConnection();
+    store.updateConnectionStatus("disconnected");
   }
 
   /**
-   * Register a query as awaiting a specific task
+   * Check if connected
    */
-  public trackQueryTask(queryId: string, taskId: string): void {
-    const store = useSSEStore.getState();
-    store.registerQueryAwaitingTask(queryId, taskId);
-    store.addActiveTask(taskId);
-  }
-
-  /**
-   * Remove a task from tracking
-   */
-  public untrackTask(taskId: string): void {
-    const store = useSSEStore.getState();
-    store.removeActiveTask(taskId);
+  public isConnected(): boolean {
+    return this.eventSource?.readyState === EventSource.OPEN;
   }
 
   /**
@@ -157,19 +105,17 @@ class SSEConnectionManager {
   }
 
   /**
-   * Get current connection status
+   * Track a query task mapping
    */
-  public getConnectionStatus(): GlobalSSEConnection["status"] | "disconnected" {
-    const store = useSSEStore.getState();
-    return store.getConnectionStatus();
+  public trackQueryTask(queryId: string, taskId: string): void {
+    this.queryTaskMap.set(queryId, taskId);
   }
 
   /**
-   * Check if connection is active
+   * Get task ID for a query
    */
-  public isConnected(): boolean {
-    const store = useSSEStore.getState();
-    return store.hasActiveConnection();
+  public getTaskForQuery(queryId: string): string | undefined {
+    return this.queryTaskMap.get(queryId);
   }
 
   /**
@@ -182,15 +128,12 @@ class SSEConnectionManager {
 
       switch (data.type) {
         case "connection":
-          this.clientId = data.client_id;
-
           // Update connection with client ID
-          if (store.connection) {
-            store.setConnection({
-              ...store.connection,
-              clientId: data.client_id
-            });
-          }
+          store.setConnection({
+            status: "connected",
+            reconnectAttempts: 0,
+            clientId: data.client_id
+          });
 
           // Notify handlers
           this.messageHandlers.forEach((handler) => {
@@ -203,12 +146,10 @@ class SSEConnectionManager {
           const status = data.status;
 
           if (taskId && status) {
-            // Find query ID for this task from our tracked queries
-            const queries = store.queries;
+            // Find query ID for this task
             let queryId: string | null = null;
-
-            for (const [qId, queryData] of Object.entries(queries)) {
-              if (queryData.awaitingTaskId === taskId) {
+            for (const [qId, tId] of this.queryTaskMap.entries()) {
+              if (tId === taskId) {
                 queryId = qId;
                 break;
               }
@@ -216,46 +157,58 @@ class SSEConnectionManager {
 
             if (queryId) {
               if (status === "success") {
-                // Task completed successfully, fetch the actual data
+                // Fetch results when task completes
                 try {
                   const taskResult = await getWorkerTaskResult(taskId);
-                  store.updateTaskResult(
+                  const result: TaskResult = {
                     taskId,
                     queryId,
-                    status,
-                    taskResult.data as TableRow[],
-                    taskResult.error
-                  );
+                    status: "success",
+                    timestamp: Date.now(),
+                    data: taskResult.data as TableRow[],
+                    error: taskResult.error
+                  };
+                  store.updateTaskResult(queryId, result);
+
+                  // Notify handlers
+                  this.messageHandlers.forEach((handler) => {
+                    handler.onTaskResult?.(queryId!, result);
+                  });
+
+                  // Clean up task mapping
+                  this.queryTaskMap.delete(queryId);
                 } catch (error) {
-                  // Failed to fetch results, mark as error
-                  const errorMessage =
-                    error instanceof Error ? error.message : "Failed to fetch task results";
-                  store.updateTaskResult(taskId, queryId, "error", undefined, errorMessage);
+                  // Failed to fetch results
+                  const errorResult: TaskResult = {
+                    taskId,
+                    queryId,
+                    status: "error",
+                    timestamp: Date.now(),
+                    error: error instanceof Error ? error.message : "Failed to fetch results"
+                  };
+                  store.updateTaskResult(queryId, errorResult);
                 }
               } else {
-                // For running, error, or cancelled states, update without fetching data
-                store.updateTaskResult(taskId, queryId, status, undefined, data.error);
+                // Update status for running, error, or cancelled
+                const result: TaskResult = {
+                  taskId,
+                  queryId,
+                  status,
+                  timestamp: Date.now(),
+                  error: data.error
+                };
+                store.updateTaskResult(queryId, result);
+
+                // Notify handlers
+                this.messageHandlers.forEach((handler) => {
+                  handler.onTaskResult?.(queryId!, result);
+                });
+
+                // Clean up if terminal state
+                if (status === "error" || status === "cancelled") {
+                  this.queryTaskMap.delete(queryId);
+                }
               }
-            }
-
-            // Create result object for handlers
-            const result: TaskResult = {
-              taskId,
-              queryId: queryId || "unknown",
-              status,
-              timestamp: data.timestamp || Date.now(),
-              data: undefined, // Data will be fetched separately for success cases
-              error: data.error
-            };
-
-            // Notify handlers
-            this.messageHandlers.forEach((handler) => {
-              handler.onTaskResult?.(queryId, taskId, result);
-            });
-
-            // Remove from active tasks if completed
-            if (status === "success" || status === "error" || status === "cancelled") {
-              store.removeActiveTask(taskId);
             }
           }
           break;
@@ -279,37 +232,34 @@ class SSEConnectionManager {
   }
 
   /**
-   * Schedule a reconnection attempt
+   * Handle reconnection logic
    */
-  private scheduleReconnect(): void {
-    this.clearReconnectTimeout();
-
+  private handleReconnect(): void {
     const store = useSSEStore.getState();
-    const attempts = store.connection?.reconnectAttempts || 0;
-    const delay = this.baseReconnectDelay * Math.pow(2, attempts); // Exponential backoff
+    const currentAttempts = store.connection?.reconnectAttempts || 0;
 
-    store.incrementReconnectAttempts();
-
-    this.reconnectTimeout = setTimeout(() => {
-      this.connect().catch(() => {
-        // Reconnection failed, will be handled by the error handler
-      });
-    }, delay);
-  }
-
-  /**
-   * Clear reconnection timeout
-   */
-  private clearReconnectTimeout(): void {
-    if (this.reconnectTimeout) {
-      clearTimeout(this.reconnectTimeout);
-      this.reconnectTimeout = null;
+    if (currentAttempts >= this.MAX_RECONNECT_ATTEMPTS) {
+      console.error("Max reconnection attempts reached");
+      store.updateConnectionStatus("error");
+      return;
     }
+
+    // Schedule reconnect
+    this.reconnectTimeout = setTimeout(
+      () => {
+        store.setConnection({
+          status: "connecting",
+          reconnectAttempts: currentAttempts + 1
+        });
+        this.connect();
+      },
+      this.RECONNECT_DELAY * Math.pow(2, currentAttempts)
+    );
   }
 }
 
 // Export singleton instance
-export const sseConnectionManager = SSEConnectionManager.getInstance();
+export const sseConnectionManager = new SSEConnectionManager();
 
 // Handle page unload/reload - cleanup connection
 if (typeof window !== "undefined") {
@@ -320,8 +270,7 @@ if (typeof window !== "undefined") {
   window.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible") {
       // Page became visible - reconnect if needed
-      const store = useSSEStore.getState();
-      if (!store.hasActiveConnection() && store.activeTasks.size > 0) {
+      if (!sseConnectionManager.isConnected()) {
         sseConnectionManager.connect().catch(() => {
           // Failed to reconnect on visibility change
         });
