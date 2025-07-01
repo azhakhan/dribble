@@ -3,7 +3,6 @@ import { getSourceCredentials, updateSourceCredentials, testSource } from "@/sha
 import type {
   PostgresCreds,
   MysqlCreds,
-  SqliteCreds,
   UpdateCredentialsRequest,
   CreateSourceRequest
 } from "@/shared/lib/api";
@@ -32,7 +31,7 @@ export const EditSource = ({ open, onOpenChange, sourceId }: EditSourceProps) =>
   const [loadingCreds, setLoadingCreds] = useState(false);
   const [testing, setTesting] = useState(false);
   const [connectionTested, setConnectionTested] = useState(false);
-  const [sourceType, setSourceType] = useState<"postgres" | "mysql" | "sqlite" | "">("");
+  const [sourceType, setSourceType] = useState<"postgres" | "mysql" | "">("");
   const [formError, setFormError] = useState("");
   const queryClient = useQueryClient();
   const { loadSources } = useSourceStore();
@@ -55,11 +54,6 @@ export const EditSource = ({ open, onOpenChange, sourceId }: EditSourceProps) =>
     dbname: ""
   });
 
-  // SQLite form state
-  const [sqliteConfig, setSqliteConfig] = useState<SqliteCreds>({
-    path: ""
-  });
-
   // Load source credentials when dialog opens
   useEffect(() => {
     if (open && sourceId) {
@@ -69,7 +63,7 @@ export const EditSource = ({ open, onOpenChange, sourceId }: EditSourceProps) =>
           const sourceData = await getSourceCredentials(sourceId);
 
           // Set source type
-          setSourceType(sourceData.dbtype as "postgres" | "mysql" | "sqlite");
+          setSourceType(sourceData.dbtype as "postgres" | "mysql");
 
           // Set config based on database type
           if (sourceData.dbtype === "postgres") {
@@ -89,11 +83,6 @@ export const EditSource = ({ open, onOpenChange, sourceId }: EditSourceProps) =>
               user: creds.user || "",
               password: "", // Password is not returned by API for security
               dbname: creds.dbname || ""
-            });
-          } else if (sourceData.dbtype === "sqlite") {
-            const creds = sourceData.creds as SqliteCreds;
-            setSqliteConfig({
-              path: creds.path || ""
             });
           }
         } catch (error) {
@@ -137,9 +126,6 @@ export const EditSource = ({ open, onOpenChange, sourceId }: EditSourceProps) =>
       password: "",
       dbname: ""
     });
-    setSqliteConfig({
-      path: ""
-    });
   };
 
   const handleTest = async () => {
@@ -148,7 +134,7 @@ export const EditSource = ({ open, onOpenChange, sourceId }: EditSourceProps) =>
       return;
     }
 
-    let credentials: PostgresCreds | MysqlCreds | SqliteCreds;
+    let credentials: PostgresCreds | MysqlCreds;
 
     // Validate and prepare credentials based on source type
     if (sourceType === "postgres") {
@@ -165,13 +151,6 @@ export const EditSource = ({ open, onOpenChange, sourceId }: EditSourceProps) =>
         return;
       }
       credentials = mysqlConfig;
-    } else {
-      // SQLite
-      if (!sqliteConfig.path) {
-        setFormError("SQLite file path is required");
-        return;
-      }
-      credentials = sqliteConfig;
     }
 
     try {
@@ -214,7 +193,7 @@ export const EditSource = ({ open, onOpenChange, sourceId }: EditSourceProps) =>
     }
 
     let isValid = true;
-    let credentials: PostgresCreds | MysqlCreds | SqliteCreds;
+    let credentials: PostgresCreds | MysqlCreds;
 
     // Validate based on source type
     if (sourceType === "postgres") {
@@ -231,13 +210,6 @@ export const EditSource = ({ open, onOpenChange, sourceId }: EditSourceProps) =>
         isValid = false;
       }
       credentials = mysqlConfig;
-    } else {
-      // SQLite
-      if (!sqliteConfig.path) {
-        setFormError("SQLite file path is required");
-        isValid = false;
-      }
-      credentials = sqliteConfig;
     }
 
     if (!isValid) return;
@@ -499,25 +471,6 @@ export const EditSource = ({ open, onOpenChange, sourceId }: EditSourceProps) =>
                     />
                   </div>
                 </>
-              )}
-
-              {sourceType === "sqlite" && (
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <label htmlFor="path" className="text-right text-sm font-medium">
-                    File Path
-                  </label>
-                  <input
-                    id="path"
-                    className="col-span-3 flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                    value={sqliteConfig.path}
-                    onChange={(e) => {
-                      setSqliteConfig({ path: e.target.value });
-                      resetConnectionTest();
-                    }}
-                    placeholder="/path/to/database.db"
-                    disabled={isFormDisabled}
-                  />
-                </div>
               )}
 
               {formError && <p className="text-destructive text-sm mt-2">{formError}</p>}

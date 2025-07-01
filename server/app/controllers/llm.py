@@ -3,7 +3,6 @@ from abc import ABC, abstractmethod
 
 from typing import Dict, Any, List, AsyncGenerator, Optional, Union
 import json
-import asyncio
 from uuid import UUID
 from app.schemas.llm import LLMName
 from app.models import (
@@ -12,7 +11,6 @@ from app.models import (
 )
 from openai import OpenAI
 from app.core.encryption import decrypt_password
-from app.controllers.query import execute_in_worker, get_query_results
 from app.controllers.messages import ChatMessageService, ChatMessage
 from app.controllers.chat_types import ContextQuery, ChatResponse
 from datetime import datetime
@@ -252,28 +250,11 @@ class OpenAIProvider(BaseLLMProvider):
                 }
 
         try:
-            # Execute query using the determined source
-            result = execute_in_worker(source_id, sql_query, self.db_session)
-            query_id = result.get("query_id")
-
-            if query_id:
-                # Wait for query results
-                for _ in range(5):
-                    result = await get_query_results(query_id)
-                    if result.get("status") == "success":
-                        break
-                    await asyncio.sleep(1)
-
-                if result.get("status") == "error":
-                    result_data = result.get("error")
-                else:
-                    result_data = result.get("data")
-            else:
-                result_data = result
+            # TODO: AZ implement using new worker
 
             return {
                 "query": sql_query,
-                "result": result_data,
+                "result": {},
                 "reasoning": reasoning,
                 "source_id": str(source_id),
                 "query_name": query_name,

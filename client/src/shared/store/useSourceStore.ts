@@ -2,12 +2,7 @@ import { create } from "zustand";
 import type { Source, SourceStatus, ConnectedSource } from "@/shared/lib/api";
 import type { SourceSchemaMap, SchemaObject } from "./types";
 import type { FileNode } from "@/shared/lib/fileTreeUtils";
-import {
-  getSources,
-  getConnectedSources,
-  getSourceSchemas,
-  getSourceStatus
-} from "@/shared/lib/api";
+import { getSources, getConnectedSources, getSourceSchemas } from "@/shared/lib/api";
 
 interface SourceState {
   // Source data
@@ -353,46 +348,32 @@ export const useSourceStore = create<SourceState>((set, get) => ({
 
   loadAllSourceStatuses: async () => {
     const state = get();
-    const connectedSourceIds = Array.from(state.connectedSources);
 
-    if (connectedSourceIds.length === 0) {
-      return;
+    try {
+      // Get connected sources from the API
+      const connectedSources = await getConnectedSources();
+      const connectedSourceIds = new Set(connectedSources.map((s) => s.id));
+
+      // Update source statuses based on connection status
+      const newSourceStatuses = { ...state.sourceStatuses };
+
+      // Mark all connected sources as "running"
+      connectedSourceIds.forEach((sourceId) => {
+        newSourceStatuses[sourceId] = "running";
+      });
+
+      // Mark all non-connected sources as "unhealthy" (if they exist in our status map)
+      Object.keys(state.sourceStatuses).forEach((sourceId) => {
+        if (!connectedSourceIds.has(sourceId)) {
+          newSourceStatuses[sourceId] = "unhealthy";
+        }
+      });
+
+      // Update the store
+      set({ sourceStatuses: newSourceStatuses });
+    } catch (error) {
+      console.error("Failed to load source statuses:", error);
     }
-
-    // Load statuses in parallel for all connected sources
-    await Promise.allSettled(
-      connectedSourceIds.map(async (sourceId) => {
-        // Don't load if already loading
-        if (state.loadingStatuses.has(sourceId)) {
-          return;
-        }
-
-        // Mark as loading
-        set((prevState) => ({
-          loadingStatuses: new Set(prevState.loadingStatuses).add(sourceId)
-        }));
-
-        try {
-          const status = await getSourceStatus(sourceId);
-
-          // Update status in store
-          set((prevState) => ({
-            sourceStatuses: {
-              ...prevState.sourceStatuses,
-              [sourceId]: status
-            },
-            loadingStatuses: new Set([...prevState.loadingStatuses].filter((id) => id !== sourceId))
-          }));
-        } catch (error) {
-          console.error(`Failed to load status for source ${sourceId}:`, error);
-
-          // Remove from loading set
-          set((prevState) => ({
-            loadingStatuses: new Set([...prevState.loadingStatuses].filter((id) => id !== sourceId))
-          }));
-        }
-      })
-    );
   },
 
   getSourceStatus: (sourceId: string) => {

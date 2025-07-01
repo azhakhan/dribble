@@ -1,5 +1,4 @@
 import axios from "axios";
-import type { TableRow } from "../types/api";
 
 // Create axios instance with base URL
 const api = axios.create({
@@ -27,49 +26,42 @@ export const getSources = async (): Promise<Source[]> => {
 
 // Get schemas for a specific source
 export const getSourceSchemas = async (sourceId: string) => {
-  const response = await api.get(`/sources/schemas/${sourceId}`);
+  const response = await api.get(`/worker/schemas/${sourceId}`);
   return response.data;
 };
 
 // Connect to a source
 export const connectSource = async (sourceId: string): Promise<void> => {
-  await api.get(`/sources/connect/${sourceId}`);
+  await api.get(`/worker/connect/${sourceId}`);
 };
 
 // Disconnect from a source
 export const disconnectSource = async (sourceId: string): Promise<void> => {
-  await api.delete(`/sources/disconnect/${sourceId}`);
+  await api.delete(`/worker/disconnect/${sourceId}`);
 };
 
-// Get source status
-export const getSourceStatus = async (sourceId: string): Promise<SourceStatus> => {
-  const response = await api.get<{ status: SourceStatus }>(`/sources/status/${sourceId}`);
-  return response.data.status;
-};
-
-// New function to execute query version with run
 export const executeQueryVersionRun = async (request: CreateQueryRunRequest): Promise<string> => {
-  const response = await api.post<{ query_run_id: string }>("/execution/version", request);
+  const response = await api.post<{ query_run_id: string }>("/execution/", request);
   return response.data.query_run_id;
 };
 
-// New function to get query run results
-export const getQueryRunResults = async (run_id: string): Promise<TableRow[] | null> => {
-  try {
-    const response = await api.get<TableRow[]>(`/execution/run-results/${run_id}`);
-    return response.data;
-  } catch (error) {
-    if (axios.isAxiosError(error) && error.response?.status === 202) {
-      // Still processing, return a signal that we need to keep polling
-      return null;
-    }
-    throw error;
-  }
+// New worker-based execution that returns task_id
+export const executeQueryVersionTask = async (request: CreateQueryRunRequest): Promise<string> => {
+  const response = await api.post<{ task_id: string }>("/execution/", request);
+  return response.data.task_id;
 };
 
-// Cancel a running query
-export const cancelQueryRun = async (query_run_id: string): Promise<void> => {
-  await api.post(`/execution/cancel/${query_run_id}`);
+// Worker task result interface
+export interface WorkerTaskResult {
+  status: "success" | "error" | "running" | "cancelled";
+  data?: Record<string, unknown>[];
+  error?: string;
+}
+
+// Get task result from worker
+export const getWorkerTaskResult = async (taskId: string): Promise<WorkerTaskResult> => {
+  const response = await api.get<WorkerTaskResult>(`/worker/result/${taskId}`);
+  return response.data;
 };
 
 // Cancel a running query immediately (client-side cancellation)
@@ -81,15 +73,15 @@ export const cancelQueryRunImmediate = async (
   execution_time_ms: number;
   message: string;
 }> => {
-  const response = await api.post(`/execution/cancel-immediate/${query_run_id}`);
+  const response = await api.post(`/execution/cancel/${query_run_id}`);
   return response.data;
 };
 
 // Create a new database source
 export interface CreateSourceRequest {
   name: string;
-  dbtype: "postgres" | "mysql" | "sqlite";
-  creds: PostgresCreds | MysqlCreds | SqliteCreds;
+  dbtype: "postgres" | "mysql";
+  creds: PostgresCreds | MysqlCreds;
 }
 
 export interface PostgresCreds {
@@ -108,10 +100,6 @@ export interface MysqlCreds {
   dbname: string;
 }
 
-export interface SqliteCreds {
-  path: string;
-}
-
 export const createSource = async (sourceData: CreateSourceRequest): Promise<Source> => {
   const response = await api.post<Source>("/sources/", sourceData);
   return response.data;
@@ -123,14 +111,14 @@ export interface TestSourceResponse {
 }
 
 export const testSource = async (sourceData: CreateSourceRequest): Promise<TestSourceResponse> => {
-  const response = await api.post<TestSourceResponse>("/sources/test/", sourceData);
+  const response = await api.post<TestSourceResponse>("/worker/test_db/", sourceData);
   return response.data;
 };
 
 export interface SourceCredentials {
   name: string;
   dbtype: string;
-  creds: PostgresCreds | MysqlCreds | SqliteCreds;
+  creds: PostgresCreds | MysqlCreds;
 }
 
 export const getSourceCredentials = async (sourceId: string): Promise<SourceCredentials> => {
@@ -139,7 +127,7 @@ export const getSourceCredentials = async (sourceId: string): Promise<SourceCred
 };
 
 export interface UpdateCredentialsRequest {
-  creds?: PostgresCreds | MysqlCreds | SqliteCreds;
+  creds?: PostgresCreds | MysqlCreds;
 }
 
 export const updateSourceCredentials = async (
@@ -169,7 +157,7 @@ export interface ConnectedSource {
 }
 
 export const getConnectedSources = async (): Promise<ConnectedSource[]> => {
-  const response = await api.get<ConnectedSource[]>("/sources/connected/");
+  const response = await api.get<ConnectedSource[]>("/worker/connected/");
   return response.data;
 };
 

@@ -19,10 +19,6 @@ class MysqlCreds(BaseModel):
     dbname: str
 
 
-class SqliteCreds(BaseModel):
-    path: str
-
-
 class SourceType(str, Enum):
     postgres = "postgres"
     mysql = "mysql"
@@ -32,16 +28,11 @@ class SourceType(str, Enum):
 class CreateSourceRequest(BaseModel):
     name: str
     dbtype: SourceType
-    creds: PostgresCreds | MysqlCreds | SqliteCreds
-
-
-class TestSourceRequest(BaseModel):
-    dbtype: SourceType
-    creds: PostgresCreds | MysqlCreds | SqliteCreds
+    creds: PostgresCreds | MysqlCreds
 
 
 class UpdateCredentialsRequest(BaseModel):
-    creds: PostgresCreds | MysqlCreds | SqliteCreds | None = None
+    creds: PostgresCreds | MysqlCreds | None = None
 
 
 class RenameSourceRequest(BaseModel):

@@ -13,6 +13,9 @@ build-worker name:
     fi
     docker build -t dribble-worker-$actual_name:latest ./worker/$actual_name
 
+build-worker-new:
+    docker compose build worker
+
 build-server:
     docker compose build server
 

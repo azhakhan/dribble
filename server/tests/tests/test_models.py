@@ -3,7 +3,6 @@ from datetime import datetime
 
 from app.models import (
     Source,
-    Worker,
     Query,
     QueryVersion,
     QueryRun,
@@ -26,25 +25,6 @@ def test_source_model():
     assert source.creds == creds
     assert source.created_at is None  # Default only applies when saved to DB
     assert source.deleted_at is None
-
-
-def test_worker_model():
-    """Test Worker model creation and attributes."""
-    source_id = uuid.uuid4()
-    worker = Worker(
-        source_id=source_id,
-        container_id="test-container",
-        port=8000,
-        host="localhost",
-        status="healthy",
-    )
-    assert worker.source_id == source_id
-    assert worker.container_id == "test-container"
-    assert worker.port == 8000
-    assert worker.host == "localhost"
-    assert worker.status == "healthy"
-    assert worker.created_at is None  # Default only applies when saved to DB
-    assert worker.deleted_at is None
 
 
 def test_query_model():

@@ -10,7 +10,7 @@ import {
   DialogTrigger
 } from "@/components/ui/dialog";
 import { createSource, testSource } from "@/shared/lib/api";
-import type { PostgresCreds, MysqlCreds, SqliteCreds, CreateSourceRequest } from "@/shared/lib/api";
+import type { PostgresCreds, MysqlCreds, CreateSourceRequest } from "@/shared/lib/api";
 import { Button } from "@/components/ui/button";
 import { useSourceStore } from "@/shared/store";
 import { toast } from "sonner";
@@ -25,7 +25,7 @@ export const AddSource = ({ onSourceAdded }: AddSourceProps) => {
   const [loading, setLoading] = useState(false);
   const [testing, setTesting] = useState(false);
   const [connectionTested, setConnectionTested] = useState(false);
-  const [sourceType, setSourceType] = useState<"postgres" | "mysql" | "sqlite" | "">("");
+  const [sourceType, setSourceType] = useState<"postgres" | "mysql" | "">("");
   const [sourceName, setSourceName] = useState("");
   const [formError, setFormError] = useState("");
   const { loadSources } = useSourceStore();
@@ -48,11 +48,6 @@ export const AddSource = ({ onSourceAdded }: AddSourceProps) => {
     dbname: ""
   });
 
-  // SQLite form state
-  const [sqliteConfig, setSquliteConfig] = useState<SqliteCreds>({
-    path: ""
-  });
-
   const resetForm = () => {
     setSourceType("");
     setSourceName("");
@@ -71,9 +66,6 @@ export const AddSource = ({ onSourceAdded }: AddSourceProps) => {
       user: "",
       password: "",
       dbname: ""
-    });
-    setSquliteConfig({
-      path: ""
     });
   };
 
@@ -94,7 +86,7 @@ export const AddSource = ({ onSourceAdded }: AddSourceProps) => {
     }
 
     let isValid = true;
-    let credentials: PostgresCreds | MysqlCreds | SqliteCreds;
+    let credentials: PostgresCreds | MysqlCreds;
 
     // Validate based on source type
     if (sourceType === "postgres") {
@@ -111,13 +103,6 @@ export const AddSource = ({ onSourceAdded }: AddSourceProps) => {
         isValid = false;
       }
       credentials = mysqlConfig;
-    } else {
-      // SQLite
-      if (!sqliteConfig.path) {
-        setFormError("SQLite file path is required");
-        isValid = false;
-      }
-      credentials = sqliteConfig;
     }
 
     if (!isValid) return;
@@ -129,7 +114,7 @@ export const AddSource = ({ onSourceAdded }: AddSourceProps) => {
       // For create operation
       const createData: CreateSourceRequest = {
         name: sourceName,
-        dbtype: sourceType as "postgres" | "mysql" | "sqlite",
+        dbtype: sourceType as "postgres" | "mysql",
         creds: credentials!
       };
 
@@ -159,15 +144,13 @@ export const AddSource = ({ onSourceAdded }: AddSourceProps) => {
       return;
     }
 
-    let credentials: PostgresCreds | MysqlCreds | SqliteCreds;
+    let credentials: PostgresCreds | MysqlCreds;
 
     // Validate based on source type
     if (sourceType === "postgres") {
       credentials = postgresConfig;
     } else if (sourceType === "mysql") {
       credentials = mysqlConfig;
-    } else {
-      credentials = sqliteConfig;
     }
 
     try {
@@ -263,7 +246,7 @@ export const AddSource = ({ onSourceAdded }: AddSourceProps) => {
               className="col-span-3 flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
               value={sourceType}
               onChange={(e) => {
-                setSourceType(e.target.value as "postgres" | "mysql" | "sqlite" | "");
+                setSourceType(e.target.value as "postgres" | "mysql" | "");
                 resetConnectionTest();
               }}
               disabled={isFormDisabled}
@@ -458,25 +441,6 @@ export const AddSource = ({ onSourceAdded }: AddSourceProps) => {
                 />
               </div>
             </>
-          )}
-
-          {sourceType === "sqlite" && (
-            <div className="grid grid-cols-4 items-center gap-4">
-              <label htmlFor="path" className="text-right text-sm font-medium">
-                File Path
-              </label>
-              <input
-                id="path"
-                className="col-span-3 flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                value={sqliteConfig.path}
-                onChange={(e) => {
-                  setSquliteConfig({ path: e.target.value });
-                  resetConnectionTest();
-                }}
-                placeholder="/path/to/database.db"
-                disabled={isFormDisabled}
-              />
-            </div>
           )}
 
           {formError && <div className="text-sm text-red-500 px-4">{formError}</div>}

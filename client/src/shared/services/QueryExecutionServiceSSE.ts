@@ -1,10 +1,6 @@
 import type { CreateQueryRunRequest } from "@/shared/lib/api";
-import { executeQueryVersionRun } from "@/shared/lib/api";
+import { executeQueryVersionTask } from "@/shared/lib/api";
 import type { QueryTab } from "@/shared/store/types";
-import type { TableData, TableRow } from "@/shared/types/api";
-import { convertToTableData } from "@/shared/utils/typeUtils";
-import { createNoDataMessage } from "@/shared/utils/errorUtils";
-import { useSSEStore } from "@/shared/store/useSSEStore";
 import { sseConnectionManager } from "./SSEConnectionManager";
 
 export interface QueryExecutionOptions {
@@ -14,9 +10,8 @@ export interface QueryExecutionOptions {
 
 export interface QueryExecutionResult {
   success: boolean;
-  results?: TableData;
-  error?: string;
   queryRunId?: string;
+  error?: string;
 }
 
 export class QueryExecutionServiceSSE {
@@ -28,7 +23,7 @@ export class QueryExecutionServiceSSE {
     options: QueryExecutionOptions = {}
   ): Promise<QueryExecutionResult> {
     try {
-      // Determine what SQL to run - prioritize the passed sql parameter over tab content
+      // Determine what SQL to run
       const queryToRun = options.sql || tab.editorContent;
       if (!queryToRun.trim()) {
         return {
@@ -37,7 +32,7 @@ export class QueryExecutionServiceSSE {
         };
       }
 
-      // Step 1: Ensure we have a version ID for execution
+      // Ensure we have a version ID for execution
       const versionId = await this.ensureQueryVersionExists(tab, queryToRun);
       if (!versionId) {
         return {
@@ -46,209 +41,101 @@ export class QueryExecutionServiceSSE {
         };
       }
 
-      // Step 2: Create and start the query run
-      const runId = await this.createQueryRun(tab, versionId, options.overrideFilters);
+      // Create and start the query task
+      const taskId = await this.createQueryTask(tab, versionId, options.overrideFilters);
 
-      // Step 3: Ensure SSE connection is established and track the query
-      try {
-        await sseConnectionManager.connect();
-        if (tab.queryId) {
-          sseConnectionManager.trackQueryRun(tab.queryId, runId);
-        }
-      } catch {
-        // SSE connection failed, but continue with execution
-        // The hook will handle fallback polling if needed
+      // Track the query-task mapping for SSE
+      if (tab.queryId) {
+        sseConnectionManager.trackQueryTask(tab.queryId, taskId);
       }
 
-      // Step 4: Return immediately with the run ID
-      // The SSE stream will be managed by the useQueryStream hook
+      // Ensure SSE connection is established
+      sseConnectionManager.connect().catch(console.error);
+
+      // Return immediately with the task ID
       return {
         success: true,
-        queryRunId: runId,
-        results: undefined // Results will come via SSE
+        queryRunId: taskId
       };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Unknown error";
       return {
         success: false,
-        error: `Query execution failed: ${errorMessage}`,
-        results: [{ error: errorMessage }]
+        error: `Query execution failed: ${errorMessage}`
       };
     }
   }
 
   /**
-   * Execute a query and wait for results via Promise (for backward compatibility)
-   * This method uses SSE internally but presents a Promise-based interface
-   */
-  static async executeQueryAndWait(
-    tab: QueryTab,
-    options: QueryExecutionOptions = {},
-    timeoutMs: number = 30000
-  ): Promise<QueryExecutionResult> {
-    const result = await this.executeQuery(tab, options);
-
-    if (!result.success || !result.queryRunId) {
-      return result;
-    }
-
-    // Wait for SSE result
-    return new Promise((resolve, reject) => {
-      const timeoutId = setTimeout(() => {
-        reject(new Error(`Query execution timeout after ${timeoutMs}ms`));
-      }, timeoutMs);
-
-      const sseStore = useSSEStore.getState();
-
-      // Check if result is already available (need queryId for this)
-      if (tab.queryId) {
-        const existingResult = sseStore.getQueryLatestRun(tab.queryId!);
-        if (existingResult && existingResult.status !== "running") {
-          clearTimeout(timeoutId);
-
-          if (existingResult.status === "success") {
-            resolve({
-              success: true,
-              results: this.processResults(existingResult.data || []),
-              queryRunId: result.queryRunId
-            });
-          } else {
-            resolve({
-              success: false,
-              error: existingResult.error || "Query execution failed",
-              queryRunId: result.queryRunId
-            });
-          }
-          return;
-        }
-      }
-
-      // Set up a polling mechanism to check for updates
-      // This is a fallback - normally the UI would use useQueryStream hook
-      if (tab.queryId) {
-        const checkInterval = setInterval(() => {
-          const currentResult = sseStore.getQueryLatestRun(tab.queryId!);
-
-          if (currentResult && currentResult.status !== "running") {
-            clearTimeout(timeoutId);
-            clearInterval(checkInterval);
-
-            if (currentResult.status === "success") {
-              resolve({
-                success: true,
-                results: this.processResults(currentResult.data || []),
-                queryRunId: result.queryRunId
-              });
-            } else {
-              resolve({
-                success: false,
-                error: currentResult.error || "Query execution failed",
-                queryRunId: result.queryRunId
-              });
-            }
-          }
-        }, 100);
-      } else {
-        // No queryId available, reject after timeout
-        reject(new Error("No query ID available for polling results"));
-      }
-    });
-  }
-
-  /**
-   * Ensure a query version exists for the given SQL content
+   * Ensure a query version exists for execution
    */
   private static async ensureQueryVersionExists(
     tab: QueryTab,
-    queryToRun: string
+    sql: string
   ): Promise<string | null> {
-    // Dynamic imports to avoid circular dependencies
-    const { useQueryStore } = await import("@/shared/store/useQueryStore");
-    const { useSourceStore } = await import("@/shared/store/useSourceStore");
+    try {
+      // Import services dynamically to avoid circular dependencies
+      const { useQueryStore } = await import("@/shared/store");
+      const queryStore = useQueryStore.getState();
 
-    const queryStore = useQueryStore.getState();
-    const sourceStore = useSourceStore.getState();
+      // If we don't have a query ID, create a new ephemeral query
+      if (!tab.queryId) {
+        const newQuery = await queryStore.createNewQuery({
+          sourceId: tab.sourceId
+        });
 
-    if (tab.queryId) {
-      // Check if it's an ephemeral query that should be converted
-      const query = queryStore.queries[tab.queryId];
-      if (query?.is_ephemeral) {
-        await this.convertEphemeralQueryIfNeeded(tab, queryStore, sourceStore);
+        // Save the SQL as the first version
+        const newVersion = await queryStore.saveQueryVersion(newQuery.id, sql, "run");
+
+        // Update tab with the new query and version info
+        const { useTabManagerStore } = await import("@/shared/store/useTabManagerStore");
+        const tabManagerStore = useTabManagerStore.getState();
+        tabManagerStore.updateTabContent(tab.id, {
+          queryId: newQuery.id,
+          queryVersionId: newVersion.id,
+          isDirty: false,
+          lastSavedContent: sql,
+          originalContent: sql
+        });
+
+        return newVersion.id;
       }
 
       // Get the latest version to compare against
-      const currentLatestVersion = await queryStore.loadLatestQueryVersion(tab.queryId);
+      const latestVersion = await queryStore.loadLatestQueryVersion(tab.queryId);
 
-      // Check if what user wants to execute is different from the latest saved version
-      const shouldSaveNewVersion =
-        !currentLatestVersion || queryToRun.trim() !== currentLatestVersion.sql.trim();
+      // Check if the editor content differs from the latest saved version
+      const shouldSaveNewVersion = !latestVersion || sql.trim() !== latestVersion.sql.trim();
 
       if (shouldSaveNewVersion) {
         // Save the current editor content as a new version
-        const newVersion = await queryStore.saveQueryVersion(tab.queryId, queryToRun, "run");
+        const newVersion = await queryStore.saveQueryVersion(tab.queryId, sql, "run");
 
-        // Update tab to mark it as clean
-        const { QueryVersionService } = await import("./QueryVersionService");
-        await QueryVersionService.updateTabAfterVersionSave(tab.id, newVersion, queryToRun);
+        // Update tab with new version ID and mark as clean
+        const { useTabManagerStore } = await import("@/shared/store/useTabManagerStore");
+        const tabManagerStore = useTabManagerStore.getState();
+        tabManagerStore.updateTabContent(tab.id, {
+          queryVersionId: newVersion.id,
+          isDirty: false,
+          lastSavedContent: sql,
+          originalContent: sql
+        });
 
         return newVersion.id;
       } else {
         // Content is the same as latest version, use existing version
-        return currentLatestVersion.id;
+        return latestVersion.id;
       }
-    } else {
-      // Create a new ephemeral query and save the version
-      const newQuery = await queryStore.createNewQuery({
-        sourceId: tab.sourceId
-      });
-
-      // Save the current editor content as the first version
-      const newVersion = await queryStore.saveQueryVersion(newQuery.id, queryToRun, "run");
-
-      // Update tab to mark it as clean
-      const { QueryVersionService } = await import("./QueryVersionService");
-      await QueryVersionService.updateTabAfterVersionSave(tab.id, newVersion, queryToRun);
-
-      return newVersion.id;
+    } catch (error) {
+      console.error("Failed to ensure query version:", error);
+      return null;
     }
   }
 
   /**
-   * Convert ephemeral query to regular if needed
+   * Create a query task with filters
    */
-  private static async convertEphemeralQueryIfNeeded(
-    tab: QueryTab,
-    queryStore: ReturnType<typeof import("@/shared/store/useQueryStore").useQueryStore.getState>,
-    sourceStore: ReturnType<typeof import("@/shared/store/useSourceStore").useSourceStore.getState>
-  ): Promise<void> {
-    if (!tab.queryId) return;
-
-    const query = queryStore.queries[tab.queryId];
-    if (query?.is_ephemeral && tab.isDirty) {
-      // Generate name for the converted query
-      const date = new Date();
-      const sourceName = sourceStore.sources[tab.sourceId]?.name || "Unknown";
-      const queryName = `${sourceName} query ${date.toISOString().split("T")[0]}`;
-
-      // Convert to regular query
-      const updatedQuery = await queryStore.convertEphemeralToRegular(tab.queryId, queryName);
-
-      // Update the tab title to match the converted query name
-      const { useTabManagerStore } = await import("@/shared/store/useTabManagerStore");
-      const tabManagerStore = useTabManagerStore.getState();
-
-      const updatedTabs = tabManagerStore.openTabs.map((t) =>
-        t.id === tab.id ? { ...t, title: updatedQuery.name || queryName } : t
-      );
-
-      useTabManagerStore.setState({ openTabs: updatedTabs });
-    }
-  }
-
-  /**
-   * Create a query run with filters
-   */
-  private static async createQueryRun(
+  private static async createQueryTask(
     tab: QueryTab,
     versionId: string,
     overrideFilters?: { where?: string; order_by?: string }
@@ -265,39 +152,11 @@ export class QueryExecutionServiceSSE {
       order_by: overrideFilters?.order_by ?? (tabFilters.orderByInput.trim() || undefined)
     };
 
-    const runRequest: CreateQueryRunRequest = {
+    const taskRequest: CreateQueryRunRequest = {
       query_version_id: versionId,
       modifiers: finalFilters
     };
 
-    return await executeQueryVersionRun(runRequest);
-  }
-
-  /**
-   * Process and format query results
-   */
-  private static processResults(results: TableRow[]): TableData {
-    if (!results || results.length === 0) {
-      return createNoDataMessage();
-    }
-
-    return convertToTableData(results);
-  }
-
-  /**
-   * Refresh query data after successful execution (for compatibility)
-   */
-  static async refreshQueryData(queryId: string): Promise<void> {
-    // Add delay to ensure the run is fully persisted
-    await new Promise((resolve) => setTimeout(resolve, 500));
-
-    const { useQueryStore } = await import("@/shared/store/useQueryStore");
-    const queryStore = useQueryStore.getState();
-
-    // Force refresh to get the latest runs including the one just created
-    await queryStore.loadQueryRuns(queryId, true);
-
-    // Also trigger a reload of query versions to ensure version count is accurate
-    await queryStore.loadQueryVersions(queryId);
+    return await executeQueryVersionTask(taskRequest);
   }
 }

@@ -11,8 +11,8 @@ ENV PYTHONPATH=/app
 # Copy from the cache instead of linking since it's a mounted volume
 ENV UV_LINK_MODE=copy
 
-# Install PostgreSQL client libraries
-RUN apt-get update && apt-get install -y libpq-dev curl && rm -rf /var/lib/apt/lists/*
+# Install PostgreSQL client libraries (worker supports PostgreSQL)
+RUN apt-get update && apt-get install -y libpq-dev && rm -rf /var/lib/apt/lists/*
 
 # Install the project's dependencies using the settings
 RUN --mount=type=cache,target=/root/.cache/uv \
@@ -31,5 +31,9 @@ ENV PATH="/app/.venv/bin:$PATH"
 # Reset the entrypoint, don't invoke `uv`
 ENTRYPOINT []
 
-# Run the FastAPI application
-CMD ["/app/.venv/bin/uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload", "--reload-dir", "/app/app", "--timeout-graceful-shutdown", "5", "--timeout-keep-alive", "5"] 
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD python main.py health || exit 1
+
+# Run the worker
+CMD ["/app/.venv/bin/python", "main.py"] 

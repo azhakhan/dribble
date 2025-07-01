@@ -30,7 +30,6 @@ class Source(Base, SoftDeleteMixin):
     dbtype = Column(String, nullable=False)
     creds = Column(JSON, nullable=False)
     queries = relationship("Query", back_populates="source")
-    workers = relationship("Worker", back_populates="source")
     created_at = Column(DateTime, default=datetime.now)
 
 
@@ -79,19 +78,6 @@ class QueryRun(Base):
     execution_time_ms = Column(Integer, nullable=True)
     query_version_id = Column(UUID(as_uuid=True), ForeignKey("query_versions.id"), nullable=False)
     query_version = relationship("QueryVersion", back_populates="runs")
-    created_at = Column(DateTime, default=datetime.now)
-
-
-class Worker(Base, SoftDeleteMixin):
-    __tablename__ = "workers"
-
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    source_id = Column(UUID(as_uuid=True), ForeignKey("sources.id"), nullable=False)
-    source = relationship("Source", back_populates="workers")
-    container_id = Column(String, nullable=False)
-    port = Column(Integer, nullable=False)
-    host = Column(String, nullable=False)
-    status = Column(String, nullable=False)
     created_at = Column(DateTime, default=datetime.now)
 
 

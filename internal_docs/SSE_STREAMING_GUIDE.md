@@ -1,243 +1,225 @@
-# Redis Pub/Sub + SSE Streaming Guide
+# SSE Status Streaming Guide
 
-This guide explains how to use the new real-time query execution streaming system that replaces polling with Server-Sent Events (SSE).
+This guide explains the simplified real-time task status streaming system using Server-Sent Events (SSE).
 
 ## Overview
 
-The system consists of:
+The simplified system consists of:
 
-1. **Workers** publish query results to Redis pub/sub channels
-2. **Server** subscribes to these channels and stores messages in memory
-3. **SSE endpoints** stream results to clients in real-time
-4. **Client** receives instant updates instead of polling
+1. **Workers** publish only status updates to Redis pub/sub channels (no data)
+2. **Server** subscribes to status channels and stores latest status per task
+3. **SSE endpoint** streams only status updates to clients
+4. **Clients** fetch actual data separately via REST API when needed
 
 ## Architecture
 
 ```
-Worker (PostgreSQL/MySQL)
-    ↓ (publishes to Redis)
-Redis Pub/Sub Channel: query_results:{query_id}
+Worker (PostgreSQL/MySQL/etc)
+    ↓ (publishes status to Redis)
+Redis Pub/Sub Channel: task_status:{task_id}
     ↓ (background subscriber)
-Server In-Memory Storage
-    ↓ (SSE streaming)
+Server In-Memory Status Storage
+    ↓ (SSE streaming - status only)
 Client (JavaScript EventSource)
+    ↓ (on success, fetch data separately)
+REST API: GET /api/tasks/{task_id}/result
 ```
 
 ## Redis Pub/Sub Channels
 
 ### Channel Format
 
-- `query_results:{query_run_id}` - for both `/execute/` and `/execute/version` endpoints
-
-All query results are now published using query_run_id for consistency.
+- `task_status:{task_id}` - for all task types (execute, test_db, connect, etc.)
 
 ### Message Format
 
+**Status messages (via pub/sub):**
+
 ```json
 {
-  "query_run_id": "uuid-here",
-  "status": "running" | "success" | "error",
+  "task_id": "uuid-here",
+  "status": "running" | "success" | "error" | "cancelled",
+  "task_type": "execute" | "test_db" | "connect" | "schema" | "disconnect",
   "timestamp": 1234567890.123,
-  "data": [...],      // Only present on success
   "error": "message"  // Only present on error
 }
 ```
 
-## SSE Endpoints
+**Full results (via REST API):**
 
-### 1. Stream Query Results
+```json
+{
+  "status": "success",
+  "data": [...],  // Full query results
+  "execution_time_ms": 150
+}
+```
+
+## SSE Endpoint
+
+### Stream Task Status Updates
 
 ```
-GET /stream/query-results/{query_id}?last_timestamp=optional
+GET /api/stream/events?client_id=optional
 ```
 
 **Response**: Server-Sent Events stream
 
-- `data:` events contain query status updates
-- `event: close` when query completes (success/error)
-- `event: heartbeat` to keep connection alive
+- `data:` events contain task status updates only
+- `event: heartbeat` to keep connection alive (every 30 seconds)
 - `event: error` on streaming errors
 
-**Example Usage**:
+**Event Types:**
+
+- `connection` - Initial connection confirmation
+- `task_status` - Task status update
+- `heartbeat` - Keep-alive ping
+- `error` - Stream error
+
+## Usage Pattern
+
+### JavaScript Example
 
 ```javascript
-const eventSource = new EventSource(`/stream/query-results/${queryId}`);
+// Start SSE connection for status updates
+const eventSource = new EventSource("/api/stream/events");
 
 eventSource.onmessage = function (event) {
-  const data = JSON.parse(event.data);
-  console.log("Query status:", data.status);
+  const message = JSON.parse(event.data);
 
-  if (data.status === "success") {
-    console.log("Results:", data.data);
-  } else if (data.status === "error") {
-    console.error("Query failed:", data.error);
+  if (message.type === "task_status") {
+    console.log(`Task ${message.task_id}: ${message.status}`);
+
+    if (message.status === "success") {
+      // Fetch actual data separately
+      fetchTaskResult(message.task_id);
+    } else if (message.status === "error") {
+      console.error(`Task failed: ${message.error}`);
+    }
   }
 };
 
-eventSource.addEventListener("close", function (event) {
-  console.log("Query completed, closing stream");
-  eventSource.close();
-});
-```
-
-### 2. Get Query Status (Non-streaming)
-
-```
-GET /stream/query-status/{query_id}
-```
-
-**Response**:
-
-```json
-{
-  "query_id": "uuid",
-  "status": "running" | "success" | "error" | "not_found",
-  "timestamp": 1234567890.123,
-  "has_data": true,
-  "has_error": false
-}
-```
-
-### 3. List Active Queries
-
-```
-GET /stream/active-queries
-```
-
-**Response**:
-
-```json
-{
-  "active_queries": [
-    {
-      "query_id": "uuid1",
-      "status": "running",
-      "timestamp": 1234567890.123
-    }
-  ],
-  "total_count": 1
-}
-```
-
-## Replacing Polling with SSE
-
-### Before (Polling)
-
-```javascript
-// ❌ Old polling approach
-async function pollForResults(runId) {
-  while (true) {
-    const response = await fetch(`/execution/run-results/${runId}`);
-    if (response.status === 200) {
-      return await response.json();
-    } else if (response.status === 500) {
-      throw new Error("Query failed");
-    }
-    // Status 202 = still running, continue polling
-    await new Promise((resolve) => setTimeout(resolve, 500));
+// Separate function to fetch task results
+async function fetchTaskResult(taskId) {
+  try {
+    const response = await fetch(`/api/tasks/${taskId}/result`);
+    const result = await response.json();
+    console.log("Task data:", result.data);
+  } catch (error) {
+    console.error("Failed to fetch result:", error);
   }
 }
 ```
 
-### After (SSE)
+### React Hook Example
 
-```javascript
-// ✅ New SSE approach
-function streamQueryResults(queryId) {
-  return new Promise((resolve, reject) => {
-    const eventSource = new EventSource(`/stream/query-results/${queryId}`);
+```typescript
+import { useEffect, useState } from "react";
 
-    eventSource.onmessage = function (event) {
-      const data = JSON.parse(event.data);
+interface TaskStatus {
+  task_id: string;
+  status: string;
+  task_type: string;
+  error?: string;
+}
 
-      if (data.status === "success") {
-        eventSource.close();
-        resolve(data.data);
-      } else if (data.status === "error") {
-        eventSource.close();
-        reject(new Error(data.error));
+export function useSSETaskUpdates() {
+  const [taskStatuses, setTaskStatuses] = useState<Record<string, TaskStatus>>({});
+
+  useEffect(() => {
+    const eventSource = new EventSource("/api/stream/events");
+
+    eventSource.onmessage = (event) => {
+      const message = JSON.parse(event.data);
+
+      if (message.type === "task_status") {
+        setTaskStatuses((prev) => ({
+          ...prev,
+          [message.task_id]: message
+        }));
       }
-      // 'running' status: just wait for next message
     };
 
-    eventSource.onerror = function (event) {
-      eventSource.close();
-      reject(new Error("Stream connection failed"));
-    };
-  });
+    return () => eventSource.close();
+  }, []);
+
+  return taskStatuses;
 }
 ```
 
-## Benefits
+## Benefits of Simplified System
 
-1. **Instant Updates**: No 500ms polling delay
-2. **Reduced Server Load**: No repeated HTTP requests
-3. **Better UX**: Real-time progress updates
-4. **Efficient**: Single connection per query
-5. **Reliable**: Automatic reconnection on failures
+1. **Lightweight**: No large data sent via SSE, only status updates
+2. **Memory Efficient**: Server only stores latest status per task
+3. **Separation of Concerns**: Status updates via SSE, data via REST
+4. **Scalable**: Minimal memory usage in Redis subscriber
+5. **Simple**: Easy to understand and maintain
+
+## Task Result Endpoint
+
+### Get Task Results
+
+```
+GET /api/tasks/{task_id}/result
+```
+
+**Response**:
+
+- **200**: Task completed successfully with data
+- **404**: Task not found
+- **500**: Server error
+
+**Success Response**:
+
+```json
+{
+  "status": "success",
+  "data": [...],
+  "execution_time_ms": 150
+}
+```
+
+**Error Response**:
+
+```json
+{
+  "status": "error",
+  "error": "Connection failed"
+}
+```
+
+## Migration from Old System
+
+### Before (Complex SSE)
+
+- SSE streamed both status and data
+- Complex filtering by task types and IDs
+- Memory-intensive message storage
+- Backward compatibility concerns
+
+### After (Simplified SSE)
+
+- SSE streams only status updates
+- Simple status-only messages
+- Minimal memory usage
+- Clear separation of status vs data
 
 ## Configuration
 
-### Memory Management
-
-The system stores up to 100 messages per query in memory (configurable):
+### Memory Usage
 
 ```python
-# In redis_subscriber.py
-subscriber = QueryResultsSubscriber(max_messages_per_query=100)
+# Only stores latest status per task (minimal memory)
+class TaskStatusSubscriber:
+    def __init__(self):
+        self.task_status: Dict[str, dict] = {}  # Only latest status
 ```
 
-### Connection Timeouts
-
-SSE connections include heartbeats to prevent browser timeouts:
+### Heartbeat
 
 ```python
-# Heartbeat sent every 1 second during streaming
-yield f"event: heartbeat\ndata: ping\n\n"
+# Heartbeat every 30 seconds to keep connections alive
+heartbeat_interval = 30  # seconds
 ```
 
-## Testing
-
-Run the test script to verify everything works:
-
-```bash
-cd server
-python test_redis_pubsub.py
-```
-
-## Troubleshooting
-
-### Common Issues
-
-1. **No messages received**
-
-   - Check Redis connection
-   - Verify worker is publishing to correct channels
-   - Check server logs for subscriber errors
-
-2. **SSE connection drops**
-
-   - Browser may timeout long connections
-   - Check for firewall/proxy issues
-   - Verify heartbeat messages are sent
-
-3. **Memory usage**
-   - Monitor in-memory message storage
-   - Adjust `max_messages_per_query` if needed
-   - Messages auto-expire when queries complete
-
-### Debug Endpoints
-
-- `GET /stream/active-queries` - See what queries have messages
-- `GET /stream/query-status/{id}` - Check individual query status
-- Check server logs for Redis subscriber activity
-
-## Migration Guide
-
-1. Replace polling loops with SSE EventSource
-2. Handle three status types: running, success, error
-3. Close EventSource when query completes
-4. Add error handling for connection failures
-5. Test with real query executions
-
-This system provides instant, efficient real-time updates for query execution results! 🚀
+This simplified approach makes the system much easier to understand, maintain, and scale.

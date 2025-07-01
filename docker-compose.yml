@@ -33,21 +33,21 @@ services:
       timeout: 5s
       retries: 5
 
-  migrations:
-    image: dribble-migrations:latest
-    build:
-      context: ./server
-      dockerfile: Dockerfile.migrations
-    volumes:
-      - ./server/app/alembic:/app/app/alembic:cached
-    environment:
-      - DATABASE_URL=postgresql+psycopg://postgres:postgres@postgres:5432/postgres
-    depends_on:
-      postgres:
-        condition: service_healthy
-    networks:
-      - dribble-network
-    command: upgrade head
+  # migrations:
+  #   image: dribble-migrations:latest
+  #   build:
+  #     context: ./server
+  #     dockerfile: Dockerfile.migrations
+  #   volumes:
+  #     - ./server/app/alembic:/app/app/alembic:cached
+  #   environment:
+  #     - DATABASE_URL=postgresql+psycopg://postgres:postgres@postgres:5432/postgres
+  #   depends_on:
+  #     postgres:
+  #       condition: service_healthy
+  #   networks:
+  #     - dribble-network
+  #   command: upgrade head
 
   server:
     image: dribble-server:latest
@@ -73,8 +73,8 @@ services:
     networks:
       - dribble-network
     depends_on:
-      migrations:
-        condition: service_completed_successfully
+      # migrations:
+      #   condition: service_completed_successfully
       postgres:
         condition: service_healthy
       redis:
@@ -86,6 +86,26 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
+
+  worker:
+    build:
+      context: ./worker
+      dockerfile: Dockerfile
+    restart: always
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - PYTHONPATH=/app
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - dribble-network
+    healthcheck:
+      test: ["CMD", "python", "main.py", "health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
 
   client:
     build:

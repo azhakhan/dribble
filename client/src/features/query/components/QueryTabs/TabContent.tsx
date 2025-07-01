@@ -2,7 +2,7 @@ import { memo, Suspense, lazy } from "react";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 import { useTabManagerStore } from "@/shared/store/useTabManagerStore";
 import { useSourceStore } from "@/shared/store";
-import { QueryResults } from "../QueryResults";
+import { QueryResultsWithSSE } from "./QueryResultsWithSSE";
 import { QueryRuns } from "../../QueryRuns";
 
 // Feature-based code splitting
@@ -50,8 +50,9 @@ const TabContentComponent = ({ tabId }: TabContentProps) => {
   return (
     <PanelGroup direction="vertical" className="h-full">
       <Panel defaultSize={50} minSize={20}>
-        <QueryResults
-          tableData={null}
+        <QueryResultsWithSSE
+          tabId={tabId}
+          queryId={currentTab.queryId}
           queryResults={currentTab.queryResults}
           isQueryRunning={currentTab.queryRunning}
         />
