@@ -188,14 +188,44 @@ class SSEConnectionManager {
                   };
                   store.updateTaskResult(queryId, errorResult);
                 }
+              } else if (status === "error" || status === "cancelled") {
+                // Fetch full task result for error cases to get error message
+                try {
+                  const taskResult = await getWorkerTaskResult(taskId);
+                  const result: TaskResult = {
+                    taskId,
+                    queryId,
+                    status,
+                    timestamp: Date.now(),
+                    error: taskResult.error
+                  };
+                  store.updateTaskResult(queryId, result);
+
+                  // Notify handlers
+                  this.messageHandlers.forEach((handler) => {
+                    handler.onTaskResult?.(queryId!, result);
+                  });
+                } catch (error) {
+                  // Failed to fetch error details
+                  const errorResult: TaskResult = {
+                    taskId,
+                    queryId,
+                    status: "error",
+                    timestamp: Date.now(),
+                    error: error instanceof Error ? error.message : "Failed to fetch error details"
+                  };
+                  store.updateTaskResult(queryId, errorResult);
+                }
+
+                // Clean up task mapping
+                this.queryTaskMap.delete(queryId);
               } else {
-                // Update status for running, error, or cancelled
+                // Update status for running/other non-terminal states
                 const result: TaskResult = {
                   taskId,
                   queryId,
                   status,
-                  timestamp: Date.now(),
-                  error: data.error
+                  timestamp: Date.now()
                 };
                 store.updateTaskResult(queryId, result);
 
@@ -203,11 +233,6 @@ class SSEConnectionManager {
                 this.messageHandlers.forEach((handler) => {
                   handler.onTaskResult?.(queryId!, result);
                 });
-
-                // Clean up if terminal state
-                if (status === "error" || status === "cancelled") {
-                  this.queryTaskMap.delete(queryId);
-                }
               }
             }
           }

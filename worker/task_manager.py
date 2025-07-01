@@ -105,6 +105,7 @@ def handle_execute_task(task: TaskRequest):
             row_count=result.get("row_count"),
             execution_time_ms=result.get("execution_time_ms"),
         )
+
         set_result(
             task.id,
             {
@@ -121,7 +122,22 @@ def handle_execute_task(task: TaskRequest):
         error_message = str(e)
         logger.error(f"Query {task.id} failed after {execution_time_ms}ms: {error_message}")
 
-        set_result(task.id, {"status": "error", "error": error_message})
+        # Create update request for server to process via pub/sub
+        error_update_request = UpdateQueryRunRequest(
+            error_message=error_message,
+            execution_time_ms=execution_time_ms,
+            row_count=0,
+        )
+
+        set_result(
+            task.id,
+            {
+                "status": "error",
+                "type": "query_run",
+                "stats": error_update_request.model_dump(),
+                "error": error_message,
+            },
+        )
         publish_status(task.id, "error")
 
 
@@ -277,4 +293,4 @@ def process_task(task: TaskRequest):
         logger.error(f"Error processing task: {str(e)}")
         if task.id:
             set_result(task.id, {"status": "error", "error": str(e)})
-            publish_status(task.id, "error", error=str(e), task_type=task.task_type)
+            publish_status(task.id, "error")
