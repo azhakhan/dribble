@@ -1,0 +1,29 @@
+app = "YOUR_APP_NAME_client"
+primary_region = "ord"
+
+[build]
+dockerfile = "Dockerfile.prod"
+[build.args]
+VITE_API_URL = "https://YOUR_APP_NAME_server.fly.dev"
+
+[env]
+NODE_ENV = "production"
+
+[http_service]
+internal_port = 80
+force_https = true
+
+[[http_service.checks]]
+grace_period = "10s"
+interval = "30s"
+method = "GET"
+timeout = "5s"
+path = "/"
+
+[[vm]]
+memory = "512mb"
+cpu_kind = "shared"
+cpus = 1
+
+[deploy]
+strategy = "immediate" 

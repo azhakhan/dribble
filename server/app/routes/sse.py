@@ -112,7 +112,6 @@ async def stream_events(client_id: Optional[str] = Query(None)):
         headers={
             "Cache-Control": "no-cache",
             "Connection": "keep-alive",
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Headers": "Cache-Control",
+            # CORS headers are handled by middleware
         },
     )

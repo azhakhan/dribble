@@ -36,8 +36,11 @@ class SSEConnectionManager {
     store.updateConnectionStatus("connecting");
 
     try {
-      // Create SSE connection
-      this.eventSource = new EventSource("/api/stream/events", {
+      // Create SSE connection using environment-aware URL
+      const baseUrl = import.meta.env.VITE_API_URL || "/api";
+      const sseUrl = `${baseUrl}/stream/events`;
+
+      this.eventSource = new EventSource(sseUrl, {
         withCredentials: true
       });
 

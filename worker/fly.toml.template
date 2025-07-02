@@ -1,0 +1,21 @@
+app = "YOUR_APP_NAME_worker"
+primary_region = "ord"
+
+[build]
+dockerfile = "Dockerfile"
+
+[env]
+PYTHONPATH = "/app"
+
+# No HTTP service since this is a background worker
+# Workers don't need external HTTP access
+
+[[vm]]
+memory = "512mb"
+cpu_kind = "shared"
+cpus = 1
+
+[deploy]
+strategy = "immediate"
+
+# Worker doesn't need health checks as it's a background service 
