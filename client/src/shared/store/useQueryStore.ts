@@ -73,19 +73,6 @@ interface QueryState {
     nodeType: "table" | "view"
   ) => Promise<Query>;
   convertEphemeralToRegular: (queryId: string, name: string) => Promise<Query>;
-
-  // Legacy state (to be deprecated)
-  queriesBySource: Record<string, Query[]>;
-  versionsByQuery: Record<string, QueryVersion[]>;
-  runsByVersion: Record<string, QueryRun[]>;
-
-  // Legacy actions
-  setQueriesBySource: (sourceId: string, queries: Query[]) => void;
-  setVersionsByQuery: (queryId: string, versions: QueryVersion[]) => void;
-  setRunsByVersion: (versionId: string, runs: QueryRun[]) => void;
-  clearQueriesBySource: (sourceId: string) => void;
-  clearVersionsByQuery: (queryId: string) => void;
-  clearRunsByVersion: (versionId: string) => void;
 }
 
 export const useQueryStore = create<QueryState>((set, get) => ({
@@ -99,11 +86,6 @@ export const useQueryStore = create<QueryState>((set, get) => ({
   loadingVersions: new Set(),
   loadingRuns: new Set(),
   loadingLatestVersions: new Set(),
-
-  // Legacy state
-  queriesBySource: {},
-  versionsByQuery: {},
-  runsByVersion: {},
 
   // Load query by ID
   loadQuery: async (queryId) => {
@@ -458,42 +440,5 @@ export const useQueryStore = create<QueryState>((set, get) => ({
       console.error("Failed to convert ephemeral query to regular:", error);
       throw error;
     }
-  },
-
-  // Legacy actions
-  setQueriesBySource: (sourceId, queries) =>
-    set((state) => ({
-      queriesBySource: { ...state.queriesBySource, [sourceId]: queries }
-    })),
-
-  setVersionsByQuery: (queryId, versions) =>
-    set((state) => ({
-      versionsByQuery: { ...state.versionsByQuery, [queryId]: versions }
-    })),
-
-  setRunsByVersion: (versionId, runs) =>
-    set((state) => ({
-      runsByVersion: { ...state.runsByVersion, [versionId]: runs }
-    })),
-
-  clearQueriesBySource: (sourceId) =>
-    set((state) => {
-      const newQueries = { ...state.queriesBySource };
-      delete newQueries[sourceId];
-      return { queriesBySource: newQueries };
-    }),
-
-  clearVersionsByQuery: (queryId) =>
-    set((state) => {
-      const newVersions = { ...state.versionsByQuery };
-      delete newVersions[queryId];
-      return { versionsByQuery: newVersions };
-    }),
-
-  clearRunsByVersion: (versionId) =>
-    set((state) => {
-      const newRuns = { ...state.runsByVersion };
-      delete newRuns[versionId];
-      return { runsByVersion: newRuns };
-    })
+  }
 }));
