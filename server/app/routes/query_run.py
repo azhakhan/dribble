@@ -1,7 +1,6 @@
 from fastapi import APIRouter, Depends, Query as FastAPIQuery
 from app.schemas.query_run import (
     QueryRunResponse,
-    UpdateQueryRunRequest,
     QueryRunsPaginatedResponse,
 )
 from app.core.db import get_db
@@ -53,11 +52,3 @@ async def get_query_run_by_id(run_id: UUID, db: Session = Depends(get_db)):
 async def delete_query_run(run_id: UUID, db: Session = Depends(get_db)):
     """Delete a query run"""
     return QueryRunService.delete_run(db, run_id)
-
-
-# called by worker
-# TODO: remove
-@router.put("/{run_id}")
-async def update_query_run(run_id: UUID, run: UpdateQueryRunRequest, db: Session = Depends(get_db)):
-    """Update a query run"""
-    return QueryRunService.update_run(db, run_id, run)
