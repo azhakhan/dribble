@@ -25,6 +25,10 @@ target_metadata = Base.metadata
 # local development using the alembic.ini configuration
 database_url = os.getenv("DATABASE_URL")
 if database_url:
+    # Convert postgres:// to postgresql+psycopg:// for psycopg 3.x compatibility
+    if database_url.startswith("postgres://"):
+        database_url = database_url.replace("postgres://", "postgresql+psycopg://", 1)
+        print("Converted DATABASE_URL format for psycopg 3.x compatibility")
     config.set_main_option("sqlalchemy.url", database_url)
 
 # other values from the config, defined by the needs of env.py,

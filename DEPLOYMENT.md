@@ -41,8 +41,8 @@ Save the connection strings from the output.
 cd server
 fly apps create YOUR_PREFIX-server
 fly secrets set \
-    DATABASE_URL="postgresql+psycopg://user:pass@host:5432/db" \
-    REDIS_URL="redis://user:pass@host:6379" \
+    DATABASE_URL="_DATABASE_URL_FROM_STEP_3_" \
+    REDIS_URL="_REDIS_URL_FROM_STEP_3_" \
     ENCRYPTION_KEY="$(openssl rand -hex 16)" \
     ENCRYPTION_SECRET="$(openssl rand -hex 32)" \
     CLIENT_URL="https://YOUR_PREFIX-client.fly.dev"

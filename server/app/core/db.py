@@ -5,7 +5,12 @@ from sqlalchemy.ext.declarative import declarative_base
 import os
 
 
-engine = create_engine(os.getenv("DATABASE_URL"))
+database_url = os.getenv("DATABASE_URL")
+# Convert postgres:// to postgresql+psycopg:// for psycopg 3.x compatibility
+if database_url and database_url.startswith("postgres://"):
+    database_url = database_url.replace("postgres://", "postgresql+psycopg://", 1)
+
+engine = create_engine(database_url)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 

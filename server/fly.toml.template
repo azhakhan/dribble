@@ -1,4 +1,4 @@
-app = "YOUR_APP_NAME_server"
+app = "YOUR_APP_NAME-server"
 primary_region = "ord"
 
 [build]

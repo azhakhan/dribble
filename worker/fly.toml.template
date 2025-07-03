@@ -1,4 +1,4 @@
-app = "YOUR_APP_NAME_worker"
+app = "YOUR_APP_NAME-worker"
 primary_region = "ord"
 
 [build]

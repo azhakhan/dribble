@@ -1,10 +1,10 @@
-app = "YOUR_APP_NAME_client"
+app = "YOUR_APP_NAME-client"
 primary_region = "ord"
 
 [build]
 dockerfile = "Dockerfile.prod"
 [build.args]
-VITE_API_URL = "https://YOUR_APP_NAME_server.fly.dev"
+VITE_API_URL = "https://YOUR_APP_NAME-server.internal:8000"
 
 [env]
 NODE_ENV = "production"
