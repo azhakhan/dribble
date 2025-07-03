@@ -163,7 +163,7 @@ class SSEConnectionManager {
                   const result: TaskResult = {
                     taskId,
                     queryId,
-                    status: "success",
+                    status,
                     timestamp: Date.now(),
                     data: taskResult.data as TableRow[],
                     error: taskResult.error

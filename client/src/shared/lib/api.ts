@@ -40,11 +40,6 @@ export const disconnectSource = async (sourceId: string): Promise<void> => {
   await api.delete(`/worker/disconnect/${sourceId}`);
 };
 
-export const executeQueryVersionRun = async (request: CreateQueryRunRequest): Promise<string> => {
-  const response = await api.post<{ query_run_id: string }>("/execution/", request);
-  return response.data.query_run_id;
-};
-
 // New worker-based execution that returns task_id
 export const executeQueryVersionTask = async (request: CreateQueryRunRequest): Promise<string> => {
   const response = await api.post<{ task_id: string }>("/execution/", request);
