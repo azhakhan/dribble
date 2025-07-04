@@ -272,11 +272,11 @@ def process_task(task: TaskRequest):
         logger.info(f"Processing {task.task_type} task: {task.id}")
 
         # Route to appropriate handler
-        if task.task_type == "connect":
+        if task.task_type == "connect" or task.task_type == "source_connect":
             handle_connect_task(task)
-        elif task.task_type == "test_db":
+        elif task.task_type == "test_db" or task.task_type == "source_test":
             handle_test_db_task(task)
-        elif task.task_type == "execute":
+        elif task.task_type == "execute" or task.task_type == "query_execution":
             handle_execute_task(task)
         elif task.task_type == "schema":
             handle_schema_task(task)
@@ -284,7 +284,7 @@ def process_task(task: TaskRequest):
             handle_disconnect_task(task)
         elif task.task_type == "connected":
             handle_connected_task(task)
-        elif task.task_type == "cancel":
+        elif task.task_type == "cancel" or task.task_type == "query_cancel":
             handle_cancel_task(task)
         else:
             raise InvalidTaskTypeError(task.task_type)

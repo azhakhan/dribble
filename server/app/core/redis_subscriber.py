@@ -3,11 +3,7 @@ import logging
 from typing import Dict, List, Optional
 import time
 import orjson
-from uuid import UUID
-from app.core._redis import REDIS, get_task_result
-from app.core.db import SessionLocal
-from app.controllers.query_service import QueryRunService
-from app.schemas.query_run import UpdateQueryRunRequest
+from app.core._redis import REDIS
 
 logger = logging.getLogger(__name__)
 
@@ -121,36 +117,16 @@ class TaskStatusSubscriber:
             logger.error(f"Error handling Redis message: {str(e)}")
 
     async def _maybe_update_query_run(self, task_id: str):
-        """Check if task result contains query_run data and update database if so"""
-        try:
-            # Get the full result from Redis
-            result = await get_task_result(task_id)
-            if not result:
-                return
+        """
+        DEPRECATED: This method is no longer used.
+        Use QueryExecutionService.handle_task_completion instead.
 
-            # Check if this is a query_run result
-            if result.get("type") != "query_run":
-                return
-
-            # Get the stats for query run update
-            stats = result.get("stats")
-            if not stats:
-                return
-
-            # Create database session and update query run
-            db = SessionLocal()
-            try:
-                update_request = UpdateQueryRunRequest(**stats)
-                QueryRunService.update_run(db, UUID(task_id), update_request)
-                logger.debug(f"Updated query run {task_id} from SSE flow")
-            except Exception as e:
-                db.rollback()
-                logger.error(f"Failed to update query run {task_id}: {str(e)}")
-            finally:
-                db.close()
-
-        except Exception as e:
-            logger.error(f"Error updating query run for task {task_id}: {str(e)}")
+        This method is kept only for reference and will be removed in future versions.
+        """
+        logger.warning(
+            f"Deprecated _maybe_update_query_run called for task {task_id}. "
+            "This method should not be used anymore."
+        )
 
     def get_status(self, task_id: str) -> Optional[dict]:
         """Get the latest status for a task"""

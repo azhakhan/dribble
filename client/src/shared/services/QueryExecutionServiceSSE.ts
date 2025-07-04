@@ -157,6 +157,7 @@ export class QueryExecutionServiceSSE {
       modifiers: finalFilters
     };
 
-    return await executeQueryVersionTask(taskRequest);
+    const result = await executeQueryVersionTask(taskRequest);
+    return result.task_id;
   }
 }

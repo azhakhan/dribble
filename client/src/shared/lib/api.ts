@@ -40,10 +40,18 @@ export const disconnectSource = async (sourceId: string): Promise<void> => {
   await api.delete(`/worker/disconnect/${sourceId}`);
 };
 
-// New worker-based execution that returns task_id
-export const executeQueryVersionTask = async (request: CreateQueryRunRequest): Promise<string> => {
-  const response = await api.post<{ task_id: string }>("/execution/", request);
-  return response.data.task_id;
+// Execute query with direct streaming
+export const executeQueryVersionTask = async (
+  request: CreateQueryRunRequest,
+  clientId?: string
+): Promise<{ task_id: string; status: string; message: string }> => {
+  const headers = clientId ? { "X-Client-ID": clientId } : {};
+  const response = await api.post<{ task_id: string; status: string; message: string }>(
+    "/execution/",
+    request,
+    { headers }
+  );
+  return response.data;
 };
 
 // Worker task result interface
@@ -59,16 +67,17 @@ export const getWorkerTaskResult = async (taskId: string): Promise<WorkerTaskRes
   return response.data;
 };
 
-// Cancel a running query immediately (client-side cancellation)
-export const cancelQueryRunImmediate = async (
-  query_run_id: string
+// Cancel a running query
+export const cancelQueryRun = async (
+  query_run_id: string,
+  clientId?: string
 ): Promise<{
   query_run_id: string;
   status: string;
-  execution_time_ms: number;
   message: string;
 }> => {
-  const response = await api.post(`/execution/cancel/${query_run_id}`);
+  const headers = clientId ? { "X-Client-ID": clientId } : {};
+  const response = await api.post(`/execution/cancel/${query_run_id}`, {}, { headers });
   return response.data;
 };
 
