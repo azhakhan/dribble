@@ -4,7 +4,7 @@ Provides type safety and consistency across client, server, and worker.
 """
 
 from enum import Enum
-from typing import Any, Dict, Optional, Union
+from typing import Any, Dict, List, Optional, Union
 from pydantic import BaseModel
 from uuid import UUID
 
@@ -114,6 +114,7 @@ class SourceConnectResult(TaskResult):
 
     connected: bool = False
     worker_session_id: Optional[str] = None
+    data: Optional[Union[List[Dict[str, Any]], Dict[str, Any]]] = None
 
 
 # Union type for all task results

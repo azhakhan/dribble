@@ -101,6 +101,14 @@ class TaskService:
                 task_type = TaskType(result_data["task_type"])
                 result_class = self._task_handlers.get(task_type)
                 if result_class:
+                    # Special handling for source connect tasks
+                    if (
+                        task_type == TaskType.SOURCE_CONNECT
+                        and result_data.get("status") == "completed"
+                    ):
+                        # If worker didn't set connected field but task completed successfully, set it to True
+                        if "connected" not in result_data:
+                            result_data["connected"] = True
                     return result_class.model_validate(result_data)
 
             # Fallback to generic TaskResult
