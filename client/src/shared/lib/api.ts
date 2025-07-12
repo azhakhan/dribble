@@ -1,4 +1,5 @@
 import axios from "axios";
+import type { SchemaObject } from "@/shared/store/types";
 
 // Create axios instance with base URL
 const api = axios.create({
@@ -25,19 +26,19 @@ export const getSources = async (): Promise<Source[]> => {
 };
 
 // Get schemas for a specific source
-export const getSourceSchemas = async (sourceId: string) => {
-  const response = await api.get(`/worker/schemas/${sourceId}`);
+export const getSourceSchemas = async (sourceId: string): Promise<Record<string, SchemaObject>> => {
+  const response = await api.get<Record<string, SchemaObject>>(`/worker/schemas/${sourceId}/`);
   return response.data;
 };
 
 // Connect to a source
 export const connectSource = async (sourceId: string): Promise<void> => {
-  await api.get(`/worker/connect/${sourceId}`);
+  await api.get(`/worker/connect/${sourceId}/`);
 };
 
 // Disconnect from a source
 export const disconnectSource = async (sourceId: string): Promise<void> => {
-  await api.delete(`/worker/disconnect/${sourceId}`);
+  await api.delete(`/worker/disconnect/${sourceId}/`);
 };
 
 // Execute query with direct streaming
@@ -63,7 +64,7 @@ export interface WorkerTaskResult {
 
 // Get task result from worker
 export const getWorkerTaskResult = async (taskId: string): Promise<WorkerTaskResult> => {
-  const response = await api.get<WorkerTaskResult>(`/worker/result/${taskId}`);
+  const response = await api.get<WorkerTaskResult>(`/worker/result/${taskId}/`);
   return response.data;
 };
 
@@ -77,7 +78,7 @@ export const cancelQueryRun = async (
   message: string;
 }> => {
   const headers = clientId ? { "X-Client-ID": clientId } : {};
-  const response = await api.post(`/execution/cancel/${query_run_id}`, {}, { headers });
+  const response = await api.post(`/execution/cancel/${query_run_id}/`, {}, { headers });
   return response.data;
 };
 
@@ -211,7 +212,7 @@ export const getLLMs = async (): Promise<LLMListItem[]> => {
 };
 
 export const getLLM = async (llmId: string): Promise<LLM> => {
-  const response = await api.get<LLM>(`/llms/${llmId}`);
+  const response = await api.get<LLM>(`/llms/${llmId}/`);
   return response.data;
 };
 
@@ -220,13 +221,19 @@ export const createLLM = async (data: CreateLLMRequest): Promise<LLM> => {
   return response.data;
 };
 
-export const updateLLM = async (llmId: string, data: UpdateLLMRequest): Promise<LLM> => {
-  const response = await api.put<LLM>(`/llms/${llmId}`, data);
+export const updateLLM = async ({
+  llmId,
+  data
+}: {
+  llmId: string;
+  data: UpdateLLMRequest;
+}): Promise<LLM> => {
+  const response = await api.put<LLM>(`/llms/${llmId}/`, data);
   return response.data;
 };
 
 export const deleteLLM = async (llmId: string): Promise<void> => {
-  await api.delete(`/llms/${llmId}`);
+  await api.delete(`/llms/${llmId}/`);
 };
 
 // Chat LLM types and functions
@@ -283,14 +290,51 @@ export interface ChatSessionsResponse {
   total_count: number;
 }
 
+// Chat session types
+export interface CreateChatSessionRequest {
+  name?: string;
+  llm_id: string;
+}
+
+export interface UpdateChatSessionRequest {
+  name?: string;
+}
+
 export const getChatMessages = async (sessionId: string): Promise<ChatMessagesResponse> => {
-  const response = await api.get<ChatMessagesResponse>(`/chat/messages/${sessionId}`);
+  const response = await api.get<ChatMessagesResponse>(`/chat/messages/${sessionId}/`);
   return response.data;
 };
 
 export const getChatSessions = async (): Promise<ChatSessionsResponse> => {
-  const response = await api.get<ChatSessionsResponse>("/chat/sessions");
+  const response = await api.get<ChatSessionsResponse>("/chat/sessions/");
   return response.data;
+};
+
+export const getChatSession = async (sessionId: string): Promise<ChatSessionResponse> => {
+  const response = await api.get<ChatSessionResponse>(`/chat/sessions/${sessionId}/`);
+  return response.data;
+};
+
+export const createChatSession = async (
+  data: CreateChatSessionRequest
+): Promise<ChatSessionResponse> => {
+  const response = await api.post<ChatSessionResponse>("/chat/sessions/", data);
+  return response.data;
+};
+
+export const updateChatSession = async ({
+  sessionId,
+  data
+}: {
+  sessionId: string;
+  data: UpdateChatSessionRequest;
+}): Promise<ChatSessionResponse> => {
+  const response = await api.put<ChatSessionResponse>(`/chat/sessions/${sessionId}/`, data);
+  return response.data;
+};
+
+export const deleteChatSession = async (sessionId: string): Promise<void> => {
+  await api.delete(`/chat/sessions/${sessionId}/`);
 };
 
 // ==================== QUERY, VERSION, RUN TYPES ====================
@@ -369,7 +413,7 @@ export const getQueries = async (): Promise<Record<string, Query[]>> => {
 };
 
 export const getQueryById = async (queryId: string): Promise<Query> => {
-  const response = await api.get<Query>(`/query/${queryId}`);
+  const response = await api.get<Query>(`/query/${queryId}/`);
   return response.data;
 };
 
@@ -379,12 +423,12 @@ export const createQuery = async (data: CreateQueryRequest): Promise<Query> => {
 };
 
 export const updateQuery = async (queryId: string, data: UpdateQueryRequest): Promise<Query> => {
-  const response = await api.put<Query>(`/query/${queryId}`, data);
+  const response = await api.put<Query>(`/query/${queryId}/`, data);
   return response.data;
 };
 
 export const deleteQuery = async (queryId: string): Promise<void> => {
-  await api.delete(`/query/${queryId}`);
+  await api.delete(`/query/${queryId}/`);
 };
 
 // ==================== EPHEMERAL QUERY API ====================
@@ -396,17 +440,15 @@ export const getOrCreateEphemeralQuery = async (
   nodeType: "table" | "view"
 ): Promise<Query> => {
   const previewKey = `${nodeType}-${sourceId}.${schema}.${table}`;
-  const response = await api.post<Query>("/query/ephemeral", {
+  const response = await api.post<Query>("/query/ephemeral/", {
     source_id: sourceId,
     preview_key: previewKey
   });
   return response.data;
 };
 
-export const convertEphemeralToRegular = async (queryId: string, name: string): Promise<Query> => {
-  const response = await api.put<Query>(`/query/${queryId}/convert`, {
-    name
-  });
+export const convertEphemeralToRegular = async (queryId: string): Promise<Query> => {
+  const response = await api.post<Query>(`/query/${queryId}/convert/`);
   return response.data;
 };
 
@@ -418,12 +460,12 @@ export const getQueryVersions = async (queryId: string): Promise<QueryVersion[]>
 };
 
 export const getLatestQueryVersion = async (queryId: string): Promise<QueryVersion | null> => {
-  const response = await api.get<QueryVersion | null>(`/versions/query/${queryId}/latest`);
+  const response = await api.get<QueryVersion>(`/versions/query/${queryId}/latest/`);
   return response.data;
 };
 
 export const getQueryVersionById = async (versionId: string): Promise<QueryVersion> => {
-  const response = await api.get<QueryVersion>(`/versions/${versionId}`);
+  const response = await api.get<QueryVersion>(`/versions/${versionId}/`);
   return response.data;
 };
 
@@ -435,7 +477,7 @@ export const createQueryVersion = async (
 };
 
 export const deleteQueryVersion = async (versionId: string): Promise<void> => {
-  await api.delete(`/versions/${versionId}`);
+  await api.delete(`/versions/${versionId}/`);
 };
 
 // ==================== QUERY RUN API ====================
@@ -453,29 +495,29 @@ export interface PaginatedResponse<T> {
 export const getQueryRunsByQueryId = async (queryId: string): Promise<QueryRun[]> => {
   // Use the paginated endpoint but return just the items for backward compatibility
   const response = await api.get<PaginatedResponse<QueryRun>>(
-    `/runs/query/${queryId}?page=1&page_size=100`
+    `/runs/query/${queryId}/?page=1&page_size=100`
   );
   return response.data.items;
 };
 
 export const getQueryRunsByQueryIdPaginated = async (
   queryId: string,
-  page: number = 1,
-  pageSize: number = 25
+  page = 1,
+  pageSize = 20
 ): Promise<PaginatedResponse<QueryRun>> => {
   const response = await api.get<PaginatedResponse<QueryRun>>(
-    `/runs/query/${queryId}?page=${page}&page_size=${pageSize}`
+    `/runs/query/${queryId}/?page=${page}&page_size=${pageSize}`
   );
   return response.data;
 };
 
 export const getQueryRunsByVersionId = async (versionId: string): Promise<QueryRun[]> => {
-  const response = await api.get<QueryRun[]>(`/runs/version/${versionId}`);
+  const response = await api.get<QueryRun[]>(`/runs/version/${versionId}/`);
   return response.data;
 };
 
 export const getQueryRunById = async (runId: string): Promise<QueryRun> => {
-  const response = await api.get<QueryRun>(`/runs/${runId}`);
+  const response = await api.get<QueryRun>(`/runs/${runId}/`);
   return response.data;
 };
 

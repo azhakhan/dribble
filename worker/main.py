@@ -24,10 +24,11 @@ from common.redis_client import get_task_from_queue, set_worker_heartbeat, healt
 from common.connection_manager import get_connections_count, cleanup_all_connections
 from common.models import TaskRequest
 from task_manager import process_task
+from task_adapter import adapt_task_data
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    level=logging.DEBUG, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
 
@@ -99,8 +100,12 @@ def main_loop():
                 # Get and process tasks
                 task_data = get_task_from_queue(timeout=5)
                 if task_data:
+                    logger.info(f"Received task from queue: {task_data}")
+                    # Adapt task data to handle both old and new formats
+                    adapted_data = adapt_task_data(task_data)
+                    logger.debug(f"Adapted task data: {adapted_data}")
                     # Convert dictionary to TaskRequest object
-                    task = TaskRequest(**task_data)
+                    task = TaskRequest(**adapted_data)
                     process_task(task)
                 else:
                     # No task received, continue loop

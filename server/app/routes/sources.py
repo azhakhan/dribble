@@ -4,10 +4,15 @@ from app.core.db import get_db
 from sqlalchemy.orm import Session
 from app.models import Source
 from uuid import UUID
-from app.core._redis import submit_task
+from app.core._redis import redis_client
+from app.core.task_service import TaskService
+from app.core.task_types import TaskType
 from app.core.db_utils import get_or_404, safe_delete, get_all_active
 
 router = APIRouter(prefix="/sources", tags=["sources"])
+
+# Initialize TaskService
+task_service = TaskService(redis_client)
 
 
 # add a source
@@ -75,6 +80,15 @@ async def edit_source(
 @router.delete("/{source_id}/")
 async def delete_source(source_id: UUID, db: Session = Depends(get_db)):
     source = get_or_404(db, Source, source_id)
-    await submit_task({"task_type": "disconnect", "source_id": str(source_id)})
+
+    # Create a proper typed task for disconnection
+    disconnect_task = task_service.create_source_connect_task(
+        source_id=str(source_id), connection_params={"action": "disconnect"}
+    )
+    disconnect_task.task_type = TaskType.SOURCE_CONNECT  # Override to indicate disconnection
+
+    # Submit the task
+    await task_service.submit_task(disconnect_task, "default_queue")
+
     safe_delete(db, source)
     return {"message": "Source deleted"}

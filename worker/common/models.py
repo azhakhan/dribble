@@ -44,6 +44,7 @@ class TaskRequest(BaseModel):
 
     task_type: str  # 'connect', 'test_db', 'execute', 'schema', 'cancel'
     id: str
+    task_id: Optional[str] = None  # Alternative to id for new typed tasks
 
     # For connect/test_db tasks
     source_id: Optional[str] = None
@@ -51,9 +52,22 @@ class TaskRequest(BaseModel):
     dbtype: Optional[str] = None
     creds: Optional[Dict] = None
 
+    # For new typed tasks
+    connection_params: Optional[Dict[str, Any]] = None
+
     # For execute tasks (use existing connection)
     sql: Optional[str] = None
     modifiers: Optional[QueryRunModifiers] = None
+
+    # For new typed query execution tasks
+    query_version_id: Optional[str] = None
+    query_run_id: Optional[str] = None
+    worker_session_id: Optional[str] = None
+
+    @property
+    def effective_id(self) -> str:
+        """Get the effective task ID (prefer task_id over id)"""
+        return self.task_id or self.id
 
 
 # Connection info storage

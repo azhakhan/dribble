@@ -3,7 +3,7 @@ import logging
 from typing import Dict, List, Optional
 import time
 import orjson
-from app.core._redis import REDIS
+from app.core._redis import redis_client
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +48,7 @@ class TaskStatusSubscriber:
         """Subscribe to task_status:* channels"""
         pubsub_redis = None
         try:
-            pubsub_redis = REDIS.pubsub()
+            pubsub_redis = redis_client.redis.pubsub()
             await pubsub_redis.psubscribe("task_status:*")
 
             logger.info("Subscribed to task_status:* channels")

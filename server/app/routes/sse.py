@@ -18,6 +18,13 @@ query_execution_service = QueryExecutionService(task_service)
 streaming_service = ResultsStreamingService(task_service, query_execution_service)
 
 
+def cleanup_sse_connections():
+    """Cleanup SSE connections during shutdown."""
+    # This function is called during app shutdown
+    # The streaming service will handle cleanup automatically when connections are closed
+    logger.info("SSE cleanup initiated")
+
+
 @router.get("/events")
 async def stream_events(request: Request, client_id: Optional[str] = Query(None)):
     """Stream task events with direct result streaming."""

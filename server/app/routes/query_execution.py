@@ -4,7 +4,7 @@ from typing import Optional
 from sqlalchemy.orm import Session
 
 from app.schemas.query_execute import CreateQueryRunRequest
-from app.core.db import get_db, get_async_session
+from app.core.db import get_db
 from app.core._redis import redis_client
 from app.core.task_service import TaskService
 from app.core.query_execution_service import QueryExecutionService
@@ -31,12 +31,11 @@ async def execute_query_version_run(
     """Execute a query run with improved typed flow"""
     try:
         # Use new typed service for execution
-        async with get_async_session() as async_db:
-            task_id = await streaming_query_service.execute_query_with_streaming(
-                query_version_id=request.query_version_id,
-                client_id=client_id or "default",
-                db_session=async_db,
-            )
+        task_id = await streaming_query_service.execute_query_with_streaming(
+            query_version_id=request.query_version_id,
+            client_id=client_id or "default",
+            db_session=db,
+        )
 
         return {
             "task_id": task_id,
@@ -56,10 +55,9 @@ async def cancel_query_run_immediate(
     """Cancel a query run with improved typed flow"""
     try:
         # Use new typed service for cancellation
-        async with get_async_session() as async_db:
-            success = await streaming_query_service.cancel_query_with_streaming(
-                query_run_id=query_run_id, client_id=client_id or "default", db_session=async_db
-            )
+        success = await streaming_query_service.cancel_query_with_streaming(
+            query_run_id=query_run_id, client_id=client_id or "default", db_session=db
+        )
 
         if success:
             return {
