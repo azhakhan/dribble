@@ -33,7 +33,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Worker configuration
-HEARTBEAT_INTERVAL = 5  # seconds
+HEARTBEAT_INTERVAL = 30  # seconds
 WORKER_ID = str(uuid.uuid4())
 RUNNING = True
 SHUTDOWN_TIMEOUT = 30  # seconds to wait for graceful shutdown

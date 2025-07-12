@@ -322,13 +322,13 @@ export const useSourceStore = create<SourceState>((set, get) => ({
     // Initial load
     get().loadAllSourceStatuses();
 
-    // Set up polling interval (every 3 seconds)
+    // Set up polling interval (every 30 seconds)
     const interval = setInterval(() => {
       const currentState = get();
       if (currentState.statusPollingEnabled && currentState.connectedSources.size > 0) {
         currentState.loadAllSourceStatuses();
       }
-    }, 5000);
+    }, 30000);
 
     set({ statusPollingInterval: interval });
   },
