@@ -21,7 +21,7 @@ async def get_all_queries(db: Session = Depends(get_db)):
     return QueryService.get_all_queries_grouped_by_source(db)
 
 
-@router.get("/{query_id}", response_model=QueryResponse)
+@router.get("/{query_id}/", response_model=QueryResponse)
 async def get_query_by_id(query_id: UUID, db: Session = Depends(get_db)):
     """Get a specific query by ID"""
     return QueryService.get_query_by_id(db, query_id)
@@ -33,7 +33,7 @@ async def create_query(request: CreateQueryRequest, db: Session = Depends(get_db
     return QueryService.create_query(db, request)
 
 
-@router.post("/ephemeral", response_model=QueryResponse)
+@router.post("/ephemeral/", response_model=QueryResponse)
 async def get_or_create_ephemeral_query(
     request: CreateEphemeralQueryRequest,
     db: Session = Depends(get_db),
@@ -42,14 +42,14 @@ async def get_or_create_ephemeral_query(
     return QueryService.get_or_create_ephemeral_query(db, request)
 
 
-@router.put("/{query_id}", response_model=QueryResponse)
+@router.put("/{query_id}/", response_model=QueryResponse)
 async def update_query(query_id: UUID, request: UpdateQueryRequest, db: Session = Depends(get_db)):
     """Update a query"""
     # TODO: save who updated the query
     return QueryService.update_query(db, query_id, request)
 
 
-@router.put("/{query_id}/convert", response_model=QueryResponse)
+@router.put("/{query_id}/convert/", response_model=QueryResponse)
 async def convert_ephemeral_to_regular(
     query_id: UUID, request: ConvertEphemeralQueryRequest, db: Session = Depends(get_db)
 ):
@@ -57,7 +57,7 @@ async def convert_ephemeral_to_regular(
     return QueryService.convert_ephemeral_to_regular(db, query_id, request)
 
 
-@router.delete("/{query_id}")
+@router.delete("/{query_id}/")
 async def delete_query(query_id: UUID, db: Session = Depends(get_db)):
     """Delete a query"""
     # TODO: check if user has permission to delete the query

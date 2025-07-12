@@ -46,7 +46,7 @@ async def execute_query_version_run(
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
-@router.post("/cancel/{query_run_id}")
+@router.post("/cancel/{query_run_id}/")
 async def cancel_query_run_immediate(
     query_run_id: UUID,
     client_id: Optional[str] = Header(None, alias="X-Client-ID"),

@@ -145,7 +145,7 @@ async def test_db(request: TestDBTask):
     return await submit_and_wait_for_task(task_data)
 
 
-@router.get("/connect/{source_id}")
+@router.get("/connect/{source_id}/")
 async def connect(
     source_id: UUID,
     db: Session = Depends(get_db),
@@ -186,7 +186,7 @@ async def get_connected_sources():
 
 
 # get schema for a source
-@router.get("/schemas/{source_id}")
+@router.get("/schemas/{source_id}/")
 async def get_schemas(source_id: UUID):
     task_data = {
         "task_type": "schema",
@@ -196,13 +196,13 @@ async def get_schemas(source_id: UUID):
     return await submit_and_wait_for_task(task_data, return_data_only=True)
 
 
-@router.delete("/disconnect/{source_id}")
+@router.delete("/disconnect/{source_id}/")
 async def disconnect_source(source_id: UUID):
     task_data = {"task_type": "disconnect", "source_id": str(source_id)}
     return await submit_and_wait_for_task(task_data)
 
 
-@router.get("/result/{task_id}")
+@router.get("/result/{task_id}/")
 async def get_task_result_endpoint(task_id: str):
     """Get the full result data for a completed task using TaskService"""
     try:

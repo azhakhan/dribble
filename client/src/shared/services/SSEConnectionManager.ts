@@ -37,7 +37,7 @@ class SSEConnectionManager {
 
     try {
       // Create SSE connection
-      this.eventSource = new EventSource("/api/stream/events", {
+      this.eventSource = new EventSource("/api/stream/events/", {
         withCredentials: true
       });
 

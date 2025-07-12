@@ -24,7 +24,7 @@ from app.controllers.chat import ChatService
 router = APIRouter(prefix="/chat", tags=["chat"])
 
 
-@router.get("/sessions", response_model=ChatSessionsResponse)
+@router.get("/sessions/", response_model=ChatSessionsResponse)
 async def get_sessions(
     db: Session = Depends(get_db),
 ):
@@ -36,7 +36,7 @@ async def get_sessions(
     )
 
 
-@router.get("/messages/{session_id}", response_model=ChatMessagesResponse)
+@router.get("/messages/{session_id}/", response_model=ChatMessagesResponse)
 async def get_messages(
     session_id: UUID,
     db: Session = Depends(get_db),
