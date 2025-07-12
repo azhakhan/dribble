@@ -58,6 +58,11 @@ class SSEConnectionManager {
       this.eventSource.onmessage = (event) => {
         this.handleMessage(event);
       };
+
+      // Add listener for task_update events from server
+      this.eventSource.addEventListener("task_update", (event) => {
+        this.handleTaskUpdateEvent(event as MessageEvent);
+      });
     } catch (error) {
       console.error("Failed to create SSE connection:", error);
       store.updateConnectionStatus("error");
@@ -116,6 +121,122 @@ class SSEConnectionManager {
    */
   public getTaskForQuery(queryId: string): string | undefined {
     return this.queryTaskMap.get(queryId);
+  }
+
+  /**
+   * Handle task_update events from server
+   */
+  private async handleTaskUpdateEvent(event: MessageEvent): Promise<void> {
+    try {
+      const data = JSON.parse(event.data);
+
+      // Extract task data
+      const taskId = data.task_id;
+      const status = data.status;
+
+      if (!taskId || !status) {
+        console.warn("Received task_update without taskId or status:", data);
+        return;
+      }
+
+      // Find query ID for this task
+      let queryId: string | null = null;
+      for (const [qId, tId] of this.queryTaskMap.entries()) {
+        if (tId === taskId) {
+          queryId = qId;
+          break;
+        }
+      }
+
+      if (!queryId) {
+        console.warn(`No query found for task ${taskId}`);
+        return;
+      }
+
+      const store = useSSEStore.getState();
+
+      // Handle different statuses
+      if (status === "success") {
+        // Fetch results when task completes
+        try {
+          const taskResult = await getWorkerTaskResult(taskId);
+          const result: TaskResult = {
+            taskId,
+            queryId,
+            status,
+            timestamp: Date.now(),
+            data: taskResult.data as TableRow[],
+            error: taskResult.error
+          };
+          store.updateTaskResult(queryId, result);
+
+          // Notify handlers
+          this.messageHandlers.forEach((handler) => {
+            handler.onTaskResult?.(queryId!, result);
+          });
+
+          // Clean up task mapping
+          this.queryTaskMap.delete(queryId);
+        } catch (error) {
+          // Failed to fetch results
+          const errorResult: TaskResult = {
+            taskId,
+            queryId,
+            status: "error",
+            timestamp: Date.now(),
+            error: error instanceof Error ? error.message : "Failed to fetch results"
+          };
+          store.updateTaskResult(queryId, errorResult);
+        }
+      } else if (status === "error" || status === "cancelled") {
+        // Fetch full task result for error cases to get error message
+        try {
+          const taskResult = await getWorkerTaskResult(taskId);
+          const result: TaskResult = {
+            taskId,
+            queryId,
+            status: status as "error" | "cancelled",
+            timestamp: Date.now(),
+            error: taskResult.error
+          };
+          store.updateTaskResult(queryId, result);
+
+          // Notify handlers
+          this.messageHandlers.forEach((handler) => {
+            handler.onTaskResult?.(queryId!, result);
+          });
+        } catch (error) {
+          // Failed to fetch error details
+          const errorResult: TaskResult = {
+            taskId,
+            queryId,
+            status: "error",
+            timestamp: Date.now(),
+            error: error instanceof Error ? error.message : "Failed to fetch error details"
+          };
+          store.updateTaskResult(queryId, errorResult);
+        }
+
+        // Clean up task mapping
+        this.queryTaskMap.delete(queryId);
+      } else {
+        // Update status for running/other non-terminal states
+        const result: TaskResult = {
+          taskId,
+          queryId,
+          status: status as TaskResult["status"],
+          timestamp: Date.now()
+        };
+        store.updateTaskResult(queryId, result);
+
+        // Notify handlers
+        this.messageHandlers.forEach((handler) => {
+          handler.onTaskResult?.(queryId!, result);
+        });
+      }
+    } catch (error) {
+      console.error("Error handling task_update event:", error);
+    }
   }
 
   /**

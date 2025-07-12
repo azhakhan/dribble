@@ -7,6 +7,7 @@ import logging
 from datetime import datetime
 from typing import Optional
 from uuid import UUID, uuid4
+import json
 
 from sqlalchemy.orm import Session
 
@@ -15,7 +16,6 @@ from app.core.task_service import TaskService
 from app.core.task_types import (
     TaskStatus,
     TaskStatusUpdate,
-    TaskType,
 )
 from app.models import QueryRun, QueryVersion, Source
 
@@ -49,33 +49,38 @@ class QueryExecutionService:
                 raise ValueError(f"Query version {query_version_id} not found")
 
             # Create query run record
-            query_run = self._create_query_run(
-                query_version_id, query_version.query.source_id, db_session
-            )
+            try:
+                query_run = self._create_query_run(query_version_id, db_session)
+                logger.info(f"QueryRun created successfully: {query_run.id}")
+            except Exception as e:
+                logger.error(f"Failed to create QueryRun: {e}")
+                raise
 
-            # Create and submit task
-            task_data = self.task_service.create_query_execution_task(
-                query_version_id=str(query_version_id),
-                source_id=str(query_version.query.source_id),
-                query_run_id=str(query_run.id),
-                sql=query_version.sql,
-                worker_session_id=str(query_version.query.source_id),  # Use source_id for now
-            )
+            # Create simple task data for worker
+            task_data = {
+                "task_type": "query_execution",
+                "task_id": str(query_run.id),
+                "query_version_id": str(query_version_id),
+                "source_id": str(query_version.query.source_id),
+                "query_run_id": str(query_run.id),
+                "sql": query_version.sql,
+                "role": "reader",  # Always use reader role for queries
+                "worker_session_id": str(query_version.query.source_id),
+                "created_at": datetime.utcnow().isoformat(),
+            }
 
             # Submit to worker queue
             # TODO: In future, use different queues per database type
             queue_name = "query_tasks"
-            task_id = await self.task_service.submit_task(task_data, queue_name)
-
-            # Update query run with task ID
-            self._update_query_run_task_id(query_run.id, task_id, db_session)
+            await self.task_service.redis.submit_task(queue_name, json.dumps(task_data))
+            task_id = task_data["task_id"]
 
             # Publish initial status
             await self.task_service.publish_status_update(
                 TaskStatusUpdate(
                     task_id=task_id,
-                    status=TaskStatus.PENDING,
-                    task_type=TaskType.QUERY_EXECUTION,
+                    status="pending",
+                    task_type="query_execution",
                     message="Query execution queued",
                 )
             )
@@ -171,35 +176,20 @@ class QueryExecutionService:
         self, query_version_id: UUID, db_session: Session
     ) -> Optional[QueryVersion]:
         """Get query version with related source data."""
-        return (
-            db_session.query(QueryVersion)
-            .filter(QueryVersion.id == query_version_id)
-            .join(QueryVersion.query)
-            .join(Source)
-            .first()
-        )
+        return db_session.query(QueryVersion).filter(QueryVersion.id == query_version_id).first()
 
-    def _create_query_run(
-        self, query_version_id: UUID, source_id: UUID, db_session: Session
-    ) -> QueryRun:
+    def _create_query_run(self, query_version_id: UUID, db_session: Session) -> QueryRun:
         """Create a new query run record."""
         query_run = QueryRun(
             id=uuid4(),
             query_version_id=query_version_id,
-            source_id=source_id,
-            status="running",
             created_at=datetime.utcnow(),
         )
         db_session.add(query_run)
         db_session.flush()
-        return query_run
-
-    def _update_query_run_task_id(
-        self, query_run_id: UUID, task_id: str, db_session: Session
-    ) -> None:
-        """Update query run with task ID."""
-        db_session.query(QueryRun).filter(QueryRun.id == query_run_id).update({"task_id": task_id})
         db_session.commit()
+        logger.info(f"Successfully created QueryRun {query_run.id} for version {query_version_id}")
+        return query_run
 
     def _update_query_run_status(
         self, query_run_id: UUID, status: str, db_session: Session
@@ -221,11 +211,12 @@ class QueryExecutionService:
         }
 
         if result_data:
-            update_data["result"] = result_data
             if "row_count" in result_data:
                 update_data["row_count"] = result_data["row_count"]
             if "execution_time_ms" in result_data:
                 update_data["execution_time_ms"] = result_data["execution_time_ms"]
+            if "result_message" in result_data:
+                update_data["result_message"] = result_data["result_message"]
 
         db_session.query(QueryRun).filter(QueryRun.id == query_run_id).update(update_data)
         db_session.commit()
@@ -241,7 +232,7 @@ class QueryExecutionService:
         }
 
         if error:
-            update_data["error"] = error
+            update_data["error_message"] = error
 
         db_session.query(QueryRun).filter(QueryRun.id == query_run_id).update(update_data)
         db_session.commit()
@@ -253,5 +244,5 @@ class QueryExecutionService:
         return db_session.query(QueryRun).filter(QueryRun.id == query_run_id).join(Source).first()
 
     def _get_query_run_by_task_id(self, task_id: str, db_session: Session) -> Optional[QueryRun]:
-        """Get query run by task ID."""
-        return db_session.query(QueryRun).filter(QueryRun.task_id == task_id).first()
+        """Get query run by task ID (using query_run.id as task_id)."""
+        return db_session.query(QueryRun).filter(QueryRun.id == task_id).first()

@@ -59,6 +59,16 @@ class RedisClient:
             logger.error(f"Failed to subscribe to channel {channel}: {e}")
             raise
 
+    async def psubscribe(self, pattern: str):
+        """Subscribe to Redis pub/sub channels matching a pattern."""
+        try:
+            pubsub = self.redis.pubsub()
+            await pubsub.psubscribe(pattern)
+            return pubsub
+        except Exception as e:
+            logger.error(f"Failed to pattern subscribe to {pattern}: {e}")
+            raise
+
     async def remove_task_from_queue(self, queue_name: str, task_id: str) -> bool:
         """Remove a specific task from the queue (for cancellation)."""
         try:

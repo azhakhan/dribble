@@ -14,53 +14,15 @@ from common.connection_manager import (
 from common.exceptions import InvalidTaskTypeError, UnsupportedDatabaseError
 from postgres.query_executor import execute_query_with_modifiers
 from postgres.schema_inspector import get_postgres_schemas
-from common.models import UpdateQueryRunRequest
-from task_adapter import get_original_task_type
 
 logger = logging.getLogger(__name__)
-
-
-def format_task_result(task_id: str, task_type: str, status: str, **kwargs) -> dict:
-    """
-    Format task result with correct fields for server parsing.
-
-    Maps worker status values to server expected values:
-    - 'error' -> 'failed'
-    - 'success' -> 'completed'
-    """
-    # Map status values
-    status_mapping = {
-        "success": "completed",
-        "error": "failed",
-        "running": "running",
-        "connecting": "running",
-        "disconnecting": "running",
-        "testing": "running",
-        "fetching": "running",
-        "cancelled": "cancelled",
-    }
-
-    mapped_status = status_mapping.get(status, status)
-
-    result = {
-        "task_id": task_id,
-        "status": mapped_status,
-        "task_type": get_original_task_type(task_type),
-    }
-
-    # Add any additional fields
-    result.update(kwargs)
-
-    return result
 
 
 def handle_connect_task(task: TaskRequest):
     """Handle database connection setup"""
     try:
-        task_id = task.effective_id
-        set_result(task_id, format_task_result(task_id, task.task_type, "connecting"))
-
-        # TODO: Test connection first
+        task_id = task.task_id or task.id
+        set_result(task_id, {"task_id": task_id, "status": "connecting"})
 
         # Add connection to pool
         source_key = add_connection(
@@ -68,24 +30,22 @@ def handle_connect_task(task: TaskRequest):
         )
 
         logger.info(f"Successfully established connection {source_key}")
-        set_result(task_id, format_task_result(task_id, task.task_type, "success"))
+        set_result(task_id, {"task_id": task_id, "status": "success"})
         publish_status(task_id, "success")
 
     except Exception as e:
         error_message = str(e)
         logger.error(f"Connection setup failed for {task.source_id}:{task.role}: {error_message}")
-        task_id = task.effective_id
-        set_result(
-            task_id, format_task_result(task_id, task.task_type, "error", error=error_message)
-        )
+        task_id = task.task_id or task.id
+        set_result(task_id, {"task_id": task_id, "status": "error", "error": error_message})
         publish_status(task_id, "error")
 
 
 def handle_test_db_task(task: TaskRequest):
     """Handle database connection testing"""
     try:
-        task_id = task.effective_id
-        set_result(task_id, format_task_result(task_id, task.task_type, "testing"))
+        task_id = task.task_id or task.id
+        set_result(task_id, {"task_id": task_id, "status": "testing"})
 
         # Create temporary engine for testing
         engine, _ = create_database_engine(task.dbtype, task.creds, task.role or "reader")
@@ -99,16 +59,12 @@ def handle_test_db_task(task: TaskRequest):
             if connection_healthy:
                 message = f"Database connection test successful in {test_time_ms}ms"
                 logger.info(f"DB test successful: {task.dbtype}")
-                set_result(
-                    task_id, format_task_result(task_id, task.task_type, "success", message=message)
-                )
+                set_result(task_id, {"task_id": task_id, "status": "success", "message": message})
                 publish_status(task_id, "success")
             else:
                 message = f"Database connection test failed after {test_time_ms}ms"
                 logger.error(f"DB test failed: {task.dbtype}")
-                set_result(
-                    task_id, format_task_result(task_id, task.task_type, "error", error=message)
-                )
+                set_result(task_id, {"task_id": task_id, "status": "error", "error": message})
                 publish_status(task_id, "error")
 
         finally:
@@ -118,16 +74,14 @@ def handle_test_db_task(task: TaskRequest):
     except Exception as e:
         error_message = str(e)
         logger.error(f"DB test failed for {task.dbtype}: {error_message}")
-        task_id = task.effective_id
-        set_result(
-            task_id, format_task_result(task_id, task.task_type, "error", error=error_message)
-        )
+        task_id = task.task_id or task.id
+        set_result(task_id, {"task_id": task_id, "status": "error", "error": error_message})
         publish_status(task_id, "error")
 
 
 def handle_execute_task(task: TaskRequest):
-    """Handle query execution with modifiers"""
-    task_id = task.effective_id
+    """Handle query execution"""
+    task_id = task.task_id or task.id
     start_time = time.time()
 
     try:
@@ -135,7 +89,8 @@ def handle_execute_task(task: TaskRequest):
         # Get connection from pool
         connection_info = get_connection(source_key)
 
-        set_result(task_id, format_task_result(task_id, task.task_type, "running"))
+        set_result(task_id, {"task_id": task_id, "status": "running"})
+        publish_status(task_id, "running")
 
         if connection_info.dbtype == "postgres":
             result = execute_query_with_modifiers(
@@ -149,22 +104,17 @@ def handle_execute_task(task: TaskRequest):
                 f"Query execution not implemented for {connection_info.dbtype}"
             )
 
-        update_request = UpdateQueryRunRequest(
-            result_message=result.get("result_message"),
-            row_count=result.get("row_count"),
-            execution_time_ms=result.get("execution_time_ms"),
-        )
-
+        # Store the complete result with data
         set_result(
             task_id,
-            format_task_result(
-                task_id,
-                task.task_type,
-                "success",
-                type="query_run",
-                stats=update_request.model_dump(),
-                data=result.get("data"),
-            ),
+            {
+                "task_id": task_id,
+                "status": "success",
+                "data": result.get("data"),
+                "row_count": result.get("row_count"),
+                "execution_time_ms": result.get("execution_time_ms"),
+                "result_message": result.get("result_message"),
+            },
         )
         publish_status(task_id, "success")
 
@@ -173,23 +123,14 @@ def handle_execute_task(task: TaskRequest):
         error_message = str(e)
         logger.error(f"Query {task_id} failed after {execution_time_ms}ms: {error_message}")
 
-        # Create update request for server to process via pub/sub
-        error_update_request = UpdateQueryRunRequest(
-            error_message=error_message,
-            execution_time_ms=execution_time_ms,
-            row_count=0,
-        )
-
         set_result(
             task_id,
-            format_task_result(
-                task_id,
-                task.task_type,
-                "error",
-                type="query_run",
-                stats=error_update_request.model_dump(),
-                error=error_message,
-            ),
+            {
+                "task_id": task_id,
+                "status": "error",
+                "error": error_message,
+                "execution_time_ms": execution_time_ms,
+            },
         )
         publish_status(task_id, "error")
 
@@ -197,12 +138,13 @@ def handle_execute_task(task: TaskRequest):
 def handle_schema_task(task: TaskRequest):
     """Handle schema inspection"""
     try:
-        task_id = task.effective_id
+        task_id = task.task_id or task.id
         # Get connection from pool
         source_key = f"{task.source_id}:{task.role}"
         connection_info = get_connection(source_key)
 
-        set_result(task_id, format_task_result(task_id, task.task_type, "running"))
+        set_result(task_id, {"task_id": task_id, "status": "running"})
+        publish_status(task_id, "running")
 
         # For now, only PostgreSQL is supported
         if connection_info.dbtype == "postgres":
@@ -214,27 +156,23 @@ def handle_schema_task(task: TaskRequest):
 
         logger.info(f"Schema inspection completed for {task_id}")
 
-        set_result(
-            task_id, format_task_result(task_id, task.task_type, "success", data=schema_info)
-        )
+        set_result(task_id, {"task_id": task_id, "status": "success", "data": schema_info})
         publish_status(task_id, "success")
 
     except Exception as e:
         error_message = str(e)
-        task_id = task.effective_id
+        task_id = task.task_id or task.id
         logger.error(f"Schema inspection {task_id} failed: {error_message}")
 
-        set_result(
-            task_id, format_task_result(task_id, task.task_type, "error", error=error_message)
-        )
+        set_result(task_id, {"task_id": task_id, "status": "error", "error": error_message})
         publish_status(task_id, "error")
 
 
 def handle_disconnect_task(task: TaskRequest):
     """Handle database disconnection"""
     try:
-        task_id = task.effective_id
-        set_result(task_id, format_task_result(task_id, task.task_type, "disconnecting"))
+        task_id = task.task_id or task.id
+        set_result(task_id, {"task_id": task_id, "status": "disconnecting"})
 
         # Remove all connections for this source
         removed_count = remove_connections_by_source_id(task.source_id)
@@ -242,25 +180,23 @@ def handle_disconnect_task(task: TaskRequest):
         message = f"Removed {removed_count} connections for source {task.source_id}"
         logger.info(message)
 
-        set_result(task_id, format_task_result(task_id, task.task_type, "success", message=message))
+        set_result(task_id, {"task_id": task_id, "status": "success", "message": message})
         publish_status(task_id, "success")
 
     except Exception as e:
         error_message = str(e)
-        task_id = task.effective_id
+        task_id = task.task_id or task.id
         logger.error(f"Disconnect task {task_id} failed: {error_message}")
 
-        set_result(
-            task_id, format_task_result(task_id, task.task_type, "error", error=error_message)
-        )
+        set_result(task_id, {"task_id": task_id, "status": "error", "error": error_message})
         publish_status(task_id, "error")
 
 
 def handle_connected_task(task: TaskRequest):
     """Handle getting all connected sources"""
     try:
-        task_id = task.effective_id
-        set_result(task_id, format_task_result(task_id, task.task_type, "fetching"))
+        task_id = task.task_id or task.id
+        set_result(task_id, {"task_id": task_id, "status": "fetching"})
 
         # Get all active connections
         all_connections = get_all_connections()
@@ -284,90 +220,54 @@ def handle_connected_task(task: TaskRequest):
             f"Connected sources fetched: {len(connected_sources)} sources, {len(all_connections)} total connections"
         )
 
-        set_result(
-            task_id,
-            format_task_result(task_id, task.task_type, "success", data=connected_sources),
-        )
+        set_result(task_id, {"task_id": task_id, "status": "success", "data": connected_sources})
         publish_status(task_id, "success")
 
     except Exception as e:
         error_message = str(e)
-        task_id = task.effective_id
+        task_id = task.task_id or task.id
         logger.error(f"Connected task {task_id} failed: {error_message}")
 
-        set_result(
-            task_id, format_task_result(task_id, task.task_type, "error", error=error_message)
-        )
+        set_result(task_id, {"task_id": task_id, "status": "error", "error": error_message})
         publish_status(task_id, "error")
 
 
 def handle_cancel_task(task: TaskRequest):
     """Handle query cancellation"""
     try:
-        task_id = task.effective_id
+        task_id = task.task_id or task.id
         logger.info(f"Processing cancel request for query_run_id: {task.query_run_id}")
 
         # For now, just mark it as cancelled
         # In future, we should actually cancel the running query in the database
         set_result(
             task_id,
-            format_task_result(
-                task_id, task.task_type, "cancelled", message="Query cancellation requested"
-            ),
+            {"task_id": task_id, "status": "cancelled", "message": "Query cancellation requested"},
         )
-        publish_status(task_id, "success")
+        publish_status(task_id, "cancelled")
 
     except Exception as e:
         error_message = str(e)
-        task_id = task.effective_id
+        task_id = task.task_id or task.id
         logger.error(f"Cancel task {task_id} failed: {error_message}")
 
-        set_result(
-            task_id, format_task_result(task_id, task.task_type, "error", error=error_message)
-        )
+        set_result(task_id, {"task_id": task_id, "status": "error", "error": error_message})
         publish_status(task_id, "error")
 
 
 def process_task(task: TaskRequest):
     """Process a task from the queue"""
     try:
-        # Use effective_id to handle both old 'id' and new 'task_id' fields
-        task_id = task.effective_id
+        task_id = task.task_id or task.id
         logger.info(f"Processing {task.task_type} task: {task_id}")
         logger.debug(f"Task data: {task.model_dump()}")
 
-        # Extract connection_params if present
-        connection_params = (
-            getattr(task, "connection_params", {}) if hasattr(task, "connection_params") else {}
-        )
-        action = None
-        if isinstance(connection_params, dict):
-            # Extract action from connection_params
-            action = connection_params.get("action")
-
-            # Update task attributes from connection_params if needed
-            if not task.dbtype and "dbtype" in connection_params:
-                task.dbtype = connection_params["dbtype"]
-            if not task.creds and "creds" in connection_params:
-                task.creds = connection_params["creds"]
-            if not task.role and "role" in connection_params:
-                task.role = connection_params["role"]
-
-        # Route to appropriate handler based on task_type and action
-        if task.task_type == "source_connect":
-            if action == "disconnect":
-                handle_disconnect_task(task)
-            elif action == "list":
-                handle_connected_task(task)
-            elif action == "schema":
-                handle_schema_task(task)
-            else:
-                handle_connect_task(task)
-        elif task.task_type == "connect":
+        # Simple task routing - one task type per handler
+        if task.task_type == "connect":
             handle_connect_task(task)
-        elif task.task_type == "source_test" or task.task_type == "test_db":
+        elif task.task_type == "test_db":
             handle_test_db_task(task)
-        elif task.task_type == "execute" or task.task_type == "query_execution":
+        elif task.task_type == "query_execution":
             handle_execute_task(task)
         elif task.task_type == "schema":
             handle_schema_task(task)
@@ -375,15 +275,14 @@ def process_task(task: TaskRequest):
             handle_disconnect_task(task)
         elif task.task_type == "connected":
             handle_connected_task(task)
-        elif task.task_type == "cancel" or task.task_type == "query_cancel":
+        elif task.task_type == "query_cancel":
             handle_cancel_task(task)
         else:
             raise InvalidTaskTypeError(task.task_type)
 
     except Exception as e:
         logger.error(f"Error processing task: {str(e)}")
-        if task_id:
-            # Try to determine the task type for the error response
-            task_type = getattr(task, "task_type", "unknown")
-            set_result(task_id, format_task_result(task_id, task_type, "error", error=str(e)))
+        if task:
+            task_id = task.task_id or task.id
+            set_result(task_id, {"task_id": task_id, "status": "error", "error": str(e)})
             publish_status(task_id, "error")

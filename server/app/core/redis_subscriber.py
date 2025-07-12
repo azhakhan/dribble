@@ -101,11 +101,6 @@ class TaskStatusSubscriber:
             if "timestamp" not in parsed_message:
                 parsed_message["timestamp"] = time.time()
 
-            # Check if this is a terminal status (success or error) and if we need to update query run
-            status = parsed_message.get("status")
-            if status in ["success", "error"]:
-                await self._maybe_update_query_run(task_id)
-
             # Store only the latest status for this task
             self.task_status[task_id] = parsed_message
 

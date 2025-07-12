@@ -9,12 +9,10 @@ from datetime import datetime
 from typing import Dict, Optional, Type, TypeVar
 from uuid import uuid4
 
-from pydantic import ValidationError
 
 from app.core._redis import RedisClient
 from app.core.task_types import (
     TaskData,
-    TaskResult,
     TaskResultData,
     TaskStatus,
     TaskStatusUpdate,
@@ -79,7 +77,7 @@ class TaskService:
             logger.error(f"Failed to submit task: {e}")
             raise
 
-    async def get_task_result(self, task_id: str) -> Optional[TaskResultData]:
+    async def get_task_result(self, task_id: str) -> Optional[dict]:
         """
         Get task result from Redis.
 
@@ -87,7 +85,7 @@ class TaskService:
             task_id: Task identifier
 
         Returns:
-            Task result or None if not found
+            Task result dictionary or None if not found
         """
         try:
             result_json = await self.redis.get_task_result(task_id)
@@ -95,26 +93,9 @@ class TaskService:
                 return None
 
             result_data = json.loads(result_json)
+            return result_data
 
-            # Determine result type based on task type
-            if "task_type" in result_data:
-                task_type = TaskType(result_data["task_type"])
-                result_class = self._task_handlers.get(task_type)
-                if result_class:
-                    # Special handling for source connect tasks
-                    if (
-                        task_type == TaskType.SOURCE_CONNECT
-                        and result_data.get("status") == "completed"
-                    ):
-                        # If worker didn't set connected field but task completed successfully, set it to True
-                        if "connected" not in result_data:
-                            result_data["connected"] = True
-                    return result_class.model_validate(result_data)
-
-            # Fallback to generic TaskResult
-            return TaskResult.model_validate(result_data)
-
-        except (json.JSONDecodeError, ValidationError) as e:
+        except json.JSONDecodeError as e:
             logger.error(f"Failed to parse task result {task_id}: {e}")
             return None
         except Exception as e:

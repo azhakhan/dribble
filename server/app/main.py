@@ -11,7 +11,6 @@ from app.routes.chat import router as chat_router
 from app.routes.sse import router as sse_router, cleanup_sse_connections
 from app.routes.worker import router as worker_router
 from app.core.session_naming import start_session_naming, stop_session_naming
-from app.core.redis_subscriber import start_redis_subscriber, stop_redis_subscriber
 import logging
 
 # Suppress APScheduler logs to reduce noise
@@ -24,14 +23,13 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     # Startup
     start_session_naming()
-    await start_redis_subscriber()
+    # redis_subscriber not needed - worker endpoints poll Redis directly
     yield
     # Shutdown - clean up connections first for faster reload
     cleanup_sse_connections()
     # TODO: stop workers only when not in development mode with hot reloading
     # stop_workers()
     stop_session_naming()
-    await stop_redis_subscriber()
 
 
 app = FastAPI(lifespan=lifespan)

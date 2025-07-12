@@ -45,7 +45,7 @@ class ResultsStreamingService:
             SSE response with task updates
         """
 
-        async def event_generator() -> AsyncGenerator[str, None]:
+        async def event_generator() -> AsyncGenerator[dict, None]:
             """Generate SSE events for task updates."""
 
             # Initialize client tracking
@@ -55,8 +55,8 @@ class ResultsStreamingService:
             if task_ids:
                 self._active_streams[client_id].update(task_ids)
 
-            # Subscribe to Redis pub/sub
-            pubsub = await self.task_service.redis.subscribe("task_status")
+            # Subscribe to Redis pub/sub pattern to match worker channels
+            pubsub = await self.task_service.redis.psubscribe("task_status:*")
 
             try:
                 while True:
@@ -68,16 +68,41 @@ class ResultsStreamingService:
                     # Get message from Redis
                     message = await pubsub.get_message(timeout=1.0)
                     if message is None:
-                        # Send heartbeat
-                        yield f"event: heartbeat\ndata: {json.dumps({'timestamp': 'now'})}\n\n"
+                        # Send heartbeat - yield dict for EventSourceResponse
+                        yield {"event": "heartbeat", "data": json.dumps({"timestamp": "now"})}
                         continue
 
-                    if message["type"] != "message":
+                    if message["type"] != "pmessage":
                         continue
 
                     try:
-                        # Parse task update
-                        update_data = json.loads(message["data"])
+                        # Extract task_id from channel name (task_status:task_id)
+                        channel = message["channel"]
+                        if not channel.startswith("task_status:"):
+                            continue
+                        task_id = channel[12:]  # Remove "task_status:" prefix
+
+                        # Parse the basic message data from worker
+                        message_data = json.loads(message["data"])
+                        logger.info(f"ResultsStreamingService received message: {message_data}")
+
+                        # Transform worker message to TaskStatusUpdate format
+                        # Worker sends: {task_id, status, timestamp}
+                        # We need: {task_id, status, task_type, ...}
+                        timestamp = message_data.get("timestamp")
+                        if isinstance(timestamp, (int, float)):
+                            from datetime import datetime
+
+                            timestamp = datetime.fromtimestamp(timestamp).isoformat()
+
+                        update_data = {
+                            "task_id": task_id,
+                            "status": message_data.get("status", "pending"),
+                            "task_type": "query_execution",  # Assume query execution for now
+                            "timestamp": timestamp,
+                        }
+                        logger.info(f"Transformed to TaskStatusUpdate: {update_data}")
+
                         update = TaskStatusUpdate.model_validate(update_data)
 
                         # Check if this client is interested in this task
@@ -85,11 +110,7 @@ class ResultsStreamingService:
                             client_id, set()
                         ):
                             # Handle task completion
-                            if update.status in [
-                                TaskStatus.COMPLETED,
-                                TaskStatus.FAILED,
-                                TaskStatus.CANCELLED,
-                            ]:
+                            if update.status in ["success", "error", "cancelled"]:
                                 await self._handle_task_completion(update)
 
                                 # Remove from tracking
@@ -99,8 +120,8 @@ class ResultsStreamingService:
                             # Stream the update
                             event_data = {
                                 "task_id": update.task_id,
-                                "status": update.status.value,
-                                "task_type": update.task_type.value,
+                                "status": update.status,
+                                "task_type": update.task_type,
                                 "progress": update.progress,
                                 "message": update.message,
                                 "error": update.error,
@@ -111,7 +132,8 @@ class ResultsStreamingService:
                             if update.result:
                                 event_data["result"] = update.result.model_dump()
 
-                            yield f"event: task_update\ndata: {json.dumps(event_data)}\n\n"
+                            # Yield dict for EventSourceResponse to format
+                            yield {"event": "task_update", "data": json.dumps(event_data)}
 
                     except Exception as e:
                         logger.error(f"Error processing task update: {e}")
@@ -125,7 +147,7 @@ class ResultsStreamingService:
                 # Cleanup
                 if client_id in self._active_streams:
                     del self._active_streams[client_id]
-                await pubsub.unsubscribe("task_status")
+                await pubsub.punsubscribe("task_status:*")
 
         return EventSourceResponse(event_generator())
 
@@ -163,18 +185,31 @@ class ResultsStreamingService:
             update: Task status update
         """
         try:
+            # Map status to TaskStatus enum for database updates
+            status_mapping = {
+                "success": TaskStatus.COMPLETED,
+                "error": TaskStatus.FAILED,
+                "cancelled": TaskStatus.CANCELLED,
+                "running": TaskStatus.RUNNING,
+                "pending": TaskStatus.PENDING,
+            }
+            task_status = status_mapping.get(update.status, TaskStatus.PENDING)
+
             # Handle different task types
-            if update.task_type == TaskType.QUERY_EXECUTION:
+            if (
+                update.task_type == TaskType.QUERY_EXECUTION
+                or update.task_type == "query_execution"
+            ):
                 await self.query_service.handle_task_completion(
                     task_id=update.task_id,
-                    status=update.status,
+                    status=task_status,
                     result_data=update.result.model_dump() if update.result else None,
                     error=update.error,
                 )
-            elif update.task_type == TaskType.QUERY_CANCEL:
+            elif update.task_type == TaskType.QUERY_CANCEL or update.task_type == "query_cancel":
                 # Handle query cancellation
                 await self.query_service.handle_task_completion(
-                    task_id=update.task_id, status=update.status, error=update.error
+                    task_id=update.task_id, status=task_status, error=update.error
                 )
             # Add handlers for other task types as needed
 

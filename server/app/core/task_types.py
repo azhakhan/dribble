@@ -127,8 +127,8 @@ class TaskStatusUpdate(BaseModel):
     """Task status update message for SSE."""
 
     task_id: str
-    status: TaskStatus
-    task_type: TaskType
+    status: str  # Accept string statuses: "success", "error", "running", "pending", "cancelled"
+    task_type: str  # Accept string task types: "query_execution", "query_cancel", etc.
     progress: Optional[float] = None
     message: Optional[str] = None
     result: Optional[TaskResultData] = None
