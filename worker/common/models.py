@@ -42,8 +42,8 @@ class QueryRunModifiers(BaseModel):
 class TaskRequest(BaseModel):
     """Represents a task from the Redis queue"""
 
-    task_type: str  # 'connect', 'test_db', 'execute', 'schema', 'cancel'
-    id: str
+    task_type: str  # 'connect', 'test_db', 'query_execution', 'schema', 'disconnect', 'connected', 'query_cancel'
+    task_id: str  # Unique task identifier
 
     # For connect/test_db tasks
     source_id: Optional[str] = None
@@ -51,9 +51,14 @@ class TaskRequest(BaseModel):
     dbtype: Optional[str] = None
     creds: Optional[Dict] = None
 
-    # For execute tasks (use existing connection)
+    # For execute tasks
     sql: Optional[str] = None
     modifiers: Optional[QueryRunModifiers] = None
+
+    # For query execution tasks
+    query_version_id: Optional[str] = None
+    query_run_id: Optional[str] = None
+    worker_session_id: Optional[str] = None
 
 
 # Connection info storage

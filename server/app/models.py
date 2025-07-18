@@ -71,6 +71,7 @@ class QueryRun(Base):
     __tablename__ = "query_runs"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    status = Column(String, nullable=True)
     modifiers = Column(JSONB, nullable=True)
     result_message = Column(String, nullable=True)
     error_message = Column(String, nullable=True)
@@ -79,6 +80,8 @@ class QueryRun(Base):
     query_version_id = Column(UUID(as_uuid=True), ForeignKey("query_versions.id"), nullable=False)
     query_version = relationship("QueryVersion", back_populates="runs")
     created_at = Column(DateTime, default=datetime.now)
+    updated_at = Column(DateTime, nullable=True)
+    completed_at = Column(DateTime, nullable=True)
 
 
 class LLM(Base, SoftDeleteMixin):

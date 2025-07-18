@@ -77,8 +77,8 @@ export const useTabExecutionStore = create<TabExecutionState>()(() => ({
 
     try {
       // Call the cancellation API
-      const { cancelQueryRunImmediate } = await import("@/shared/lib/api");
-      await cancelQueryRunImmediate(tab.queryRunId);
+      const { cancelQueryRun } = await import("@/shared/lib/api");
+      await cancelQueryRun(tab.queryRunId);
 
       // Update the store to mark as cancelled
       const { useSSEStore } = await import("@/shared/store/useSSEStore");

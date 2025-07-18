@@ -13,7 +13,7 @@ import math
 router = APIRouter(prefix="/runs", tags=["query-runs"])
 
 
-@router.get("/query/{query_id}", response_model=QueryRunsPaginatedResponse)
+@router.get("/query/{query_id}/", response_model=QueryRunsPaginatedResponse)
 async def get_all_query_runs(
     query_id: UUID,
     page: int = FastAPIQuery(1, ge=1, description="Page number"),
@@ -36,19 +36,19 @@ async def get_all_query_runs(
     )
 
 
-@router.get("/version/{version_id}", response_model=List[QueryRunResponse])
+@router.get("/version/{version_id}/", response_model=List[QueryRunResponse])
 async def get_query_runs_by_version_id(version_id: UUID, db: Session = Depends(get_db)):
     """Get all runs for a specific query version"""
     return QueryRunService.get_runs_by_version_id(db, version_id)
 
 
-@router.get("/{run_id}", response_model=QueryRunResponse)
+@router.get("/{run_id}/", response_model=QueryRunResponse)
 async def get_query_run_by_id(run_id: UUID, db: Session = Depends(get_db)):
     """Get a specific query run by ID"""
     return QueryRunService.get_run_by_id(db, run_id)
 
 
-@router.delete("/{run_id}")
+@router.delete("/{run_id}/")
 async def delete_query_run(run_id: UUID, db: Session = Depends(get_db)):
     """Delete a query run"""
     return QueryRunService.delete_run(db, run_id)

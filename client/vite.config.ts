@@ -51,20 +51,6 @@ export default defineConfig({
       "/api": {
         target: "http://server:8000",
         changeOrigin: true,
-        configure: (proxy) => {
-          proxy.on("proxyRes", (proxyRes) => {
-            // Fix redirect loops by rewriting Location headers
-            if (
-              proxyRes.headers.location &&
-              proxyRes.headers.location.includes("http://server:8000")
-            ) {
-              proxyRes.headers.location = proxyRes.headers.location.replace(
-                "http://server:8000",
-                "http://localhost:3000/api"
-              );
-            }
-          });
-        },
         rewrite: (path) => path.replace(/^\/api/, "")
       }
     }

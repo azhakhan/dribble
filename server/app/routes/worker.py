@@ -5,11 +5,13 @@ from sqlalchemy.orm import Session
 from app.models import Source
 from uuid import UUID
 from app.core.db_utils import get_or_404
-from app.core._redis import submit_task, get_task_result
-from app.core.redis_subscriber import task_status_subscriber
+from app.core._redis import redis_client
+from app.core.task_service import TaskService
 import asyncio
 import logging
 from typing import Dict, Any
+import json
+from uuid import uuid4
 
 from app.schemas.worker import TestDBTask
 
@@ -17,52 +19,50 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/worker", tags=["worker"])
 
+# Initialize TaskService
+task_service = TaskService(redis_client)
+
 
 async def submit_and_wait_for_task(
     task_data: Dict[str, Any], max_wait_time: int = 30, return_data_only: bool = False
 ) -> Dict[str, Any]:
     """
-    Submit a task and wait for its completion.
+    Submit a task to the worker and wait for its completion.
 
     Args:
         task_data: The task data to submit
-        max_wait_time: Maximum time to wait in seconds (default: 30)
-        return_data_only: If True, return only the 'data' field from successful results
+        max_wait_time: Maximum time to wait for task completion in seconds
+        return_data_only: If True, return only the data field from the result
 
     Returns:
-        The task result
-
-    Raises:
-        HTTPException: On task failure, timeout, or other errors
+        Task result from the worker
     """
     try:
-        task_id = await submit_task(task_data)
-        task_type = task_data.get("task_type", "unknown")
+        # Submit task directly to Redis queue
+        task_id = str(uuid4())
+        task_data["task_id"] = task_id
+
+        # Ensure we have consistent task types
+        task_type = task_data.get("task_type")
+
+        # Submit to Redis queue
+        await redis_client.submit_task("query_tasks", json.dumps(task_data))
         logger.info(f"Submitted {task_type} task {task_id}")
 
-        # Wait for task completion
+        # Wait for task completion by polling Redis directly
         poll_interval = 0.5  # Poll every 500ms
         elapsed_time = 0
 
         while elapsed_time < max_wait_time:
-            # Check task status
-            status_msg = task_status_subscriber.get_status(task_id)
+            # Check if task result exists in Redis
+            result = await task_service.get_task_result(task_id)
 
-            if status_msg:
-                status = status_msg.get("status")
+            if result:
+                status = result.get("status")
                 logger.debug(f"Task {task_id} status: {status}")
 
                 if status in ["success", "error", "cancelled"]:
-                    # Task completed, get the result
-                    result = await get_task_result(task_id)
-
-                    if not result:
-                        raise HTTPException(status_code=404, detail="Task result not found")
-
-                    # Clean up status tracking
-                    task_status_subscriber.clear_status(task_id)
-
-                    # Return the result based on status
+                    # Task completed
                     if status == "success":
                         return result.get("data") if return_data_only else result
                     elif status == "error":
@@ -77,7 +77,6 @@ async def submit_and_wait_for_task(
 
         # Timeout reached
         logger.error(f"Task {task_id} timed out after {max_wait_time} seconds")
-        task_status_subscriber.clear_status(task_id)
         raise HTTPException(status_code=408, detail="Task timed out")
 
     except HTTPException:
@@ -95,7 +94,7 @@ async def test_db(request: TestDBTask):
     return await submit_and_wait_for_task(task_data)
 
 
-@router.get("/connect/{source_id}")
+@router.get("/connect/{source_id}/")
 async def connect(
     source_id: UUID,
     db: Session = Depends(get_db),
@@ -136,7 +135,7 @@ async def get_connected_sources():
 
 
 # get schema for a source
-@router.get("/schemas/{source_id}")
+@router.get("/schemas/{source_id}/")
 async def get_schemas(source_id: UUID):
     task_data = {
         "task_type": "schema",
@@ -146,22 +145,23 @@ async def get_schemas(source_id: UUID):
     return await submit_and_wait_for_task(task_data, return_data_only=True)
 
 
-@router.delete("/disconnect/{source_id}")
+@router.delete("/disconnect/{source_id}/")
 async def disconnect_source(source_id: UUID):
     task_data = {"task_type": "disconnect", "source_id": str(source_id)}
     return await submit_and_wait_for_task(task_data)
 
 
-@router.get("/result/{task_id}")
+@router.get("/result/{task_id}/")
 async def get_task_result_endpoint(task_id: str):
-    """Get the full result data for a completed task"""
+    """Get the full result data for a completed task using TaskService"""
     try:
-        result = await get_task_result(task_id)
+        result = await task_service.get_task_result(task_id)
         if not result:
             raise HTTPException(status_code=404, detail="Task result not found")
 
-        # Return the full result object with status, data, and error
-        return result
+        # Convert to dict if it's a Pydantic model
+        result_dict = result.model_dump() if hasattr(result, "model_dump") else result
+        return result_dict
     except Exception as e:
         logger.error(f"Error fetching result for task {task_id}: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e)) from e

@@ -55,7 +55,7 @@ async def get_llms(
     return [LLMListResponse.model_validate(llm) for llm in llms]
 
 
-@router.get("/{llm_id}", response_model=LLMResponse)
+@router.get("/{llm_id}/", response_model=LLMResponse)
 async def get_llm(
     llm_id: UUID,
     db: Session = Depends(get_db),
@@ -65,7 +65,7 @@ async def get_llm(
     return LLMResponse.model_validate(llm)
 
 
-@router.put("/{llm_id}", response_model=LLMResponse)
+@router.put("/{llm_id}/", response_model=LLMResponse)
 async def update_llm(
     llm_id: UUID,
     request: UpdateLLMRequest,
@@ -93,7 +93,7 @@ async def update_llm(
     return llm
 
 
-@router.delete("/{llm_id}")
+@router.delete("/{llm_id}/")
 async def delete_llm(
     llm_id: UUID,
     db: Session = Depends(get_db),

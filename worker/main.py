@@ -27,12 +27,12 @@ from task_manager import process_task
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    level=logging.DEBUG, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
 
 # Worker configuration
-HEARTBEAT_INTERVAL = 5  # seconds
+HEARTBEAT_INTERVAL = 30  # seconds
 WORKER_ID = str(uuid.uuid4())
 RUNNING = True
 SHUTDOWN_TIMEOUT = 30  # seconds to wait for graceful shutdown
@@ -79,7 +79,9 @@ def main_loop():
     """Main worker loop"""
     logger.info(f"Starting Dribble worker {WORKER_ID}")
     logger.info("Supported databases: PostgreSQL")
-    logger.info("Supported task types: connect, test_db, execute, schema")
+    logger.info(
+        "Supported task types: connect, test_db, query_execution, schema, disconnect, connected, query_cancel"
+    )
 
     last_heartbeat = 0
 
@@ -99,6 +101,7 @@ def main_loop():
                 # Get and process tasks
                 task_data = get_task_from_queue(timeout=5)
                 if task_data:
+                    logger.info(f"Received task from queue: {task_data}")
                     # Convert dictionary to TaskRequest object
                     task = TaskRequest(**task_data)
                     process_task(task)
