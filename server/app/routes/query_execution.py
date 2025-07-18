@@ -35,6 +35,7 @@ async def execute_query_version_run(
             query_version_id=request.query_version_id,
             client_id=client_id or "default",
             db_session=db,
+            modifiers=request.modifiers,
         )
 
         return {

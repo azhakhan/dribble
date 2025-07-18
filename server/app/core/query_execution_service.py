@@ -18,6 +18,7 @@ from app.core.task_types import (
     TaskStatusUpdate,
 )
 from app.models import QueryRun, QueryVersion, Source
+from app.schemas.query_execute import QueryRunModifiers
 
 logger = logging.getLogger(__name__)
 
@@ -30,13 +31,19 @@ class QueryExecutionService:
     def __init__(self, task_service: TaskService):
         self.task_service = task_service
 
-    async def execute_query_version(self, query_version_id: UUID, db_session: Session) -> str:
+    async def execute_query_version(
+        self,
+        query_version_id: UUID,
+        db_session: Session,
+        modifiers: Optional[QueryRunModifiers] = None,
+    ) -> str:
         """
         Execute a query version and return the task ID.
 
         Args:
             query_version_id: ID of the query version to execute
             db_session: Database session
+            modifiers: Optional query run modifiers
 
         Returns:
             Task ID
@@ -68,6 +75,10 @@ class QueryExecutionService:
                 "worker_session_id": str(query_version.query.source_id),
                 "created_at": datetime.utcnow().isoformat(),
             }
+
+            # Add modifiers if provided
+            if modifiers:
+                task_data["modifiers"] = modifiers.model_dump()
 
             # Submit to worker queue
             # TODO: In future, use different queues per database type

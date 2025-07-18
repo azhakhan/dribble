@@ -15,6 +15,7 @@ from sse_starlette import EventSourceResponse
 from app.core.task_service import TaskService
 from app.core.task_types import TaskStatus, TaskStatusUpdate, TaskType
 from app.core.query_execution_service import QueryExecutionService
+from app.schemas.query_execute import QueryRunModifiers
 
 logger = logging.getLogger(__name__)
 
@@ -249,7 +250,11 @@ class StreamingQueryService:
         self.streaming_service = streaming_service
 
     async def execute_query_with_streaming(
-        self, query_version_id: UUID, client_id: str, db_session
+        self,
+        query_version_id: UUID,
+        client_id: str,
+        db_session,
+        modifiers: Optional[QueryRunModifiers] = None,
     ) -> str:
         """
         Execute a query and set up streaming for the client.
@@ -258,12 +263,15 @@ class StreamingQueryService:
             query_version_id: Query version to execute
             client_id: Client identifier for streaming
             db_session: Database session
+            modifiers: Optional query run modifiers
 
         Returns:
             Task ID
         """
         # Execute the query
-        task_id = await self.query_service.execute_query_version(query_version_id, db_session)
+        task_id = await self.query_service.execute_query_version(
+            query_version_id, db_session, modifiers
+        )
 
         # Add to streaming for the client
         await self.streaming_service.add_task_to_stream(client_id, task_id)
