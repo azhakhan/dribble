@@ -119,7 +119,8 @@ export const useTableEditing = ({ data, dataIndexes }: UseTableEditingParams) =>
         return {
           kind: GridCellKind.Text,
           displayData: "",
-          data: ""
+          data: "",
+          allowOverlay: true
         } as GridCell;
       }
 
@@ -130,7 +131,8 @@ export const useTableEditing = ({ data, dataIndexes }: UseTableEditingParams) =>
         return {
           kind: GridCellKind.Text,
           displayData: "",
-          data: ""
+          data: "",
+          allowOverlay: true
         } as GridCell;
       }
 
@@ -140,7 +142,7 @@ export const useTableEditing = ({ data, dataIndexes }: UseTableEditingParams) =>
       if (cellValue === null) {
         cellValue = "null";
       } else if (typeof cellValue === "object") {
-        cellValue = JSON.stringify(cellValue);
+        cellValue = JSON.stringify(cellValue, null, 2); // Pretty print JSON with indentation
       } else {
         cellValue = String(cellValue);
       }
@@ -149,7 +151,9 @@ export const useTableEditing = ({ data, dataIndexes }: UseTableEditingParams) =>
         kind: GridCellKind.Text,
         displayData: cellValue,
         data: cellValue,
-        copyData: cellValue
+        copyData: cellValue,
+        allowOverlay: true, // Enable overlay editor for double-click functionality
+        readonly: false // Allow editing in overlay
       } as GridCell;
     },
     [dataIndexes, data]

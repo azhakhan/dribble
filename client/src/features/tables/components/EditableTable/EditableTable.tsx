@@ -65,6 +65,7 @@ const EditableTableComponent = ({
         rowHeight={30}
         onColumnResize={handleColumnResize}
         rowMarkers="number"
+        cellActivationBehavior="double-click"
       />
 
       {/* Loading overlay when data exists but query is running */}
