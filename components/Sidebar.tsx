@@ -1,6 +1,7 @@
 "use client";
 
-import { useRef, useState } from "react";
+import React, { useRef, useState } from "react";
+import { Database, Layers, Table2, Eye, FileCode2, MessageSquare } from "lucide-react";
 import { useIde, type ChatMeta, type ConnectionMeta, type NotebookMeta } from "@/lib/store";
 import ConnectionModal from "./ConnectionModal";
 
@@ -73,9 +74,10 @@ function TableNode({
       }
       title={`${schema}.${table}`}
     >
-      <span className="mono" style={{ fontSize: 10, color: kind === "view" ? "#b48ead" : "var(--teal)" }}>
-        {kind === "view" ? "◇" : "▦"}
-      </span>
+      {kind === "view"
+        ? <Eye size={13} color="#b48ead" style={{ flexShrink: 0 }} />
+        : <Table2 size={13} color="var(--teal)" style={{ flexShrink: 0 }} />
+      }
       <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{table}</span>
     </button>
   );
@@ -102,7 +104,7 @@ function SchemaNode({ conn, schema, selectedKey, setSelectedKey }: { conn: Conne
     <div>
       <button className={`tree-row ${selectedKey === key ? "selected" : ""}`} style={{ paddingLeft: 24 }} onClick={toggle}>
         <Chevron open={open} />
-        <span style={{ color: "var(--accent-dim)" }}>◆</span>
+        <Layers size={13} color="var(--accent-dim)" style={{ flexShrink: 0 }} />
         <span>{schema}</span>
       </button>
       {open && error && <div style={{ paddingLeft: 40, color: "var(--danger)", fontSize: 11 }}>{error}</div>}
@@ -157,7 +159,7 @@ function ConnectionNode({
       <div style={{ display: "flex", alignItems: "center", position: "relative" }} className="conn-row">
         <button className={`tree-row ${selectedKey === key ? "selected" : ""}`} onClick={toggle} title={`${conn.host}:${conn.port}/${conn.database}`}>
           <Chevron open={open} />
-          <span style={{ color: open ? "var(--green)" : "var(--text-faint)" }}>●</span>
+          <Database size={13} color={open ? "var(--green)" : "var(--text-faint)"} style={{ flexShrink: 0 }} />
           <span style={{ fontWeight: 500 }}>{conn.name}</span>
           <span className="mono" style={{ fontSize: 10, color: "var(--text-faint)", marginLeft: 2 }}>
             {conn.database}
@@ -188,15 +190,13 @@ function ResourceNode({
   item,
   kind,
   icon,
-  color,
   onOpen,
   onDelete,
   onRename,
 }: {
   item: NotebookMeta | ChatMeta;
   kind: "query" | "chat";
-  icon: string;
-  color: string;
+  icon: React.ReactNode;
   onOpen: () => void;
   onDelete: () => void;
   onRename: (name: string) => Promise<void>;
@@ -234,7 +234,7 @@ function ResourceNode({
   if (editing) {
     return (
       <div style={{ display: "flex", alignItems: "center", padding: "1px 4px 1px 8px" }}>
-        <span className="mono" style={{ width: 17, fontSize: 10, color }}>
+        <span style={{ width: 17, display: "flex", alignItems: "center" }}>
           {icon}
         </span>
         <input
@@ -260,7 +260,7 @@ function ResourceNode({
   return (
     <div style={{ display: "flex", alignItems: "center", position: "relative" }}>
       <button className="tree-row" onClick={onOpen} onDoubleClick={startEditing} title={item.name}>
-        <span className="mono" style={{ fontSize: 10, color }}>
+        <span style={{ display: "flex", alignItems: "center" }}>
           {icon}
         </span>
         <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{item.name}</span>
@@ -387,8 +387,7 @@ export default function Sidebar({ connections, notebooks, chats, refreshConnecti
             key={nb.id}
             item={nb}
             kind="query"
-            icon="❯_"
-            color="var(--accent)"
+            icon={<FileCode2 size={13} color="var(--accent)" />}
             onOpen={() => openTab({ id: `notebook:${nb.id}`, kind: "notebook", title: nb.name, connectionId: nb.connection_id, resourceId: nb.id })}
             onDelete={() => deleteResource("notebooks", nb.id)}
             onRename={(name) => renameResource("notebooks", nb.id, name)}
@@ -408,8 +407,7 @@ export default function Sidebar({ connections, notebooks, chats, refreshConnecti
             key={chat.id}
             item={chat}
             kind="chat"
-            icon="✦"
-            color="#b48ead"
+            icon={<MessageSquare size={13} color="#b48ead" />}
             onOpen={() => openTab({ id: `chat:${chat.id}`, kind: "chat", title: chat.name, connectionId: chat.connection_id, resourceId: chat.id })}
             onDelete={() => deleteResource("chats", chat.id)}
             onRename={(name) => renameResource("chats", chat.id, name)}

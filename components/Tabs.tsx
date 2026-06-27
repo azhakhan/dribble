@@ -1,18 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import React, { useState } from "react";
+import { Table2, FileCode2, MessageSquare } from "lucide-react";
 import { useIde, type Tab } from "@/lib/store";
 
-const KIND_ICONS: Record<Tab["kind"], string> = {
-  table: "▦",
-  notebook: "❯_",
-  chat: "✦",
-};
-
-const KIND_COLORS: Record<Tab["kind"], string> = {
-  table: "var(--teal)",
-  notebook: "var(--accent)",
-  chat: "#b48ead",
+const KIND_ICONS: Record<Tab["kind"], React.ReactElement> = {
+  table: <Table2 size={13} color="var(--teal)" />,
+  notebook: <FileCode2 size={13} color="var(--accent)" />,
+  chat: <MessageSquare size={13} color="#b48ead" />,
 };
 
 export default function Tabs() {
@@ -64,7 +59,7 @@ export default function Tabs() {
           }}
           title={tab.title}
         >
-          <span className="mono" style={{ fontSize: 10, color: KIND_COLORS[tab.kind] }}>
+          <span style={{ display: "flex", alignItems: "center" }}>
             {KIND_ICONS[tab.kind]}
           </span>
           <span style={{ maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis" }}>{tab.title}</span>
