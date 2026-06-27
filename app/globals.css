@@ -1,0 +1,222 @@
+@import "tailwindcss";
+
+:root {
+  /* Graphite + amber "precision instrument" theme */
+  --bg0: #181818;
+  --bg1: #1e1e1e;
+  --bg2: #242424;
+  --bg3: #2c2c2c;
+  --border: #2a2a2a;
+  --border-soft: #202020;
+  --text: #d7dbe4;
+  --text-dim: #9aa3b5;
+  --text-faint: #5d6678;
+  --accent: #e8a14c;
+  --accent-dim: #8a6736;
+  --teal: #58b8aa;
+  --danger: #e0606a;
+  --green: #7fb069;
+  --sel: rgba(232, 161, 76, 0.12);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg0);
+  color: var(--text);
+  font-family: var(--font-sans), system-ui, sans-serif;
+  font-size: 13px;
+  -webkit-font-smoothing: antialiased;
+}
+
+.mono {
+  font-family: var(--font-mono), ui-monospace, monospace;
+}
+
+::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+::-webkit-scrollbar-thumb {
+  background: #2c2c2c;
+  border-radius: 5px;
+  border: 2px solid var(--bg1);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #3a3a3a;
+}
+::-webkit-scrollbar-track,
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+button {
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+}
+button:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+input,
+textarea,
+select {
+  font: inherit;
+  color: var(--text);
+  background: var(--bg0);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 5px 8px;
+  outline: none;
+}
+input:focus,
+textarea:focus,
+select:focus {
+  border-color: var(--accent-dim);
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--bg2);
+  color: var(--text);
+  transition: background 0.12s, border-color 0.12s;
+  white-space: nowrap;
+}
+.btn:hover:not(:disabled) {
+  background: var(--bg3);
+  border-color: #333333;
+}
+.btn-accent {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #14161a;
+  font-weight: 600;
+}
+.btn-accent:hover:not(:disabled) {
+  background: #f0b066;
+  border-color: #f0b066;
+}
+.btn-ghost {
+  border-color: transparent;
+  background: transparent;
+  color: var(--text-dim);
+}
+.btn-ghost:hover:not(:disabled) {
+  background: var(--bg2);
+  color: var(--text);
+}
+
+.tree-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  width: 100%;
+  padding: 3px 8px;
+  border-radius: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: left;
+  user-select: none;
+}
+.tree-row:hover {
+  background: var(--bg2);
+}
+.tree-row.selected {
+  background: var(--sel);
+  color: var(--accent);
+}
+
+.tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 34px;
+  padding: 0 10px 0 14px;
+  border-right: 1px solid var(--border-soft);
+  color: var(--text-dim);
+  background: transparent;
+  white-space: nowrap;
+  user-select: none;
+  cursor: pointer;
+  position: relative;
+}
+.tab.active {
+  color: var(--text);
+  background: var(--bg0);
+}
+.tab.active::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--accent);
+}
+.tab.dragover {
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+.tab .close {
+  opacity: 0;
+  border-radius: 3px;
+  padding: 1px 3px;
+  line-height: 1;
+}
+.tab:hover .close,
+.tab.active .close {
+  opacity: 0.7;
+}
+.tab .close:hover {
+  opacity: 1;
+  background: var(--bg3);
+}
+
+.cell-card {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg1);
+  overflow: hidden;
+  transition: border-color 0.15s;
+}
+.cell-card:focus-within {
+  border-color: var(--accent-dim);
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 0.3; }
+  50% { opacity: 1; }
+}
+.pulse {
+  animation: pulse-dot 1.2s ease-in-out infinite;
+}
+
+@keyframes fadeup {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: none; }
+}
+.fadeup {
+  animation: fadeup 0.18s ease-out;
+}
+
+details.toolcall > summary {
+  list-style: none;
+  cursor: pointer;
+}
+details.toolcall > summary::-webkit-details-marker {
+  display: none;
+}
