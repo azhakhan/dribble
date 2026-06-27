@@ -41,6 +41,20 @@ export interface TableDataResult extends QueryResult {
   totalCount: number | null;
 }
 
+export interface PagedQueryParams {
+  limit: number;
+  offset: number;
+  /** Run a count(*) over the query to populate totalCount (do this once, then reuse while paging). */
+  withCount: boolean;
+}
+
+export interface PagedQueryResult extends QueryResult {
+  /** Total rows the query produces, or null if uncounted / non-pageable. */
+  totalCount: number | null;
+  /** True when the result was served via server-side LIMIT/OFFSET paging. */
+  paged: boolean;
+}
+
 export interface DatabaseDriver {
   readonly type: DatabaseType;
   listSchemas(): Promise<string[]>;
@@ -48,5 +62,7 @@ export interface DatabaseDriver {
   listColumns(schema: string, table: string): Promise<ColumnInfo[]>;
   getTableData(params: TableDataParams): Promise<TableDataResult>;
   runQuery(sql: string, maxRows?: number): Promise<QueryResult>;
+  /** Run an arbitrary user query with server-side pagination (and optional total count). */
+  runPagedQuery(sql: string, params: PagedQueryParams): Promise<PagedQueryResult>;
   end(): Promise<void>;
 }

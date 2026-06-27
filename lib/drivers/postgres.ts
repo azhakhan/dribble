@@ -3,6 +3,8 @@ import type {
   ColumnInfo,
   ConnectionConfig,
   DatabaseDriver,
+  PagedQueryParams,
+  PagedQueryResult,
   QueryResult,
   TableDataParams,
   TableDataResult,
@@ -31,6 +33,20 @@ const OID_NAMES: Record<number, string> = {
 
 function quoteIdent(name: string): string {
   return `"${name.replace(/"/g, '""')}"`;
+}
+
+/**
+ * Returns the query stripped of a trailing semicolon if it can be safely wrapped
+ * in `SELECT * FROM (...)` for LIMIT/OFFSET paging, or null if it can't (multiple
+ * statements, or anything other than a SELECT / WITH query). A `;` inside a string
+ * literal conservatively disables paging — the query still runs, just unpaged.
+ */
+function pageableSql(sql: string): string | null {
+  let s = sql.trim();
+  if (s.endsWith(";")) s = s.slice(0, -1).trim();
+  if (!s || s.includes(";")) return null;
+  if (!/^(with|select)\b/i.test(s)) return null;
+  return s;
 }
 
 function jsonSafe(v: unknown): unknown {
@@ -126,6 +142,35 @@ export class PostgresDriver implements DatabaseDriver {
       // count can fail (e.g. permissions) without blocking the data fetch
     }
     return { ...result, totalCount };
+  }
+
+  async runPagedQuery(sql: string, p: PagedQueryParams): Promise<PagedQueryResult> {
+    const pageable = pageableSql(sql);
+    const limit = Math.min(Math.max(p.limit, 1), MAX_ROWS);
+    const offset = Math.max(p.offset, 0);
+
+    // Non-SELECT, multi-statement, or DDL — can't be wrapped, so run as-is.
+    if (!pageable) {
+      const res = await this.runQuery(sql);
+      return { ...res, totalCount: null, paged: false };
+    }
+
+    const sub = `(${pageable}) AS _dribble_sub`;
+    const result = await this.runQuery(
+      `SELECT * FROM ${sub} LIMIT ${limit} OFFSET ${offset}`,
+      limit,
+    );
+
+    let totalCount: number | null = null;
+    if (p.withCount) {
+      try {
+        const cnt = await this.pool.query(`SELECT count(*)::int8 AS n FROM ${sub}`);
+        totalCount = Number(cnt.rows[0].n);
+      } catch {
+        // count can fail (e.g. permissions); paging still works without a total
+      }
+    }
+    return { ...result, totalCount, paged: true };
   }
 
   async runQuery(sql: string, maxRows = MAX_ROWS): Promise<QueryResult> {

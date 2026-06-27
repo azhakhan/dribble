@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import type { Tab } from "@/lib/store";
 import type { TableDataResult } from "@/lib/drivers/types";
 import ResultsGrid from "./ResultsGrid";
+import PaginationBar from "./PaginationBar";
 
 export default function TableTab({ tab }: { tab: Tab }) {
   const [data, setData] = useState<TableDataResult | null>(null);
@@ -131,60 +132,15 @@ export default function TableTab({ tab }: { tab: Tab }) {
         )}
       </div>
 
-      {/* pagination */}
-      <div
-        className="mono"
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 10,
-          padding: "4px 10px",
-          borderTop: "1px solid var(--border)",
-          background: "var(--bg1)",
-          fontSize: 11,
-          color: "var(--text-dim)",
-          flexShrink: 0,
-        }}
-      >
-        <button className="btn-ghost" style={{ padding: "1px 8px" }} disabled={page === 0} onClick={() => setPage(0)}>
-          «
-        </button>
-        <button className="btn-ghost" style={{ padding: "1px 8px" }} disabled={page === 0} onClick={() => setPage((p) => p - 1)}>
-          ‹
-        </button>
-        <span>
-          page {page + 1}
-          {totalPages != null ? ` / ${totalPages}` : ""}
-        </span>
-        <button
-          className="btn-ghost"
-          style={{ padding: "1px 8px" }}
-          disabled={totalPages != null ? page + 1 >= totalPages : (data?.rows.length ?? 0) < limit}
-          onClick={() => setPage((p) => p + 1)}
-        >
-          ›
-        </button>
-        {totalPages != null && (
-          <button className="btn-ghost" style={{ padding: "1px 8px" }} disabled={page + 1 >= totalPages} onClick={() => setPage(totalPages - 1)}>
-            »
-          </button>
-        )}
-        <span style={{ marginLeft: "auto" }}>{data?.totalCount != null ? `${data.totalCount.toLocaleString()} rows` : ""}</span>
-        <select
-          value={limit}
-          onChange={(e) => {
-            setLimit(Number(e.target.value));
-            setPage(0);
-          }}
-          style={{ padding: "1px 4px", fontSize: 11 }}
-        >
-          {[50, 100, 200, 500, 1000].map((n) => (
-            <option key={n} value={n}>
-              {n} / page
-            </option>
-          ))}
-        </select>
-      </div>
+      <PaginationBar
+        page={page}
+        totalPages={totalPages}
+        limit={limit}
+        totalCount={data?.totalCount}
+        rowsOnPage={data?.rows.length ?? 0}
+        onPage={setPage}
+        onLimit={(n) => { setLimit(n); setPage(0); }}
+      />
     </div>
   );
 }

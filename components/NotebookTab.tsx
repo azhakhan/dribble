@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useIde, type ConnectionMeta, type Tab } from "@/lib/store";
-import type { QueryResult } from "@/lib/drivers/types";
+import type { PagedQueryResult } from "@/lib/drivers/types";
 import SqlEditor from "./SqlEditor";
 import ResultsPanel from "./ResultsPanel";
 
@@ -29,7 +29,16 @@ export default function NotebookTab({
   const [cellResults, setCellResults] = useState<
     Record<
       string,
-      { result: QueryResult | null; error: string | null; running: boolean }
+      {
+        result: PagedQueryResult | null;
+        error: string | null;
+        running: boolean;
+        // pagination state for the query that produced `result`
+        sql: string;
+        page: number;
+        limit: number;
+        totalCount: number | null;
+      }
     >
   >({});
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -95,42 +104,80 @@ export default function NotebookTab({
     });
   };
 
-  async function runCell(cell: Cell) {
-    if (!connectionId || !cell.sql.trim() || cellResults[cell.id]?.running)
-      return;
+  const DEFAULT_LIMIT = 100;
+
+  // Run a cell from scratch: page 0, fresh count(*).
+  function runCell(cell: Cell) {
+    if (cellResults[cell.id]?.running) return;
+    loadPage(cell.id, cell.sql, 0, cellResults[cell.id]?.limit ?? DEFAULT_LIMIT, true);
+  }
+
+  // Fetch a single page. `withCount` runs count(*) once (on Run); paging reuses it.
+  async function loadPage(
+    cellId: string,
+    sql: string,
+    page: number,
+    limit: number,
+    withCount: boolean,
+  ) {
+    if (!connectionId || !sql.trim()) return;
     setCellResults((prev) => ({
       ...prev,
-      [cell.id]: { result: null, error: null, running: true },
+      [cellId]: {
+        result: prev[cellId]?.result ?? null,
+        error: null,
+        running: true,
+        sql,
+        page,
+        limit,
+        totalCount: withCount ? null : prev[cellId]?.totalCount ?? null,
+      },
     }));
     try {
       const res = await fetch(`/api/db/${connectionId}/query`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sql: cell.sql }),
+        body: JSON.stringify({ sql, limit, offset: page * limit, count: withCount }),
       });
       const body = await res.json();
       if (res.ok) {
         setCellResults((prev) => ({
           ...prev,
-          [cell.id]: { result: body, error: null, running: false },
+          [cellId]: {
+            result: body,
+            error: null,
+            running: false,
+            sql,
+            page,
+            limit,
+            totalCount: withCount ? body.totalCount : prev[cellId]?.totalCount ?? null,
+          },
         }));
       } else {
         setCellResults((prev) => ({
           ...prev,
-          [cell.id]: {
+          [cellId]: {
             result: null,
             error: body.error ?? "Query failed",
             running: false,
+            sql,
+            page,
+            limit,
+            totalCount: null,
           },
         }));
       }
     } catch (err) {
       setCellResults((prev) => ({
         ...prev,
-        [cell.id]: {
+        [cellId]: {
           result: null,
           error: err instanceof Error ? err.message : String(err),
           running: false,
+          sql,
+          page,
+          limit,
+          totalCount: null,
         },
       }));
     }
@@ -294,6 +341,17 @@ export default function NotebookTab({
                     error={cr.error}
                     running={cr.running}
                     emptyHint=""
+                    serverPagination={
+                      cr.result?.paged
+                        ? {
+                            page: cr.page,
+                            limit: cr.limit,
+                            totalCount: cr.totalCount,
+                            onPage: (p) => loadPage(cell.id, cr.sql, p, cr.limit, false),
+                            onLimit: (n) => loadPage(cell.id, cr.sql, 0, n, false),
+                          }
+                        : null
+                    }
                   />
                 </div>
               )}
