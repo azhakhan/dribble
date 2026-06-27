@@ -23,6 +23,18 @@
   box-sizing: border-box;
 }
 
+/* Resizable dividers (sidebar, panes, cell results) */
+.drag-handle {
+  position: relative;
+  background: transparent;
+  transition: background 0.12s;
+  z-index: 5;
+}
+.drag-handle:hover,
+.drag-handle:active {
+  background: var(--accent-dim);
+}
+
 html,
 body {
   height: 100%;

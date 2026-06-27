@@ -24,9 +24,16 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
          name = COALESCE($2, name),
          cells = COALESCE($3, cells),
          connection_id = COALESCE($4, connection_id),
+         results = COALESCE($5, results),
          updated_at = now()
        WHERE id = $1 RETURNING *`,
-      [id, body.name ?? null, body.cells ? JSON.stringify(body.cells) : null, body.connectionId ?? null]
+      [
+        id,
+        body.name ?? null,
+        body.cells ? JSON.stringify(body.cells) : null,
+        body.connectionId ?? null,
+        body.results ? JSON.stringify(body.results) : null,
+      ]
     );
     if (!res.rows.length) return NextResponse.json({ error: "Not found" }, { status: 404 });
     return NextResponse.json(res.rows[0]);

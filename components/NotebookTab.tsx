@@ -5,10 +5,24 @@ import { useIde, type ConnectionMeta, type Tab } from "@/lib/store";
 import type { PagedQueryResult } from "@/lib/drivers/types";
 import SqlEditor from "./SqlEditor";
 import ResultsPanel from "./ResultsPanel";
+import DragHandle from "./DragHandle";
+import { formatAge, isStale } from "@/lib/time";
 
 interface Cell {
   id: string;
   sql: string;
+}
+
+const DEFAULT_RESULT_HEIGHT = 300;
+
+// A persisted page of results for one cell.
+interface CellSnapshot {
+  result: PagedQueryResult | null;
+  sql: string;
+  page: number;
+  limit: number;
+  totalCount: number | null;
+  ranAt: string;
 }
 
 export default function NotebookTab({
@@ -21,6 +35,9 @@ export default function NotebookTab({
   onRenamed: () => void;
 }) {
   const renameTab = useIde((s) => s.renameTab);
+  const notebookId = tab.resourceId!;
+  const cellHeights = useIde((s) => s.layout.cellHeights[notebookId]);
+  const setCellHeight = useIde((s) => s.setCellHeight);
   const [cells, setCells] = useState<Cell[] | null>(null);
   const [name, setName] = useState(tab.title);
   const [connectionId, setConnectionId] = useState<string | null>(
@@ -38,10 +55,17 @@ export default function NotebookTab({
         page: number;
         limit: number;
         totalCount: number | null;
+        // when the persisted snapshot was produced (null for a live, just-run result)
+        ranAt: string | null;
       }
     >
   >({});
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingPatch = useRef<Record<string, unknown>>({});
+  // Persisted result snapshots, kept in a ref so a single-cell run can save
+  // without clobbering the other cells' snapshots.
+  const snapshots = useRef<Record<string, CellSnapshot>>({});
+  const dragStartHeight = useRef(0);
 
   useEffect(() => {
     (async () => {
@@ -55,20 +79,43 @@ export default function NotebookTab({
         );
         setName(nb.name);
         setConnectionId(nb.connection_id);
+        // Rehydrate cached result snapshots produced the last time this ran.
+        const saved: Record<string, CellSnapshot> =
+          nb.results && typeof nb.results === "object" ? nb.results : {};
+        snapshots.current = saved;
+        const hydrated: typeof cellResults = {};
+        for (const [cid, s] of Object.entries(saved)) {
+          hydrated[cid] = {
+            result: s.result,
+            error: null,
+            running: false,
+            sql: s.sql,
+            page: s.page,
+            limit: s.limit,
+            totalCount: s.totalCount,
+            ranAt: s.ranAt,
+          };
+        }
+        setCellResults(hydrated);
       }
     })();
   }, [tab.resourceId]);
 
   const persist = useCallback(
-    (patch: { cells?: Cell[]; name?: string; connectionId?: string }) => {
+    (patch: { cells?: Cell[]; name?: string; connectionId?: string; results?: Record<string, CellSnapshot> }) => {
+      // Merge patches so a SQL edit and a fresh result within the debounce
+      // window don't overwrite each other.
+      pendingPatch.current = { ...pendingPatch.current, ...patch };
       if (saveTimer.current) clearTimeout(saveTimer.current);
       saveTimer.current = setTimeout(() => {
+        const body = pendingPatch.current;
+        pendingPatch.current = {};
         fetch(`/api/notebooks/${tab.resourceId}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(patch),
+          body: JSON.stringify(body),
         }).then(() => {
-          if (patch.name) onRenamed();
+          if (body.name) onRenamed();
         });
       }, 600);
     },
@@ -99,8 +146,19 @@ export default function NotebookTab({
     setCells((prev) => {
       const next = prev!.filter((c) => c.id !== id);
       const final = next.length ? next : [{ id: crypto.randomUUID(), sql: "" }];
-      persist({ cells: final });
+      if (snapshots.current[id]) {
+        delete snapshots.current[id];
+        persist({ cells: final, results: snapshots.current });
+      } else {
+        persist({ cells: final });
+      }
       return final;
+    });
+    setCellResults((prev) => {
+      if (!prev[id]) return prev;
+      const next = { ...prev };
+      delete next[id];
+      return next;
     });
   };
 
@@ -131,6 +189,7 @@ export default function NotebookTab({
         page,
         limit,
         totalCount: withCount ? null : prev[cellId]?.totalCount ?? null,
+        ranAt: prev[cellId]?.ranAt ?? null,
       },
     }));
     try {
@@ -141,18 +200,21 @@ export default function NotebookTab({
       });
       const body = await res.json();
       if (res.ok) {
+        const ranAt = new Date().toISOString();
+        // On Run we counted; while paging we keep the count from the run.
+        const totalCount: number | null = withCount
+          ? body.totalCount
+          : cellResults[cellId]?.totalCount ?? snapshots.current[cellId]?.totalCount ?? null;
         setCellResults((prev) => ({
           ...prev,
-          [cellId]: {
-            result: body,
-            error: null,
-            running: false,
-            sql,
-            page,
-            limit,
-            totalCount: withCount ? body.totalCount : prev[cellId]?.totalCount ?? null,
-          },
+          [cellId]: { result: body, error: null, running: false, sql, page, limit, totalCount, ranAt },
         }));
+        // Persist this page as the cell's snapshot for next time.
+        snapshots.current = {
+          ...snapshots.current,
+          [cellId]: { result: body, sql, page, limit, totalCount, ranAt },
+        };
+        persist({ results: snapshots.current });
       } else {
         setCellResults((prev) => ({
           ...prev,
@@ -164,6 +226,7 @@ export default function NotebookTab({
             page,
             limit,
             totalCount: null,
+            ranAt: null,
           },
         }));
       }
@@ -178,6 +241,7 @@ export default function NotebookTab({
           page,
           limit,
           totalCount: null,
+          ranAt: null,
         },
       }));
     }
@@ -270,6 +334,10 @@ export default function NotebookTab({
           const lines = Math.max(cell.sql.split("\n").length, 2);
           const height = Math.min(Math.max(lines * 19 + 18, 60), 360);
           const cr = cellResults[cell.id];
+          const resultHeight = cellHeights?.[cell.id] ?? DEFAULT_RESULT_HEIGHT;
+          // A cached snapshot is stale if the SQL changed since, or it's old.
+          const sqlChanged = !!cr?.ranAt && cr.sql !== cell.sql;
+          const stale = !!cr?.ranAt && !cr.running && (sqlChanged || isStale(cr.ranAt));
           return (
             <div key={cell.id} className="cell-card fadeup" style={{ flexShrink: 0 }}>
               <div
@@ -301,6 +369,15 @@ export default function NotebookTab({
                 >
                   [{i + 1}]
                 </span>
+                {cr?.ranAt && !cr.running && (
+                  <span
+                    className="mono"
+                    style={{ fontSize: 10, color: stale ? "var(--accent)" : "var(--text-faint)" }}
+                    title={stale ? (sqlChanged ? "SQL changed since this ran — re-run for fresh results" : "These results may be out of date — re-run for fresh results") : undefined}
+                  >
+                    {stale ? "⚠ stale · " : ""}ran {formatAge(cr.ranAt)}
+                  </span>
+                )}
                 <span style={{ marginLeft: "auto", display: "flex", gap: 2 }}>
                   <button
                     className="btn-ghost"
@@ -329,10 +406,11 @@ export default function NotebookTab({
                 height={height}
               />
               {cr && (
+                <>
                 <div
                   style={{
                     borderTop: "1px solid var(--border-soft)",
-                    height: 300,
+                    height: resultHeight,
                     flexShrink: 0,
                   }}
                 >
@@ -354,6 +432,20 @@ export default function NotebookTab({
                     }
                   />
                 </div>
+                <DragHandle
+                  orientation="horizontal"
+                  onDragStart={() => {
+                    dragStartHeight.current = resultHeight;
+                  }}
+                  onDrag={(dy) =>
+                    setCellHeight(
+                      notebookId,
+                      cell.id,
+                      Math.min(Math.max(dragStartHeight.current + dy, 120), 900),
+                    )
+                  }
+                />
+                </>
               )}
             </div>
           );

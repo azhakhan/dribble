@@ -57,6 +57,10 @@ interface Props {
   sortColumn?: string;
   sortDir?: "asc" | "desc";
   onHeaderClick?: (columnName: string) => void;
+  /** Controlled column widths keyed by `${index}:${name}`. When provided, the
+   *  parent owns the state (and persists it); otherwise it's local-only. */
+  columnWidths?: Record<string, number>;
+  onColumnWidthsChange?: (widths: Record<string, number>) => void;
 }
 
 export default function ResultsGrid({
@@ -64,10 +68,13 @@ export default function ResultsGrid({
   sortColumn,
   sortDir,
   onHeaderClick,
+  columnWidths: controlledWidths,
+  onColumnWidthsChange,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ width: 0, height: 0 });
-  const [columnWidths, setColumnWidths] = useState<Record<string, number>>({});
+  const [localWidths, setLocalWidths] = useState<Record<string, number>>({});
+  const columnWidths = controlledWidths ?? localWidths;
 
   useEffect(() => {
     const el = containerRef.current;
@@ -97,10 +104,15 @@ export default function ResultsGrid({
     [columnWidths, result.columns, sortColumn, sortDir],
   );
 
-  const resizeColumn = useCallback((column: GridColumn, newSize: number) => {
-    const id = String(column.id);
-    setColumnWidths((prev) => ({ ...prev, [id]: newSize }));
-  }, []);
+  const resizeColumn = useCallback(
+    (column: GridColumn, newSize: number) => {
+      const id = String(column.id);
+      const next = { ...columnWidths, [id]: newSize };
+      if (onColumnWidthsChange) onColumnWidthsChange(next);
+      else setLocalWidths(next);
+    },
+    [columnWidths, onColumnWidthsChange],
+  );
 
   const getCellContent = useCallback(
     ([col, row]: Item): GridCell => {

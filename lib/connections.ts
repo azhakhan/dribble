@@ -63,10 +63,22 @@ export async function getDriver(connectionId: string): Promise<DatabaseDriver> {
   return driver;
 }
 
-/** Keep connections alive while the browser tab is open. */
-export function touchAll(): void {
+/**
+ * Keep the given connections warm; everything else is left to idle out. The
+ * client passes the connections its open tabs use, so connections opened just
+ * to browse the schema tree get evicted ~60s after the last query.
+ */
+export function touch(ids: string[]): void {
   const now = Date.now();
-  for (const entry of registry().values()) entry.lastUsed = now;
+  const keep = new Set(ids);
+  for (const [id, entry] of registry()) {
+    if (keep.has(id)) entry.lastUsed = now;
+  }
+}
+
+/** Ids of connections with a live driver open right now. */
+export function connectedIds(): string[] {
+  return [...registry().keys()];
 }
 
 export async function disconnect(connectionId: string): Promise<void> {

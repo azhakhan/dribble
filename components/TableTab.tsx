@@ -1,12 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import type { Tab } from "@/lib/store";
+import { useIde, type Tab } from "@/lib/store";
 import type { TableDataResult } from "@/lib/drivers/types";
 import ResultsGrid from "./ResultsGrid";
 import PaginationBar from "./PaginationBar";
 
 export default function TableTab({ tab }: { tab: Tab }) {
+  const columnWidths = useIde((s) => s.layout.columnWidths[tab.id]);
+  const setColumnWidths = useIde((s) => s.setColumnWidths);
   const [data, setData] = useState<TableDataResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -119,7 +121,14 @@ export default function TableTab({ tab }: { tab: Tab }) {
             {error}
           </pre>
         ) : data ? (
-          <ResultsGrid result={data} sortColumn={sortColumn} sortDir={sortDir} onHeaderClick={onHeaderClick} />
+          <ResultsGrid
+            result={data}
+            sortColumn={sortColumn}
+            sortDir={sortDir}
+            onHeaderClick={onHeaderClick}
+            columnWidths={columnWidths ?? {}}
+            onColumnWidthsChange={(w) => setColumnWidths(tab.id, w)}
+          />
         ) : (
           <div style={{ display: "grid", placeItems: "center", width: "100%", color: "var(--text-faint)" }}>
             {loading ? "loading…" : ""}

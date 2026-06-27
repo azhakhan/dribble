@@ -6,6 +6,8 @@ import { DefaultChatTransport, type UIMessage } from "ai";
 import { useIde, type ConnectionMeta, type Tab } from "@/lib/store";
 import type { QueryResult } from "@/lib/drivers/types";
 import ResultsPanel from "./ResultsPanel";
+import DragHandle from "./DragHandle";
+import { formatAge } from "@/lib/time";
 
 interface ToolPart {
   type: string;
@@ -101,6 +103,7 @@ function ChatInner({
   connections,
   initialMessages,
   initialConnectionId,
+  updatedAt,
   onFirstMessage,
   onRename,
 }: {
@@ -108,12 +111,19 @@ function ChatInner({
   connections: ConnectionMeta[];
   initialMessages: UIMessage[];
   initialConnectionId: string | null;
+  updatedAt: string | null;
   onFirstMessage: (text: string) => void;
   onRename: (name: string) => void;
 }) {
+  const chatId = tab.resourceId!;
+  const messageShare = useIde((s) => s.layout.chatSplit[chatId] ?? 0.55);
+  const setChatSplit = useIde((s) => s.setChatSplit);
   const [connectionId, setConnectionId] = useState<string | null>(initialConnectionId ?? connections[0]?.id ?? null);
   const [input, setInput] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
+  const resultsRef = useRef<HTMLDivElement>(null);
+  const dragTotal = useRef(0);
+  const dragStartResults = useRef(0);
   const sentFirst = useRef(initialMessages.length > 0);
 
   const transport = useMemo(
@@ -187,7 +197,7 @@ function ChatInner({
       </div>
 
       {/* messages */}
-      <div ref={scrollRef} style={{ flex: "1 1 55%", minHeight: 0, overflowY: "auto", padding: "14px 18px" }}>
+      <div ref={scrollRef} style={{ flex: `${messageShare} 1 0`, minHeight: 0, overflowY: "auto", padding: "14px 18px" }}>
         {messages.length === 0 && (
           <div style={{ color: "var(--text-faint)", textAlign: "center", marginTop: 60, lineHeight: 1.8 }}>
             Ask anything about your data.
@@ -267,9 +277,35 @@ function ChatInner({
         </div>
       </div>
 
+      {/* draggable boundary between the chat and the results panel */}
+      <DragHandle
+        orientation="horizontal"
+        onDragStart={() => {
+          const msg = scrollRef.current?.offsetHeight ?? 0;
+          const res = resultsRef.current?.offsetHeight ?? 0;
+          dragTotal.current = msg + res;
+          dragStartResults.current = res;
+        }}
+        onDrag={(dy) => {
+          if (dragTotal.current <= 0) return;
+          const resShare = (dragStartResults.current - dy) / dragTotal.current;
+          setChatSplit(chatId, Math.min(Math.max(1 - resShare, 0.15), 0.85));
+        }}
+      />
+
       {/* shared results panel — last query the agent ran */}
-      <div style={{ flex: "1 1 45%", minHeight: 120, borderTop: "1px solid var(--border)" }}>
-        <ResultsPanel result={result} error={null} running={false} emptyHint="The agent's final query results appear here" />
+      <div ref={resultsRef} style={{ flex: `${1 - messageShare} 1 0`, minHeight: 80, borderTop: "1px solid var(--border)", display: "flex", flexDirection: "column" }}>
+        {result && !busy && updatedAt && (
+          <div
+            className="mono"
+            style={{ padding: "2px 12px", fontSize: 10, color: "var(--text-faint)", borderBottom: "1px solid var(--border-soft)", flexShrink: 0 }}
+          >
+            snapshot · last run {formatAge(updatedAt)}
+          </div>
+        )}
+        <div style={{ flex: 1, minHeight: 0 }}>
+          <ResultsPanel result={result} error={null} running={false} emptyHint="The agent's final query results appear here" />
+        </div>
       </div>
     </div>
   );
@@ -277,7 +313,7 @@ function ChatInner({
 
 export default function ChatTab({ tab, connections, onRenamed }: { tab: Tab; connections: ConnectionMeta[]; onRenamed: () => void }) {
   const renameTab = useIde((s) => s.renameTab);
-  const [loaded, setLoaded] = useState<{ messages: UIMessage[]; connectionId: string | null } | null>(null);
+  const [loaded, setLoaded] = useState<{ messages: UIMessage[]; connectionId: string | null; updatedAt: string | null } | null>(null);
   const renameTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -285,9 +321,13 @@ export default function ChatTab({ tab, connections, onRenamed }: { tab: Tab; con
       const res = await fetch(`/api/chats/${tab.resourceId}`);
       if (res.ok) {
         const chat = await res.json();
-        setLoaded({ messages: Array.isArray(chat.messages) ? chat.messages : [], connectionId: chat.connection_id });
+        setLoaded({
+          messages: Array.isArray(chat.messages) ? chat.messages : [],
+          connectionId: chat.connection_id,
+          updatedAt: chat.updated_at ?? null,
+        });
       } else {
-        setLoaded({ messages: [], connectionId: null });
+        setLoaded({ messages: [], connectionId: null, updatedAt: null });
       }
     })();
   }, [tab.resourceId]);
@@ -317,6 +357,7 @@ export default function ChatTab({ tab, connections, onRenamed }: { tab: Tab; con
       connections={connections}
       initialMessages={loaded.messages}
       initialConnectionId={loaded.connectionId}
+      updatedAt={loaded.updatedAt}
       onRename={persistName}
       onFirstMessage={(text) => {
         const title = text.length > 40 ? text.slice(0, 40) + "…" : text;

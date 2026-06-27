@@ -1,14 +1,17 @@
 "use client";
 
-import React, { useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Database, Layers, Table2, Eye, FileCode2, MessageSquare } from "lucide-react";
 import { useIde, type ChatMeta, type ConnectionMeta, type NotebookMeta } from "@/lib/store";
 import ConnectionModal from "./ConnectionModal";
 
 interface Props {
+  width: number;
   connections: ConnectionMeta[];
   notebooks: NotebookMeta[];
   chats: ChatMeta[];
+  /** Connection ids with a live driver open on the server right now. */
+  connectedIds: Set<string>;
   refreshConnections: () => void;
   refreshNotebooks: () => void;
   refreshChats: () => void;
@@ -84,20 +87,36 @@ function TableNode({
 }
 
 function SchemaNode({ conn, schema, selectedKey, setSelectedKey }: { conn: ConnectionMeta; schema: string; selectedKey: string; setSelectedKey: (k: string) => void }) {
-  const [open, setOpen] = useState(false);
+  const treeKey = `${conn.id}:${schema}`;
+  const open = useIde((s) => s.tree.schemas.includes(treeKey));
+  const setSchemaExpanded = useIde((s) => s.setSchemaExpanded);
   const [tables, setTables] = useState<{ name: string; kind: "table" | "view" }[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const loadingRef = useRef(false);
   const key = `schema:${conn.id}:${schema}`;
 
-  async function toggle() {
+  const loadTables = useCallback(async () => {
+    const res = await fetch(`/api/db/${conn.id}/tables?schema=${encodeURIComponent(schema)}`);
+    if (res.ok) setTables(await res.json());
+    else setError((await res.json().catch(() => ({})))?.error ?? "failed");
+  }, [conn.id, schema]);
+
+  // Fetch tables whenever expanded (including restored from a prior session).
+  useEffect(() => {
+    if (!open || tables !== null || error || loadingRef.current) return;
+    loadingRef.current = true;
+    loadTables().finally(() => {
+      loadingRef.current = false;
+    });
+  }, [open, tables, error, loadTables]);
+
+  function toggle() {
     setSelectedKey(key);
-    const next = !open;
-    setOpen(next);
-    if (next && tables === null) {
-      const res = await fetch(`/api/db/${conn.id}/tables?schema=${encodeURIComponent(schema)}`);
-      if (res.ok) setTables(await res.json());
-      else setError((await res.json().catch(() => ({})))?.error ?? "failed");
+    if (!open && error) {
+      setError(null);
+      setTables(null);
     }
+    setSchemaExpanded(treeKey, !open);
   }
 
   return (
@@ -128,38 +147,54 @@ function SchemaNode({ conn, schema, selectedKey, setSelectedKey }: { conn: Conne
 
 function ConnectionNode({
   conn,
+  connected,
   selectedKey,
   setSelectedKey,
   onDelete,
 }: {
   conn: ConnectionMeta;
+  connected: boolean;
   selectedKey: string;
   setSelectedKey: (k: string) => void;
   onDelete: () => void;
 }) {
-  const [open, setOpen] = useState(false);
+  const open = useIde((s) => s.tree.connections.includes(conn.id));
+  const setConnectionExpanded = useIde((s) => s.setConnectionExpanded);
   const [schemas, setSchemas] = useState<string[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const loadingRef = useRef(false);
   const key = `conn:${conn.id}`;
 
-  async function toggle() {
+  const loadSchemas = useCallback(async () => {
+    const res = await fetch(`/api/db/${conn.id}/schemas`);
+    if (res.ok) setSchemas(await res.json());
+    else setError((await res.json().catch(() => ({})))?.error ?? "connection failed");
+  }, [conn.id]);
+
+  // Load schemas whenever expanded (including restored from a prior session).
+  useEffect(() => {
+    if (!open || schemas !== null || error || loadingRef.current) return;
+    loadingRef.current = true;
+    loadSchemas().finally(() => {
+      loadingRef.current = false;
+    });
+  }, [open, schemas, error, loadSchemas]);
+
+  function toggle() {
     setSelectedKey(key);
-    const next = !open;
-    setOpen(next);
-    if (next && schemas === null) {
+    if (!open && error) {
       setError(null);
-      const res = await fetch(`/api/db/${conn.id}/schemas`);
-      if (res.ok) setSchemas(await res.json());
-      else setError((await res.json().catch(() => ({})))?.error ?? "connection failed");
+      setSchemas(null);
     }
+    setConnectionExpanded(conn.id, !open);
   }
 
   return (
     <div>
       <div style={{ display: "flex", alignItems: "center", position: "relative" }} className="conn-row">
-        <button className={`tree-row ${selectedKey === key ? "selected" : ""}`} onClick={toggle} title={`${conn.host}:${conn.port}/${conn.database}`}>
+        <button className={`tree-row ${selectedKey === key ? "selected" : ""}`} onClick={toggle} title={`${conn.host}:${conn.port}/${conn.database}${connected ? " · connected" : ""}`}>
           <Chevron open={open} />
-          <Database size={13} color={open ? "var(--green)" : "var(--text-faint)"} style={{ flexShrink: 0 }} />
+          <Database size={13} color={connected ? "var(--green)" : "var(--text-faint)"} style={{ flexShrink: 0 }} />
           <span style={{ fontWeight: 500 }}>{conn.name}</span>
           <span className="mono" style={{ fontSize: 10, color: "var(--text-faint)", marginLeft: 2 }}>
             {conn.database}
@@ -277,10 +312,11 @@ function ResourceNode({
   );
 }
 
-export default function Sidebar({ connections, notebooks, chats, refreshConnections, refreshNotebooks, refreshChats }: Props) {
+export default function Sidebar({ width, connections, notebooks, chats, connectedIds, refreshConnections, refreshNotebooks, refreshChats }: Props) {
   const openTab = useIde((s) => s.openTab);
   const closeTab = useIde((s) => s.closeTab);
   const renameTab = useIde((s) => s.renameTab);
+  const pruneConnection = useIde((s) => s.pruneConnection);
   const [selectedKey, setSelectedKey] = useState("");
   const [showModal, setShowModal] = useState(false);
 
@@ -337,7 +373,7 @@ export default function Sidebar({ connections, notebooks, chats, refreshConnecti
   return (
     <div
       style={{
-        width: 280,
+        width,
         flexShrink: 0,
         borderRight: "1px solid var(--border)",
         background: "var(--bg1)",
@@ -365,11 +401,15 @@ export default function Sidebar({ connections, notebooks, chats, refreshConnecti
           <ConnectionNode
             key={c.id}
             conn={c}
+            connected={connectedIds.has(c.id)}
             selectedKey={selectedKey}
             setSelectedKey={setSelectedKey}
             onDelete={async () => {
               await fetch(`/api/connections/${c.id}`, { method: "DELETE" });
+              pruneConnection(c.id);
               refreshConnections();
+              refreshNotebooks();
+              refreshChats();
             }}
           />
         ))}
