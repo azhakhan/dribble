@@ -11,14 +11,27 @@ interface Cell {
   sql: string;
 }
 
-export default function NotebookTab({ tab, connections, onRenamed }: { tab: Tab; connections: ConnectionMeta[]; onRenamed: () => void }) {
+export default function NotebookTab({
+  tab,
+  connections,
+  onRenamed,
+}: {
+  tab: Tab;
+  connections: ConnectionMeta[];
+  onRenamed: () => void;
+}) {
   const renameTab = useIde((s) => s.renameTab);
   const [cells, setCells] = useState<Cell[] | null>(null);
   const [name, setName] = useState(tab.title);
-  const [connectionId, setConnectionId] = useState<string | null>(tab.connectionId);
-  const [result, setResult] = useState<QueryResult | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [runningCell, setRunningCell] = useState<string | null>(null);
+  const [connectionId, setConnectionId] = useState<string | null>(
+    tab.connectionId,
+  );
+  const [cellResults, setCellResults] = useState<
+    Record<
+      string,
+      { result: QueryResult | null; error: string | null; running: boolean }
+    >
+  >({});
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -26,7 +39,11 @@ export default function NotebookTab({ tab, connections, onRenamed }: { tab: Tab;
       const res = await fetch(`/api/notebooks/${tab.resourceId}`);
       if (res.ok) {
         const nb = await res.json();
-        setCells(Array.isArray(nb.cells) && nb.cells.length ? nb.cells : [{ id: crypto.randomUUID(), sql: "" }]);
+        setCells(
+          Array.isArray(nb.cells) && nb.cells.length
+            ? nb.cells
+            : [{ id: crypto.randomUUID(), sql: "" }],
+        );
         setName(nb.name);
         setConnectionId(nb.connection_id);
       }
@@ -46,7 +63,7 @@ export default function NotebookTab({ tab, connections, onRenamed }: { tab: Tab;
         });
       }, 600);
     },
-    [tab.resourceId, onRenamed]
+    [tab.resourceId, onRenamed],
   );
 
   const updateCell = (id: string, sql: string) => {
@@ -60,7 +77,9 @@ export default function NotebookTab({ tab, connections, onRenamed }: { tab: Tab;
   const addCell = (afterId?: string) => {
     setCells((prev) => {
       const next = [...prev!];
-      const idx = afterId ? next.findIndex((c) => c.id === afterId) + 1 : next.length;
+      const idx = afterId
+        ? next.findIndex((c) => c.id === afterId) + 1
+        : next.length;
       next.splice(idx, 0, { id: crypto.randomUUID(), sql: "" });
       persist({ cells: next });
       return next;
@@ -77,9 +96,12 @@ export default function NotebookTab({ tab, connections, onRenamed }: { tab: Tab;
   };
 
   async function runCell(cell: Cell) {
-    if (!connectionId || !cell.sql.trim() || runningCell) return;
-    setRunningCell(cell.id);
-    setError(null);
+    if (!connectionId || !cell.sql.trim() || cellResults[cell.id]?.running)
+      return;
+    setCellResults((prev) => ({
+      ...prev,
+      [cell.id]: { result: null, error: null, running: true },
+    }));
     try {
       const res = await fetch(`/api/db/${connectionId}/query`, {
         method: "POST",
@@ -88,24 +110,56 @@ export default function NotebookTab({ tab, connections, onRenamed }: { tab: Tab;
       });
       const body = await res.json();
       if (res.ok) {
-        setResult(body);
-        setError(null);
+        setCellResults((prev) => ({
+          ...prev,
+          [cell.id]: { result: body, error: null, running: false },
+        }));
       } else {
-        setError(body.error ?? "Query failed");
+        setCellResults((prev) => ({
+          ...prev,
+          [cell.id]: {
+            result: null,
+            error: body.error ?? "Query failed",
+            running: false,
+          },
+        }));
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setRunningCell(null);
+      setCellResults((prev) => ({
+        ...prev,
+        [cell.id]: {
+          result: null,
+          error: err instanceof Error ? err.message : String(err),
+          running: false,
+        },
+      }));
     }
   }
 
   if (cells === null) {
-    return <div style={{ display: "grid", placeItems: "center", height: "100%", color: "var(--text-faint)" }}>loading…</div>;
+    return (
+      <div
+        style={{
+          display: "grid",
+          placeItems: "center",
+          height: "100%",
+          color: "var(--text-faint)",
+        }}
+      >
+        loading…
+      </div>
+    );
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        height: "100%",
+        minHeight: 0,
+      }}
+    >
       {/* header */}
       <div
         style={{
@@ -125,7 +179,14 @@ export default function NotebookTab({ tab, connections, onRenamed }: { tab: Tab;
             renameTab(tab.id, e.target.value);
             persist({ name: e.target.value });
           }}
-          style={{ border: "none", background: "transparent", fontWeight: 600, fontSize: 13, padding: "2px 4px", width: 220 }}
+          style={{
+            border: "none",
+            background: "transparent",
+            fontWeight: 600,
+            fontSize: 13,
+            padding: "2px 4px",
+            width: 220,
+          }}
         />
         <select
           value={connectionId ?? ""}
@@ -147,12 +208,23 @@ export default function NotebookTab({ tab, connections, onRenamed }: { tab: Tab;
       </div>
 
       {/* cells */}
-      <div style={{ flex: "1 1 55%", minHeight: 0, overflowY: "auto", padding: 14, display: "flex", flexDirection: "column", gap: 12 }}>
+      <div
+        style={{
+          flex: 1,
+          minHeight: 0,
+          overflowY: "auto",
+          padding: 14,
+          display: "flex",
+          flexDirection: "column",
+          gap: 12,
+        }}
+      >
         {cells.map((cell, i) => {
           const lines = Math.max(cell.sql.split("\n").length, 2);
           const height = Math.min(Math.max(lines * 19 + 18, 60), 360);
+          const cr = cellResults[cell.id];
           return (
-            <div key={cell.id} className="cell-card fadeup">
+            <div key={cell.id} className="cell-card fadeup" style={{ flexShrink: 0 }}>
               <div
                 style={{
                   display: "flex",
@@ -165,37 +237,76 @@ export default function NotebookTab({ tab, connections, onRenamed }: { tab: Tab;
               >
                 <button
                   className="btn"
-                  style={{ padding: "1px 10px", fontSize: 11, color: runningCell === cell.id ? "var(--accent)" : "var(--green)" }}
+                  style={{
+                    padding: "1px 10px",
+                    fontSize: 11,
+                    color: cr?.running ? "var(--accent)" : "var(--green)",
+                  }}
                   onClick={() => runCell(cell)}
-                  disabled={!!runningCell || !connectionId}
+                  disabled={!!cr?.running || !connectionId}
                   title="Run (⌘↩)"
                 >
-                  {runningCell === cell.id ? "…" : "▶ Run"}
+                  {cr?.running ? "…" : "▶ Run"}
                 </button>
-                <span className="mono" style={{ fontSize: 10, color: "var(--text-faint)" }}>
+                <span
+                  className="mono"
+                  style={{ fontSize: 10, color: "var(--text-faint)" }}
+                >
                   [{i + 1}]
                 </span>
                 <span style={{ marginLeft: "auto", display: "flex", gap: 2 }}>
-                  <button className="btn-ghost" style={{ fontSize: 11, padding: "1px 6px" }} title="Add cell below" onClick={() => addCell(cell.id)}>
+                  <button
+                    className="btn-ghost"
+                    style={{ fontSize: 11, padding: "1px 6px" }}
+                    title="Add cell below"
+                    onClick={() => addCell(cell.id)}
+                  >
                     +
                   </button>
-                  <button className="btn-ghost" style={{ fontSize: 11, padding: "1px 6px" }} title="Delete cell" onClick={() => removeCell(cell.id)}>
+                  <button
+                    className="btn-ghost"
+                    style={{ fontSize: 11, padding: "1px 6px" }}
+                    title="Delete cell"
+                    onClick={() => removeCell(cell.id)}
+                  >
                     ×
                   </button>
                 </span>
               </div>
-              <SqlEditor value={cell.sql} onChange={(v) => updateCell(cell.id, v)} onRun={() => runCell({ ...cell, sql: cellSqlRefValue(cells, cell.id) })} height={height} />
+              <SqlEditor
+                value={cell.sql}
+                onChange={(v) => updateCell(cell.id, v)}
+                onRun={() =>
+                  runCell({ ...cell, sql: cellSqlRefValue(cells, cell.id) })
+                }
+                height={height}
+              />
+              {cr && (
+                <div
+                  style={{
+                    borderTop: "1px solid var(--border-soft)",
+                    height: 300,
+                    flexShrink: 0,
+                  }}
+                >
+                  <ResultsPanel
+                    result={cr.result}
+                    error={cr.error}
+                    running={cr.running}
+                    emptyHint=""
+                  />
+                </div>
+              )}
             </div>
           );
         })}
-        <button className="btn btn-ghost" style={{ alignSelf: "center", fontSize: 12 }} onClick={() => addCell()}>
+        <button
+          className="btn btn-ghost"
+          style={{ alignSelf: "center", fontSize: 12 }}
+          onClick={() => addCell()}
+        >
           + Add cell
         </button>
-      </div>
-
-      {/* single shared results panel */}
-      <div style={{ flex: "1 1 45%", minHeight: 120, borderTop: "1px solid var(--border)" }}>
-        <ResultsPanel result={result} error={error} running={!!runningCell} emptyHint="Run a cell to see results here" />
       </div>
     </div>
   );

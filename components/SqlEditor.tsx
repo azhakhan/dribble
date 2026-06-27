@@ -50,7 +50,12 @@ export default function SqlEditor({ value, onChange, onRun, height = 80 }: Props
       value={value}
       beforeMount={setupTheme}
       onMount={(editor, monaco) => {
-        editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => onRunRef.current?.());
+        editor.addAction({
+          id: "run-query",
+          label: "Run Query",
+          keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter],
+          run: () => onRunRef.current?.(),
+        });
       }}
       onChange={(v) => onChange(v ?? "")}
       options={{
