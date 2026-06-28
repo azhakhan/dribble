@@ -1,49 +1,109 @@
 # Dribble
 
-**AI-powered, open source IDE for databases.**
+**An AI-powered, open-source SQL IDE for your databases.**
 
-![Dribble](./image.png)
+![Dribble](./Screenshot.png)
 
-Dribble is a web-based SQL IDE with built-in AI assistance designed for working across databases. Explore and debug Postgres, MySQL, Snowflake, and more - all in one interface.
+Dribble is a web-based SQL IDE with a built-in AI data analyst. Connect to a
+Postgres database, browse its schema, run queries in a notebook, explore tables
+with sort/filter/pagination, and ask an AI agent questions about your data — all
+in one tabbed workspace that remembers where you left off.
 
 ---
 
-## 🚀 Getting Started
+## Features
 
-Make sure you have [Docker](https://www.docker.com/) and [Just](https://github.com/casey/just) installed.
+- **AI data analyst** — chat with an agent (Claude Opus 4.8) that inspects your
+  schema, writes and runs read-only SQL, iterates on errors, and renders the
+  final result set as a table.
+- **SQL notebooks** — write and execute queries in a Monaco editor with syntax
+  highlighting. Run with `Cmd/Ctrl + Enter`. Notebooks and their results are
+  saved.
+- **Schema browser** — navigate schemas and tables from a collapsible sidebar
+  tree.
+- **Table explorer** — browse table data with server-side pagination, column
+  sorting, and a raw `WHERE`-clause filter.
+- **Fast results grid** — large result sets render in a virtualized data grid.
+- **Persistent workspace** — open tabs, layout/panel sizes, the expanded tree,
+  and cached query/chat results survive reloads (and follow you across browsers,
+  since state is stored server-side).
+- **Smart connection lifecycle** — database drivers are kept warm while in use
+  and idle out when not, with the sidebar reflecting live connection status.
+- **Secure by default** — the whole app sits behind a password login, and stored
+  database credentials are encrypted at rest.
+- **Pluggable drivers** — Postgres ships today; the driver registry is built to
+  add more engines (MySQL, Snowflake, …).
 
-Then run:
+## Tech stack
+
+Next.js 16 · React 19 · TypeScript · Tailwind CSS 4 · Monaco Editor ·
+glide-data-grid · Zustand · Vercel AI SDK (`@ai-sdk/anthropic`) · Postgres (`pg`)
+
+## Getting started
+
+### Prerequisites
+
+- Node.js 20+
+- A Postgres database for storing app metadata (connections, notebooks, chat
+  history). Any Postgres works — local, Neon, Supabase, Vercel Postgres, etc.
+- An [Anthropic API key](https://console.anthropic.com/) for the AI agent.
+
+### Install
 
 ```bash
-just start
+git clone <your-repo-url> dribble
+cd dribble
+npm install
 ```
 
-Once running:
+### Configure
 
-- Client: http://localhost:3000
-- Server: http://localhost:8000
+Copy the example env file and fill in the values:
 
-All services run in Docker containers, including per-source workers for isolation and scalability.
+```bash
+cp .env.example .env.local
+```
 
-### Features
+```bash
+# Metadata storage (connections, notebooks, chat history).
+# Any Postgres works — Vercel Postgres / Neon / Supabase / local.
+DATABASE_URL=postgres://user:pass@host:5432/dbide
 
-- 🔌 Connect to PostgreSQL and MySQL
-- 🌐 Work across multiple databases from one place
-- 🧭 Visualize your schema in a file tree view
-- 💾 Save queries with version history
-- 📊 Log query runs for observability
-- ⚡ Run queries with filter and sort options
-- 🤖 Context-aware AI assistant (powered by GPT)
-- 🧠 Autocomplete SQL editor
-- 🐳 Isolated Docker workers per data source
+# Password that protects the whole app (login screen).
+APP_PASSWORD=change-me
 
-### License
+# Secret used to sign the session cookie and encrypt stored DB credentials.
+# Generate with: openssl rand -hex 32
+APP_SECRET=
 
-This project is licensed under the Business Source License v1.1.
+# Powers the AI chat agent (claude-opus-4-8).
+ANTHROPIC_API_KEY=
+```
 
-- ✅ Free for internal use, including production use within your organization.
-- 🚫 Not permitted in commercial hosted products without a commercial license.
+The required metadata tables are created automatically on first run.
 
-🔄 On June 16, 2028, it will convert to the Apache 2.0 License.
+### Run
 
-Want to use Dribble commercially before then? Get in touch for a license.
+```bash
+npm run dev
+```
+
+Open [http://localhost:3000](http://localhost:3000), log in with `APP_PASSWORD`,
+add a database connection, and start querying.
+
+To build and run a production server:
+
+```bash
+npm run build
+npm start
+```
+
+## A note on AI-generated code
+
+This project was written largely with the help of AI coding tools (Claude Code).
+All code has been reviewed before being committed, but you should review it
+yourself before relying on it in production.
+
+## License
+
+Released under the [MIT License](./LICENSE).
