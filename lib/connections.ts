@@ -1,4 +1,6 @@
-import { meta } from "./metadb";
+import { eq } from "drizzle-orm";
+import { db } from "./db";
+import { connections } from "./db/schema";
 import { decrypt } from "./crypto";
 import { createDriver, type ConnectionConfig, type DatabaseDriver, type DatabaseType } from "./drivers";
 
@@ -32,10 +34,9 @@ function registry(): Map<string, Entry> {
 }
 
 export async function loadConnectionConfig(id: string): Promise<ConnectionConfig> {
-  const pool = await meta();
-  const res = await pool.query(`SELECT * FROM dbide_connections WHERE id = $1`, [id]);
-  if (!res.rows.length) throw new Error("Connection not found");
-  const r = res.rows[0];
+  const conn = await db();
+  const [r] = await conn.select().from(connections).where(eq(connections.id, id));
+  if (!r) throw new Error("Connection not found");
   return {
     id: r.id,
     name: r.name,
@@ -44,7 +45,7 @@ export async function loadConnectionConfig(id: string): Promise<ConnectionConfig
     port: r.port,
     database: r.database,
     username: r.username,
-    password: decrypt(r.password_enc),
+    password: decrypt(r.passwordEnc),
     ssl: r.ssl,
   };
 }

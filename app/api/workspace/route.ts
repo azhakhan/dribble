@@ -1,15 +1,25 @@
 import { NextRequest, NextResponse } from "next/server";
-import { meta } from "@/lib/metadb";
+import { eq } from "drizzle-orm";
+import { z } from "zod";
+import { db } from "@/lib/db";
+import { workspace, workspacePublicColumns } from "@/lib/db/schema";
 import { jsonError } from "@/lib/api";
+
+const WORKSPACE_ID = 1;
+
+const patchInput = z.object({
+  tabs: z.array(z.unknown()).nullish(),
+  activeTabId: z.string().nullish(),
+  layout: z.record(z.string(), z.unknown()).nullish(),
+  tree: z.record(z.string(), z.unknown()).nullish(),
+});
 
 // Single-user workspace state: open tabs, active tab, and saved layout sizes.
 export async function GET() {
   try {
-    const pool = await meta();
-    const res = await pool.query(
-      `SELECT tabs, active_tab_id, layout, tree FROM dbide_workspace WHERE id = 1`,
-    );
-    return NextResponse.json(res.rows[0] ?? { tabs: [], active_tab_id: null, layout: {}, tree: {} });
+    const conn = await db();
+    const [row] = await conn.select(workspacePublicColumns).from(workspace).where(eq(workspace.id, WORKSPACE_ID));
+    return NextResponse.json(row ?? { tabs: [], active_tab_id: null, layout: {}, tree: {} });
   } catch (err) {
     return jsonError(err);
   }
@@ -17,28 +27,33 @@ export async function GET() {
 
 export async function PATCH(req: NextRequest) {
   try {
-    const body = await req.json();
-    const pool = await meta();
-    // The client always sends the full snapshot, so we set all three columns.
-    const res = await pool.query(
-      `INSERT INTO dbide_workspace (id, tabs, active_tab_id, layout, tree, updated_at)
-       VALUES (1, $1, $2, $3, $4, now())
-       ON CONFLICT (id) DO UPDATE SET
-         tabs = $1,
-         active_tab_id = $2,
-         layout = $3,
-         tree = $4,
-         updated_at = now()
-       RETURNING tabs, active_tab_id, layout, tree`,
-      [
-        JSON.stringify(body.tabs ?? []),
-        body.activeTabId ?? null,
-        JSON.stringify(body.layout ?? {}),
-        JSON.stringify(body.tree ?? {}),
-      ],
-    );
-    return NextResponse.json(res.rows[0]);
+    const body = patchInput.parse(await req.json());
+    const conn = await db();
+    // The client always sends the full snapshot, so we set all columns.
+    const values = {
+      id: WORKSPACE_ID,
+      tabs: (body.tabs ?? []) as typeof workspace.$inferInsert.tabs,
+      activeTabId: body.activeTabId ?? null,
+      layout: (body.layout ?? {}) as typeof workspace.$inferInsert.layout,
+      tree: (body.tree ?? {}) as typeof workspace.$inferInsert.tree,
+      updatedAt: new Date(),
+    };
+    const [row] = await conn
+      .insert(workspace)
+      .values(values)
+      .onConflictDoUpdate({
+        target: workspace.id,
+        set: {
+          tabs: values.tabs,
+          activeTabId: values.activeTabId,
+          layout: values.layout,
+          tree: values.tree,
+          updatedAt: values.updatedAt,
+        },
+      })
+      .returning(workspacePublicColumns);
+    return NextResponse.json(row);
   } catch (err) {
-    return jsonError(err);
+    return jsonError(err, err instanceof z.ZodError ? 400 : 500);
   }
 }

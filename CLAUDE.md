@@ -12,13 +12,16 @@ talking to user-configured Postgres databases, with an AI data-analyst agent.
 - `npm run build` — production build
 - `npm start` — run the production build
 - `npm run lint` — ESLint
+- `npm run db:generate` — generate a Drizzle migration after editing `lib/db/schema.ts`
+- `npm run db:studio` — open Drizzle Studio against the metadata DB
 
 ## Environment
 
 Copy `.env.example` to `.env.local`. Required vars:
 
 - `DATABASE_URL` — Postgres for app metadata (connections, notebooks, chats,
-  workspace state). Schema is created/migrated automatically by `lib/metadb.ts`.
+  workspace state). Drizzle migrations in `lib/db/migrations/` are applied
+  automatically on first use; see `lib/db/`.
 - `APP_PASSWORD` — gates the login screen.
 - `APP_SECRET` — signs the session cookie and encrypts stored DB credentials.
 - `ANTHROPIC_API_KEY` — powers the AI agent (`claude-opus-4-8`).
@@ -38,7 +41,13 @@ Copy `.env.example` to `.env.local`. Required vars:
   by `DatabaseType`; only `postgres` is implemented. Add new engines here.
 - `lib/connections.ts` — resolves and caches live drivers per connection,
   keeping them warm vs. idling them out.
-- `lib/metadb.ts` — metadata Postgres pool + schema bootstrap.
+- `lib/db/` — the **metadata DB**, managed with Drizzle ORM. `schema.ts` defines
+  the `dbide_*` tables (typed JSONB columns) + the derived Zod input schemas;
+  `index.ts` wraps a cached pg `Pool` in a Drizzle client and runs pending
+  migrations on first use (`db()`); `migrations/` holds the generated SQL.
+  Note: this only covers app-owned metadata. **User databases are queried through
+  the raw-SQL driver layer (`lib/drivers/`) by design** — their schemas are
+  unknown at build time, so an ORM does not apply there.
 - `lib/crypto.ts` — encrypt/decrypt stored DB credentials with `APP_SECRET`.
 - `lib/store.ts` — Zustand store for client-side workspace state.
 - `components/` — UI: `Sidebar`, `Tabs`, `TableTab`, `NotebookTab`, `ChatTab`,

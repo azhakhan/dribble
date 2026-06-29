@@ -1,8 +1,10 @@
 import { anthropic } from "@ai-sdk/anthropic";
 import { convertToModelMessages, stepCountIs, streamText, tool, type UIMessage } from "ai";
 import { z } from "zod";
+import { eq } from "drizzle-orm";
 import { getDriver } from "@/lib/connections";
-import { meta } from "@/lib/metadb";
+import { db } from "@/lib/db";
+import { chats } from "@/lib/db/schema";
 import { jsonError } from "@/lib/api";
 
 export const maxDuration = 300;
@@ -73,11 +75,11 @@ export async function POST(req: Request) {
       onFinish: async ({ messages: finalMessages }) => {
         if (!chatId) return;
         try {
-          const pool = await meta();
-          await pool.query(`UPDATE dbide_chats SET messages = $2, updated_at = now() WHERE id = $1`, [
-            chatId,
-            JSON.stringify(finalMessages),
-          ]);
+          const conn = await db();
+          await conn
+            .update(chats)
+            .set({ messages: finalMessages, updatedAt: new Date() })
+            .where(eq(chats.id, chatId));
         } catch (err) {
           console.error("Failed to persist chat", err);
         }
