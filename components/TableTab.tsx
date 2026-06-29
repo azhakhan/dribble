@@ -9,13 +9,17 @@ import PaginationBar from "./PaginationBar";
 export default function TableTab({ tab }: { tab: Tab }) {
   const columnWidths = useIde((s) => s.layout.columnWidths[tab.id]);
   const setColumnWidths = useIde((s) => s.setColumnWidths);
+  const savedSort = useIde((s) => s.layout.tableSort[tab.id]);
+  const setTableSort = useIde((s) => s.setTableSort);
+  const columnOrder = useIde((s) => s.layout.columnOrder[tab.id]);
+  const setColumnOrder = useIde((s) => s.setColumnOrder);
   const [data, setData] = useState<TableDataResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [page, setPage] = useState(0);
   const [limit, setLimit] = useState(100);
-  const [sortColumn, setSortColumn] = useState<string | undefined>();
-  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+  const [sortColumn, setSortColumn] = useState<string | undefined>(savedSort?.column);
+  const [sortDir, setSortDir] = useState<"asc" | "desc">(savedSort?.dir ?? "asc");
   const [whereInput, setWhereInput] = useState("");
   const [where, setWhere] = useState("");
 
@@ -52,14 +56,18 @@ export default function TableTab({ tab }: { tab: Tab }) {
 
   const onHeaderClick = (col: string) => {
     if (sortColumn === col) {
-      if (sortDir === "asc") setSortDir("desc");
-      else {
+      if (sortDir === "asc") {
+        setSortDir("desc");
+        setTableSort(tab.id, { column: col, dir: "desc" });
+      } else {
         setSortColumn(undefined);
         setSortDir("asc");
+        setTableSort(tab.id, null);
       }
     } else {
       setSortColumn(col);
       setSortDir("asc");
+      setTableSort(tab.id, { column: col, dir: "asc" });
     }
     setPage(0);
   };
@@ -128,6 +136,8 @@ export default function TableTab({ tab }: { tab: Tab }) {
             onHeaderClick={onHeaderClick}
             columnWidths={columnWidths ?? {}}
             onColumnWidthsChange={(w) => setColumnWidths(tab.id, w)}
+            columnOrder={columnOrder}
+            onColumnOrderChange={(o) => setColumnOrder(tab.id, o)}
           />
         ) : (
           <div style={{ display: "grid", placeItems: "center", width: "100%", color: "var(--text-faint)" }}>

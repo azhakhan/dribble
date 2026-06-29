@@ -61,6 +61,10 @@ interface Props {
    *  parent owns the state (and persists it); otherwise it's local-only. */
   columnWidths?: Record<string, number>;
   onColumnWidthsChange?: (widths: Record<string, number>) => void;
+  /** Column names in the desired display order. Names not present in the
+   *  result are ignored; result columns not listed are appended in native order. */
+  columnOrder?: string[];
+  onColumnOrderChange?: (order: string[]) => void;
 }
 
 export default function ResultsGrid({
@@ -70,6 +74,8 @@ export default function ResultsGrid({
   onHeaderClick,
   columnWidths: controlledWidths,
   onColumnWidthsChange,
+  columnOrder,
+  onColumnOrderChange,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ width: 0, height: 0 });
@@ -87,12 +93,36 @@ export default function ResultsGrid({
     return () => ro.disconnect();
   }, []);
 
+  // Map from display column index → original index into result.columns/rows.
+  // Built from `columnOrder` (surviving names in saved order) then any
+  // remaining columns appended in native order.
+  const order: number[] = useMemo(() => {
+    const byName = new Map(result.columns.map((c, i) => [c.name, i]));
+    const seen = new Set<number>();
+    const out: number[] = [];
+    if (columnOrder) {
+      for (const name of columnOrder) {
+        const idx = byName.get(name);
+        if (idx !== undefined && !seen.has(idx)) {
+          seen.add(idx);
+          out.push(idx);
+        }
+      }
+    }
+    for (let i = 0; i < result.columns.length; i++) {
+      if (!seen.has(i)) out.push(i);
+    }
+    return out;
+  }, [result.columns, columnOrder]);
+
   const columns: GridColumn[] = useMemo(
     () =>
-      result.columns.map((c, i) => {
+      order.map((origIdx) => {
+        const c = result.columns[origIdx];
         const arrow =
           c.name === sortColumn ? (sortDir === "desc" ? " ↓" : " ↑") : "";
-        const id = `${i}:${c.name}`;
+        // Keep the id stable per source column so widths follow it on reorder.
+        const id = `${origIdx}:${c.name}`;
         return {
           id,
           title: c.name + arrow,
@@ -101,7 +131,7 @@ export default function ResultsGrid({
             Math.min(Math.max(c.name.length * 10 + 48, 110), 360),
         };
       }),
-    [columnWidths, result.columns, sortColumn, sortDir],
+    [order, columnWidths, result.columns, sortColumn, sortDir],
   );
 
   const resizeColumn = useCallback(
@@ -116,8 +146,9 @@ export default function ResultsGrid({
 
   const getCellContent = useCallback(
     ([col, row]: Item): GridCell => {
-      const value = result.rows[row]?.[col];
-      const dataType = result.columns[col]?.dataType ?? "";
+      const origIdx = order[col];
+      const value = result.rows[row]?.[origIdx];
+      const dataType = result.columns[origIdx]?.dataType ?? "";
       const isNum = NUMERIC_TYPES.has(dataType);
       const display =
         value === null || value === undefined ? "" : String(value);
@@ -131,7 +162,7 @@ export default function ResultsGrid({
         themeOverride: value === null ? { textDark: "#5d6678" } : undefined,
       };
     },
-    [result],
+    [result, order],
   );
 
   return (
@@ -157,9 +188,19 @@ export default function ResultsGrid({
           smoothScrollY
           getCellsForSelection
           onColumnResize={resizeColumn}
+          onColumnMoved={
+            onColumnOrderChange
+              ? (startIndex, endIndex) => {
+                  const names = order.map((i) => result.columns[i].name);
+                  const [moved] = names.splice(startIndex, 1);
+                  names.splice(endIndex, 0, moved);
+                  onColumnOrderChange(names);
+                }
+              : undefined
+          }
           onHeaderClicked={
             onHeaderClick
-              ? (col) => onHeaderClick(result.columns[col].name)
+              ? (col) => onHeaderClick(result.columns[order[col]].name)
               : undefined
           }
         />

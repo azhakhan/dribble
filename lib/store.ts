@@ -26,6 +26,10 @@ export interface Layout {
   chatSplit: Record<string, number>;
   /** Per notebook id → { cellId → result panel height in px }. */
   cellHeights: Record<string, Record<string, number>>;
+  /** Per table tab id → active sort { column, dir }. Absent = unsorted. */
+  tableSort: Record<string, { column: string; dir: "asc" | "desc" }>;
+  /** Per table tab id → column names in display order. Absent = native order. */
+  columnOrder: Record<string, string[]>;
 }
 
 export const DEFAULT_LAYOUT: Layout = {
@@ -33,6 +37,8 @@ export const DEFAULT_LAYOUT: Layout = {
   columnWidths: {},
   chatSplit: {},
   cellHeights: {},
+  tableSort: {},
+  columnOrder: {},
 };
 
 /** Expanded/collapsed state of the sidebar tree. */
@@ -62,6 +68,10 @@ interface IdeState {
   setColumnWidths: (tableId: string, widths: Record<string, number>) => void;
   setChatSplit: (chatId: string, messageShare: number) => void;
   setCellHeight: (notebookId: string, cellId: string, height: number) => void;
+  /** Persist/clear the active sort for a table tab. `null` clears it. */
+  setTableSort: (tableId: string, sort: { column: string; dir: "asc" | "desc" } | null) => void;
+  /** Persist the display order of columns for a table tab. */
+  setColumnOrder: (tableId: string, order: string[]) => void;
   setConnectionExpanded: (connectionId: string, open: boolean) => void;
   setSchemaExpanded: (schemaKey: string, open: boolean) => void;
   /** Drop all workspace state tied to a deleted connection. */
@@ -185,6 +195,23 @@ export const useIde = create<IdeState>((set, get) => ({
     persist(get);
   },
 
+  setTableSort: (tableId, sort) => {
+    set((s) => {
+      const tableSort = { ...s.layout.tableSort };
+      if (sort) tableSort[tableId] = sort;
+      else delete tableSort[tableId];
+      return { layout: { ...s.layout, tableSort } };
+    });
+    persist(get);
+  },
+
+  setColumnOrder: (tableId, order) => {
+    set((s) => ({
+      layout: { ...s.layout, columnOrder: { ...s.layout.columnOrder, [tableId]: order } },
+    }));
+    persist(get);
+  },
+
   setConnectionExpanded: (connectionId, open) => {
     set((s) => {
       const without = s.tree.connections.filter((id) => id !== connectionId);
@@ -213,16 +240,22 @@ export const useIde = create<IdeState>((set, get) => ({
       for (const id of closingTabIds) delete columnWidths[id];
       const chatSplit = { ...s.layout.chatSplit };
       const cellHeights = { ...s.layout.cellHeights };
+      const tableSort = { ...s.layout.tableSort };
+      const columnOrder = { ...s.layout.columnOrder };
       for (const rid of closingResourceIds) {
         delete chatSplit[rid];
         delete cellHeights[rid];
+      }
+      for (const id of closingTabIds) {
+        delete tableSort[id];
+        delete columnOrder[id];
       }
       return {
         tabs,
         activeTabId: tabs.some((t) => t.id === s.activeTabId)
           ? s.activeTabId
           : tabs[tabs.length - 1]?.id ?? null,
-        layout: { ...s.layout, columnWidths, chatSplit, cellHeights },
+        layout: { ...s.layout, columnWidths, chatSplit, cellHeights, tableSort, columnOrder },
         tree: {
           connections: s.tree.connections.filter((id) => id !== connectionId),
           schemas: s.tree.schemas.filter((k) => !k.startsWith(`${connectionId}:`)),
