@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDriver } from "@/lib/connections";
 import { jsonError } from "@/lib/api";
+import { getCurrentUserId } from "@/lib/auth";
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const userId = await getCurrentUserId();
     const { id } = await params;
     const q = req.nextUrl.searchParams;
     const schema = q.get("schema");
@@ -11,7 +13,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     if (!schema || !table) {
       return NextResponse.json({ error: "schema and table params required" }, { status: 400 });
     }
-    const driver = await getDriver(id);
+    const driver = await getDriver(id, userId);
     const result = await driver.getTableData({
       schema,
       table,

@@ -1,5 +1,4 @@
-import { sql } from "drizzle-orm";
-import { boolean, check, integer, jsonb, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { boolean, integer, jsonb, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { createInsertSchema, createSelectSchema } from "drizzle-zod";
 import { z } from "zod";
 import type { UIMessage } from "ai";
@@ -11,8 +10,22 @@ import type { Layout, Tab, TreeState } from "@/lib/store";
 // back typed instead of `any`. Table/column names keep the historical `dbide_`
 // prefix and snake_case so existing data and migrations line up.
 
+// App users. In local mode (no Google OAuth configured) everything is owned by a
+// single sentinel user seeded by the migration; in hosted mode one row per
+// Google account, upserted by email on sign-in. See lib/auth.ts.
+export const users = pgTable("dbide_users", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  email: text("email").notNull().unique(),
+  name: text("name"),
+  image: text("image"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const connections = pgTable("dbide_connections", {
   id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
   type: text("type").notNull().default("postgres"),
   host: text("host").notNull(),
@@ -26,6 +39,9 @@ export const connections = pgTable("dbide_connections", {
 
 export const notebooks = pgTable("dbide_notebooks", {
   id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
   connectionId: uuid("connection_id").references(() => connections.id, { onDelete: "cascade" }),
   name: text("name").notNull().default("Untitled query"),
   cells: jsonb("cells").$type<Cell[]>().notNull().default([]),
@@ -36,6 +52,9 @@ export const notebooks = pgTable("dbide_notebooks", {
 
 export const chats = pgTable("dbide_chats", {
   id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
   connectionId: uuid("connection_id").references(() => connections.id, { onDelete: "cascade" }),
   name: text("name").notNull().default("New chat"),
   messages: jsonb("messages").$type<UIMessage[]>().notNull().default([]),
@@ -43,21 +62,20 @@ export const chats = pgTable("dbide_chats", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
-// Single-user workspace: one row (id = 1) holding open tabs + saved layout.
-export const workspace = pgTable(
-  "dbide_workspace",
-  {
-    id: integer("id").primaryKey().default(1),
-    tabs: jsonb("tabs").$type<Tab[]>().notNull().default([]),
-    activeTabId: text("active_tab_id"),
-    layout: jsonb("layout").$type<Partial<Layout>>().notNull().default({}),
-    tree: jsonb("tree").$type<Partial<TreeState>>().notNull().default({}),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-  },
-  (t) => [check("dbide_workspace_singleton", sql`${t.id} = 1`)],
-);
+// Per-user workspace: one row per user holding open tabs + saved layout.
+export const workspace = pgTable("dbide_workspace", {
+  userId: uuid("user_id")
+    .primaryKey()
+    .references(() => users.id, { onDelete: "cascade" }),
+  tabs: jsonb("tabs").$type<Tab[]>().notNull().default([]),
+  activeTabId: text("active_tab_id"),
+  layout: jsonb("layout").$type<Partial<Layout>>().notNull().default({}),
+  tree: jsonb("tree").$type<Partial<TreeState>>().notNull().default({}),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
 
 // Inferred row types — use these instead of hand-written interfaces.
+export type User = typeof users.$inferSelect;
 export type Connection = typeof connections.$inferSelect;
 export type Notebook = typeof notebooks.$inferSelect;
 export type Chat = typeof chats.$inferSelect;
@@ -70,7 +88,7 @@ export const connectionInsertSchema = createInsertSchema(connections, {
   host: (s) => s.min(1),
   database: (s) => s.min(1),
   username: (s) => s.min(1),
-}).omit({ id: true, passwordEnc: true, createdAt: true });
+}).omit({ id: true, userId: true, passwordEnc: true, createdAt: true });
 
 /** POST /api/connections body: like an insert but with a plaintext `password`. */
 export const connectionInput = connectionInsertSchema.extend({

@@ -4,8 +4,7 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { workspace, workspacePublicColumns } from "@/lib/db/schema";
 import { jsonError } from "@/lib/api";
-
-const WORKSPACE_ID = 1;
+import { getCurrentUserId } from "@/lib/auth";
 
 const patchInput = z.object({
   tabs: z.array(z.unknown()).nullish(),
@@ -14,11 +13,15 @@ const patchInput = z.object({
   tree: z.record(z.string(), z.unknown()).nullish(),
 });
 
-// Single-user workspace state: open tabs, active tab, and saved layout sizes.
+// Per-user workspace state: open tabs, active tab, and saved layout sizes.
 export async function GET() {
   try {
+    const userId = await getCurrentUserId();
     const conn = await db();
-    const [row] = await conn.select(workspacePublicColumns).from(workspace).where(eq(workspace.id, WORKSPACE_ID));
+    const [row] = await conn
+      .select(workspacePublicColumns)
+      .from(workspace)
+      .where(eq(workspace.userId, userId));
     return NextResponse.json(row ?? { tabs: [], active_tab_id: null, layout: {}, tree: {} });
   } catch (err) {
     return jsonError(err);
@@ -27,11 +30,12 @@ export async function GET() {
 
 export async function PATCH(req: NextRequest) {
   try {
+    const userId = await getCurrentUserId();
     const body = patchInput.parse(await req.json());
     const conn = await db();
     // The client always sends the full snapshot, so we set all columns.
     const values = {
-      id: WORKSPACE_ID,
+      userId,
       tabs: (body.tabs ?? []) as typeof workspace.$inferInsert.tabs,
       activeTabId: body.activeTabId ?? null,
       layout: (body.layout ?? {}) as typeof workspace.$inferInsert.layout,
@@ -42,7 +46,7 @@ export async function PATCH(req: NextRequest) {
       .insert(workspace)
       .values(values)
       .onConflictDoUpdate({
-        target: workspace.id,
+        target: workspace.userId,
         set: {
           tabs: values.tabs,
           activeTabId: values.activeTabId,

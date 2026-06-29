@@ -2,8 +2,9 @@
 
 Dribble persists your working session **server-side** so reloading the page —
 even in another tab or browser — restores the same open tabs, layout, expanded
-tree, and cached query results. This is a **single-user** app (one password), so
-all of this lives in a single workspace row; there is no per-user keying.
+tree, and cached query results. Each user gets their own workspace row, keyed by
+`user_id` (in local mode that's the single built-in user — see
+[Authentication & users](./authentication.md)).
 
 > Why server-side and not `localStorage`? `localStorage` is per-browser, and the
 > requirement is cross-browser restore. Everything therefore goes in the one
@@ -24,37 +25,39 @@ all of this lives in a single workspace row; there is no per-user keying.
 
 ## Database schema
 
-Defined in `lib/metadb.ts` (`SCHEMA_SQL`). Two additions back this feature:
+Defined in `lib/db/schema.ts` (Drizzle ORM). The `dbide_notebooks.results`
+column caches a page of results per cell, and `dbide_workspace` holds one row
+**per user**:
 
 ```sql
 -- Cached page of results per notebook cell:
 --   { [cellId]: { result, sql, page, limit, totalCount, ranAt } }
-ALTER TABLE dbide_notebooks ADD COLUMN IF NOT EXISTS results jsonb NOT NULL DEFAULT '{}';
+-- dbide_notebooks.results jsonb NOT NULL DEFAULT '{}'
 
--- Single-user workspace (one row, id = 1).
-CREATE TABLE IF NOT EXISTS dbide_workspace (
-  id int PRIMARY KEY DEFAULT 1,
+-- Per-user workspace (one row per user, keyed by user_id).
+CREATE TABLE dbide_workspace (
+  user_id uuid PRIMARY KEY REFERENCES dbide_users(id) ON DELETE CASCADE,
   tabs jsonb NOT NULL DEFAULT '[]',
   active_tab_id text,
   layout jsonb NOT NULL DEFAULT '{}',   -- sizes (see table above)
   tree jsonb NOT NULL DEFAULT '{}',     -- { connections: string[], schemas: string[] }
-  updated_at timestamptz NOT NULL DEFAULT now(),
-  CONSTRAINT dbide_workspace_singleton CHECK (id = 1)
+  updated_at timestamptz NOT NULL DEFAULT now()
 );
 ```
 
-### Schema is applied by hash, not once-per-process
+### Migrations run on first use
 
-`ensureSchema()` caches a "schema ready" promise on `globalThis`, keyed by a
-**hash of `SCHEMA_SQL`**. When you change the schema the idempotent DDL re-runs
-on the next request, instead of silently waiting for a full process restart
-(which previously meant new tables/columns never appeared under hot-reload).
+Schema changes are Drizzle migrations under `lib/db/migrations/`. On the first
+call to `db()` the migrator applies any pending migrations (idempotent — it
+tracks what's been applied), so a fresh database is set up automatically and
+upgrades happen on next boot. Generate a new migration with `npm run db:generate`
+after editing `lib/db/schema.ts`.
 
 ## API
 
 `app/api/workspace/route.ts`:
 
-- `GET /api/workspace` → `{ tabs, active_tab_id, layout, tree }` (the singleton row).
+- `GET /api/workspace` → `{ tabs, active_tab_id, layout, tree }` (the current user's row).
 - `PATCH /api/workspace` → upserts the **full** snapshot (`tabs`, `activeTabId`,
   `layout`, `tree`). The client always sends the complete state, so all columns
   are set unconditionally — no `COALESCE` games, and clearing the last tab

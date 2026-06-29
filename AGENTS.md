@@ -1,5 +1,10 @@
 <!-- BEGIN:nextjs-agent-rules -->
-# This is NOT the Next.js you know
+# Next.js version note
 
-This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` before writing any code. Heed deprecation notices.
+This project runs **stock** Next.js 16 + React 19 — official upstream, not forked or
+patched. These versions are newer than many models' training data, so some APIs and
+conventions differ from older Next.js (for example, middleware lives in `proxy.ts`, not
+`middleware.ts`). Before writing Next-specific code, confirm the current API against the
+docs bundled with the package at `node_modules/next/dist/docs/` rather than relying on
+memory.
 <!-- END:nextjs-agent-rules -->

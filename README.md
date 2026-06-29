@@ -29,8 +29,11 @@ in one tabbed workspace that remembers where you left off.
   since state is stored server-side).
 - **Smart connection lifecycle** — database drivers are kept warm while in use
   and idle out when not, with the sidebar reflecting live connection status.
-- **Secure by default** — the whole app sits behind a password login, and stored
-  database credentials are encrypted at rest.
+- **Flexible auth** — runs with no login at all for local use, or behind Google
+  sign-in (with an email/domain allowlist) for multi-user deployments, where each
+  person's connections, notebooks, and chats are private. Stored database
+  credentials are encrypted at rest. See
+  [docs/authentication.md](./docs/authentication.md).
 - **Pluggable drivers** — Postgres ships today; the driver registry is built to
   add more engines (MySQL, Snowflake, …).
 
@@ -67,20 +70,37 @@ cp .env.example .env.local
 ```bash
 # Metadata storage (connections, notebooks, chat history).
 # Any Postgres works — Vercel Postgres / Neon / Supabase / local.
-DATABASE_URL=postgres://user:pass@host:5432/dbide
+DATABASE_URL=postgres://user:pass@host:5432/dribble
 
-# Password that protects the whole app (login screen).
-APP_PASSWORD=change-me
-
-# Secret used to sign the session cookie and encrypt stored DB credentials.
-# Generate with: openssl rand -hex 32
+# Secret used to encrypt stored DB credentials (and sign the auth session).
+# Required. Generate with: openssl rand -hex 32
 APP_SECRET=
 
 # Powers the AI chat agent (claude-opus-4-8).
 ANTHROPIC_API_KEY=
 ```
 
+That's all you need to run locally — with no auth configured, the app starts
+**without a login screen** and all data belongs to a single built-in user.
+
 The required metadata tables are created automatically on first run.
+
+#### Optional: Google sign-in (multi-user)
+
+To require login and keep each user's data private, configure Google OAuth — see
+[docs/authentication.md](./docs/authentication.md) for the full setup. In short,
+add to `.env.local`:
+
+```bash
+AUTH_GOOGLE_ID=
+AUTH_GOOGLE_SECRET=
+# Restrict who may sign in (leave empty to allow any Google account):
+AUTH_ALLOWED_EMAILS=you@example.com
+AUTH_ALLOWED_DOMAIN=example.com
+```
+
+Register `<origin>/api/auth/callback/google` as an authorized redirect URI on the
+Google OAuth client. Setting these enables the login screen automatically.
 
 ### Run
 
@@ -88,8 +108,9 @@ The required metadata tables are created automatically on first run.
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000), log in with `APP_PASSWORD`,
-add a database connection, and start querying.
+Open [http://localhost:3000](http://localhost:3000) (you're in directly when no
+auth is configured; otherwise sign in with Google), add a database connection,
+and start querying.
 
 To build and run a production server:
 

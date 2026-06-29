@@ -22,15 +22,19 @@ Copy `.env.example` to `.env.local`. Required vars:
 - `DATABASE_URL` — Postgres for app metadata (connections, notebooks, chats,
   workspace state). Drizzle migrations in `lib/db/migrations/` are applied
   automatically on first use; see `lib/db/`.
-- `APP_PASSWORD` — gates the login screen.
-- `APP_SECRET` — signs the session cookie and encrypts stored DB credentials.
+- `APP_SECRET` — encrypts stored DB credentials (and signs the auth session
+  unless `AUTH_SECRET` is set).
 - `ANTHROPIC_API_KEY` — powers the AI agent (`claude-opus-4-8`).
+- `AUTH_GOOGLE_ID` / `AUTH_GOOGLE_SECRET` — **optional.** Unset → *local mode*: no
+  login, all data owned by a single built-in "local" user. Set → *hosted mode*:
+  Google sign-in required, data is private per user. Restrict sign-ups with
+  `AUTH_ALLOWED_EMAILS` / `AUTH_ALLOWED_DOMAIN`. See `auth.config.ts` + `lib/auth.ts`.
 
 ## Architecture
 
 - `app/page.tsx` — the IDE shell: sidebar + resizable panels + tabbed workspace.
 - `app/api/` — route handlers:
-  - `auth/` — password login/logout, cookie sessions.
+  - `auth/[...nextauth]/` — Auth.js (NextAuth v5) Google sign-in handlers.
   - `connections/` — CRUD + test for user database connections.
   - `db/[id]/` — per-connection schema/table/query endpoints; `db/status`,
     `db/heartbeat`, `db/disconnect` manage the connection lifecycle.

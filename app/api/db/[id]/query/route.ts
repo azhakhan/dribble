@@ -1,15 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDriver } from "@/lib/connections";
 import { jsonError } from "@/lib/api";
+import { getCurrentUserId } from "@/lib/auth";
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const userId = await getCurrentUserId();
     const { id } = await params;
     const { sql, limit, offset, count } = await req.json();
     if (typeof sql !== "string" || !sql.trim()) {
       return NextResponse.json({ error: "sql required" }, { status: 400 });
     }
-    const driver = await getDriver(id);
+    const driver = await getDriver(id, userId);
     if (typeof limit === "number") {
       return NextResponse.json(
         await driver.runPagedQuery(sql, {

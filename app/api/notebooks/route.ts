@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { desc } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { notebooks, notebookListColumns, notebookDetailColumns } from "@/lib/db/schema";
 import { jsonError } from "@/lib/api";
+import { getCurrentUserId } from "@/lib/auth";
 
 const createInput = z.object({
   connectionId: z.string().nullish(),
@@ -12,8 +13,13 @@ const createInput = z.object({
 
 export async function GET() {
   try {
+    const userId = await getCurrentUserId();
     const conn = await db();
-    const rows = await conn.select(notebookListColumns).from(notebooks).orderBy(desc(notebooks.updatedAt));
+    const rows = await conn
+      .select(notebookListColumns)
+      .from(notebooks)
+      .where(eq(notebooks.userId, userId))
+      .orderBy(desc(notebooks.updatedAt));
     return NextResponse.json(rows);
   } catch (err) {
     return jsonError(err);
@@ -22,11 +28,13 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
+    const userId = await getCurrentUserId();
     const { connectionId, name } = createInput.parse(await req.json());
     const conn = await db();
     const [row] = await conn
       .insert(notebooks)
       .values({
+        userId,
         connectionId: connectionId ?? null,
         name: name || "Untitled query",
         cells: [{ id: crypto.randomUUID(), sql: "" }],

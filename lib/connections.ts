@@ -1,7 +1,8 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db } from "./db";
 import { connections } from "./db/schema";
 import { decrypt } from "./crypto";
+import { HttpError } from "./api";
 import { createDriver, type ConnectionConfig, type DatabaseDriver, type DatabaseType } from "./drivers";
 
 interface Entry {
@@ -33,10 +34,13 @@ function registry(): Map<string, Entry> {
   return g.__dbide_conns;
 }
 
-export async function loadConnectionConfig(id: string): Promise<ConnectionConfig> {
+export async function loadConnectionConfig(id: string, userId: string): Promise<ConnectionConfig> {
   const conn = await db();
-  const [r] = await conn.select().from(connections).where(eq(connections.id, id));
-  if (!r) throw new Error("Connection not found");
+  const [r] = await conn
+    .select()
+    .from(connections)
+    .where(and(eq(connections.id, id), eq(connections.userId, userId)));
+  if (!r) throw new HttpError(404, "Connection not found");
   return {
     id: r.id,
     name: r.name,
@@ -50,15 +54,30 @@ export async function loadConnectionConfig(id: string): Promise<ConnectionConfig
   };
 }
 
-/** Get (or lazily open) a driver for a stored connection. */
-export async function getDriver(connectionId: string): Promise<DatabaseDriver> {
+/** True if the connection exists and belongs to the given user. */
+async function ownsConnection(id: string, userId: string): Promise<boolean> {
+  const conn = await db();
+  const [r] = await conn
+    .select({ id: connections.id })
+    .from(connections)
+    .where(and(eq(connections.id, id), eq(connections.userId, userId)));
+  return !!r;
+}
+
+/**
+ * Get (or lazily open) a driver for a stored connection the user owns.
+ * Ownership is checked on every call — including cache hits — so a connection
+ * id alone can't be used to reach another user's database.
+ */
+export async function getDriver(connectionId: string, userId: string): Promise<DatabaseDriver> {
   const reg = registry();
   const entry = reg.get(connectionId);
   if (entry) {
+    if (!(await ownsConnection(connectionId, userId))) throw new HttpError(404, "Connection not found");
     entry.lastUsed = Date.now();
     return entry.driver;
   }
-  const cfg = await loadConnectionConfig(connectionId);
+  const cfg = await loadConnectionConfig(connectionId, userId); // throws if not owned
   const driver = createDriver(cfg);
   reg.set(connectionId, { driver, lastUsed: Date.now() });
   return driver;

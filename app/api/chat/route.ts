@@ -1,11 +1,12 @@
 import { anthropic } from "@ai-sdk/anthropic";
 import { convertToModelMessages, stepCountIs, streamText, tool, type UIMessage } from "ai";
 import { z } from "zod";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { getDriver } from "@/lib/connections";
 import { db } from "@/lib/db";
 import { chats } from "@/lib/db/schema";
 import { jsonError } from "@/lib/api";
+import { getCurrentUserId } from "@/lib/auth";
 
 export const maxDuration = 300;
 
@@ -31,7 +32,8 @@ export async function POST(req: Request) {
       await req.json();
     if (!connectionId) return jsonError(new Error("connectionId required"), 400);
 
-    const driver = await getDriver(connectionId);
+    const userId = await getCurrentUserId();
+    const driver = await getDriver(connectionId, userId);
 
     const result = streamText({
       model: anthropic(MODEL),
@@ -79,7 +81,7 @@ export async function POST(req: Request) {
           await conn
             .update(chats)
             .set({ messages: finalMessages, updatedAt: new Date() })
-            .where(eq(chats.id, chatId));
+            .where(and(eq(chats.id, chatId), eq(chats.userId, userId)));
         } catch (err) {
           console.error("Failed to persist chat", err);
         }

@@ -1,14 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
+import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { connections, connectionInput, connectionPublicColumns } from "@/lib/db/schema";
 import { encrypt } from "@/lib/crypto";
 import { jsonError } from "@/lib/api";
+import { getCurrentUserId } from "@/lib/auth";
 
 export async function GET() {
   try {
+    const userId = await getCurrentUserId();
     const conn = await db();
-    const rows = await conn.select(connectionPublicColumns).from(connections).orderBy(connections.createdAt);
+    const rows = await conn
+      .select(connectionPublicColumns)
+      .from(connections)
+      .where(eq(connections.userId, userId))
+      .orderBy(connections.createdAt);
     return NextResponse.json(rows);
   } catch (err) {
     return jsonError(err);
@@ -17,11 +24,13 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
+    const userId = await getCurrentUserId();
     const input = connectionInput.parse(await req.json());
     const conn = await db();
     const [row] = await conn
       .insert(connections)
       .values({
+        userId,
         name: input.name,
         type: input.type,
         host: input.host,

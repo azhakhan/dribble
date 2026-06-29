@@ -2,7 +2,6 @@
 
 import Image from "next/image";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
 import { useIde, type ChatMeta, type ConnectionMeta, type NotebookMeta } from "@/lib/store";
 import Sidebar from "@/components/Sidebar";
 import Tabs from "@/components/Tabs";
@@ -10,12 +9,12 @@ import TableTab from "@/components/TableTab";
 import NotebookTab from "@/components/NotebookTab";
 import ChatTab from "@/components/ChatTab";
 import DragHandle from "@/components/DragHandle";
+import UserMenu from "@/components/UserMenu";
 
 const SIDEBAR_MIN = 200;
 const SIDEBAR_MAX = 620;
 
 export default function Ide() {
-  const router = useRouter();
   const { tabs, activeTabId } = useIde();
   const hydrated = useIde((s) => s.hydrated);
   const hydrate = useIde((s) => s.hydrate);
@@ -100,11 +99,6 @@ export default function Ide() {
     };
   }, []);
 
-  async function logout() {
-    await fetch("/api/auth/logout", { method: "POST" });
-    router.replace("/login");
-  }
-
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100vh", overflow: "hidden" }}>
       {/* top bar */}
@@ -124,9 +118,7 @@ export default function Ide() {
         <span style={{ color: "var(--text-faint)", fontSize: 11 }}>
           {connections.length} connection{connections.length === 1 ? "" : "s"}
         </span>
-        <button className="btn-ghost" style={{ marginLeft: "auto", fontSize: 12 }} onClick={logout}>
-          Lock
-        </button>
+        <UserMenu />
       </div>
 
       {/* main area: tree on the left + editor column */}
