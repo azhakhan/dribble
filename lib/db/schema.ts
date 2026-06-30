@@ -7,13 +7,13 @@ import type { Layout, Tab, TreeState } from "@/lib/store";
 
 // Metadata DB (app-owned) schema. Mirrors the DDL that lib/metadb.ts used to
 // apply by hand. JSONB columns are strongly typed via .$type<>() so reads come
-// back typed instead of `any`. Table/column names keep the historical `dbide_`
-// prefix and snake_case so existing data and migrations line up.
+// back typed instead of `any`. Column names stay snake_case to match the
+// generated SQL.
 
 // App users. In local mode (no Google OAuth configured) everything is owned by a
 // single sentinel user seeded by the migration; in hosted mode one row per
 // Google account, upserted by email on sign-in. See lib/auth.ts.
-export const users = pgTable("dbide_users", {
+export const users = pgTable("users", {
   id: uuid("id").primaryKey().defaultRandom(),
   email: text("email").notNull().unique(),
   name: text("name"),
@@ -21,7 +21,7 @@ export const users = pgTable("dbide_users", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
-export const connections = pgTable("dbide_connections", {
+export const connections = pgTable("connections", {
   id: uuid("id").primaryKey().defaultRandom(),
   userId: uuid("user_id")
     .notNull()
@@ -37,7 +37,7 @@ export const connections = pgTable("dbide_connections", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
-export const notebooks = pgTable("dbide_notebooks", {
+export const notebooks = pgTable("notebooks", {
   id: uuid("id").primaryKey().defaultRandom(),
   userId: uuid("user_id")
     .notNull()
@@ -50,7 +50,7 @@ export const notebooks = pgTable("dbide_notebooks", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
-export const chats = pgTable("dbide_chats", {
+export const chats = pgTable("chats", {
   id: uuid("id").primaryKey().defaultRandom(),
   userId: uuid("user_id")
     .notNull()
@@ -63,7 +63,7 @@ export const chats = pgTable("dbide_chats", {
 });
 
 // Per-user workspace: one row per user holding open tabs + saved layout.
-export const workspace = pgTable("dbide_workspace", {
+export const workspace = pgTable("workspace", {
   userId: uuid("user_id")
     .primaryKey()
     .references(() => users.id, { onDelete: "cascade" }),

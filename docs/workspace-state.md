@@ -14,29 +14,29 @@ tree, and cached query results. Each user gets their own workspace row, keyed by
 
 | State | Scope | Stored in |
 |-------|-------|-----------|
-| Open tabs + order + active tab | global | `dbide_workspace.tabs`, `.active_tab_id` |
-| Sidebar width | global | `dbide_workspace.layout.sidebarWidth` |
+| Open tabs + order + active tab | global | `workspace.tabs`, `.active_tab_id` |
+| Sidebar width | global | `workspace.layout.sidebarWidth` |
 | Table column widths | per table tab | `layout.columnWidths[tabId]` |
 | Chat results split | per chat | `layout.chatSplit[chatId]` |
 | Query cell result height | per notebook + cell | `layout.cellHeights[notebookId][cellId]` |
-| Expanded connections / schemas | global | `dbide_workspace.tree` |
-| Query result snapshots | per notebook cell | `dbide_notebooks.results` |
-| Chat result snapshots | per chat | already in `dbide_chats.messages` (tool outputs) |
+| Expanded connections / schemas | global | `workspace.tree` |
+| Query result snapshots | per notebook cell | `notebooks.results` |
+| Chat result snapshots | per chat | already in `chats.messages` (tool outputs) |
 
 ## Database schema
 
-Defined in `lib/db/schema.ts` (Drizzle ORM). The `dbide_notebooks.results`
-column caches a page of results per cell, and `dbide_workspace` holds one row
+Defined in `lib/db/schema.ts` (Drizzle ORM). The `notebooks.results`
+column caches a page of results per cell, and `workspace` holds one row
 **per user**:
 
 ```sql
 -- Cached page of results per notebook cell:
 --   { [cellId]: { result, sql, page, limit, totalCount, ranAt } }
--- dbide_notebooks.results jsonb NOT NULL DEFAULT '{}'
+-- notebooks.results jsonb NOT NULL DEFAULT '{}'
 
 -- Per-user workspace (one row per user, keyed by user_id).
-CREATE TABLE dbide_workspace (
-  user_id uuid PRIMARY KEY REFERENCES dbide_users(id) ON DELETE CASCADE,
+CREATE TABLE workspace (
+  user_id uuid PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
   tabs jsonb NOT NULL DEFAULT '[]',
   active_tab_id text,
   layout jsonb NOT NULL DEFAULT '{}',   -- sizes (see table above)
@@ -108,7 +108,7 @@ free.
 ## Result snapshots & staleness
 
 - **Queries** (`NotebookTab`): on a successful run, the current result page is
-  written to `dbide_notebooks.results[cellId]` (kept in a ref so a single-cell
+  written to `notebooks.results[cellId]` (kept in a ref so a single-cell
   run doesn't clobber the other cells' snapshots). On reopen, cells rehydrate
   from the snapshot. A badge shows `ran <age>`, turning amber **⚠ stale** when
   the cell's SQL changed since the run *or* the snapshot is over an hour old

@@ -46,7 +46,8 @@ Copy `.env.example` to `.env.local`. Required vars:
 - `lib/connections.ts` — resolves and caches live drivers per connection,
   keeping them warm vs. idling them out.
 - `lib/db/` — the **metadata DB**, managed with Drizzle ORM. `schema.ts` defines
-  the `dbide_*` tables (typed JSONB columns) + the derived Zod input schemas;
+  the `users`, `connections`, `notebooks`, `chats`, `workspace` tables (typed
+  JSONB columns) + the derived Zod input schemas;
   `index.ts` wraps a cached pg `Pool` in a Drizzle client and runs pending
   migrations on first use (`db()`); `migrations/` holds the generated SQL.
   Note: this only covers app-owned metadata. **User databases are queried through
@@ -60,7 +61,6 @@ Copy `.env.example` to `.env.local`. Required vars:
 
 ## Conventions
 
-- Metadata tables are prefixed `dbide_` (the package name is `dbide`).
 - The AI agent runs read-only SQL by default; results shown to it are row-capped.
 - New database engines: implement the driver interface in `lib/drivers/types.ts`
   and register it in `lib/drivers/index.ts`.

@@ -49,7 +49,7 @@ never imports `pg`:
 - **`auth.config.ts`** — Edge-safe config: the Google provider plus pure,
   DB-free callbacks (allowlist check, session shaping). Imported by `proxy.ts`.
 - **`lib/auth.ts`** — full config used by Node route handlers. Adds the `jwt`
-  callback that upserts the signed-in account into `dbide_users` and stamps the
+  callback that upserts the signed-in account into `users` and stamps the
   internal id onto the token, then re-exports `handlers`, `auth`, `signIn`,
   `signOut`, plus `getCurrentUserId()`.
 
@@ -86,6 +86,6 @@ See `.env.example` for the full annotated list.
 
 Migration `lib/db/migrations/0001_*.sql` seeds the sentinel user, adds the
 `user_id` columns as nullable, backfills every pre-existing row to the sentinel,
-*then* enforces `NOT NULL` + foreign keys, and finally re-keys `dbide_workspace`
+*then* enforces `NOT NULL` + foreign keys, and finally re-keys `workspace`
 from its old singleton `id` to `user_id`. So upgrading an existing single-user
 install keeps all data, now owned by the local user.

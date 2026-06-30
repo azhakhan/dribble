@@ -1,11 +1,11 @@
 {
-  "id": "e5abaf92-a994-4a7d-be8a-aefda29474f5",
+  "id": "374548c2-5e17-4168-896d-2b56b7c9be9b",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
-    "public.dbide_chats": {
-      "name": "dbide_chats",
+    "public.chats": {
+      "name": "chats",
       "schema": "",
       "columns": {
         "id": {
@@ -14,6 +14,12 @@
           "primaryKey": true,
           "notNull": true,
           "default": "gen_random_uuid()"
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
         },
         "connection_id": {
           "name": "connection_id",
@@ -52,10 +58,23 @@
       },
       "indexes": {},
       "foreignKeys": {
-        "dbide_chats_connection_id_dbide_connections_id_fk": {
-          "name": "dbide_chats_connection_id_dbide_connections_id_fk",
-          "tableFrom": "dbide_chats",
-          "tableTo": "dbide_connections",
+        "chats_user_id_users_id_fk": {
+          "name": "chats_user_id_users_id_fk",
+          "tableFrom": "chats",
+          "tableTo": "users",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "chats_connection_id_connections_id_fk": {
+          "name": "chats_connection_id_connections_id_fk",
+          "tableFrom": "chats",
+          "tableTo": "connections",
           "columnsFrom": [
             "connection_id"
           ],
@@ -72,8 +91,8 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.dbide_connections": {
-      "name": "dbide_connections",
+    "public.connections": {
+      "name": "connections",
       "schema": "",
       "columns": {
         "id": {
@@ -82,6 +101,12 @@
           "primaryKey": true,
           "notNull": true,
           "default": "gen_random_uuid()"
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
         },
         "name": {
           "name": "name",
@@ -143,15 +168,29 @@
         }
       },
       "indexes": {},
-      "foreignKeys": {},
+      "foreignKeys": {
+        "connections_user_id_users_id_fk": {
+          "name": "connections_user_id_users_id_fk",
+          "tableFrom": "connections",
+          "tableTo": "users",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.dbide_notebooks": {
-      "name": "dbide_notebooks",
+    "public.notebooks": {
+      "name": "notebooks",
       "schema": "",
       "columns": {
         "id": {
@@ -160,6 +199,12 @@
           "primaryKey": true,
           "notNull": true,
           "default": "gen_random_uuid()"
+        },
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
         },
         "connection_id": {
           "name": "connection_id",
@@ -205,10 +250,23 @@
       },
       "indexes": {},
       "foreignKeys": {
-        "dbide_notebooks_connection_id_dbide_connections_id_fk": {
-          "name": "dbide_notebooks_connection_id_dbide_connections_id_fk",
-          "tableFrom": "dbide_notebooks",
-          "tableTo": "dbide_connections",
+        "notebooks_user_id_users_id_fk": {
+          "name": "notebooks_user_id_users_id_fk",
+          "tableFrom": "notebooks",
+          "tableTo": "users",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "notebooks_connection_id_connections_id_fk": {
+          "name": "notebooks_connection_id_connections_id_fk",
+          "tableFrom": "notebooks",
+          "tableTo": "connections",
           "columnsFrom": [
             "connection_id"
           ],
@@ -225,16 +283,68 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.dbide_workspace": {
-      "name": "dbide_workspace",
+    "public.users": {
+      "name": "users",
       "schema": "",
       "columns": {
         "id": {
           "name": "id",
-          "type": "integer",
+          "type": "uuid",
           "primaryKey": true,
           "notNull": true,
-          "default": 1
+          "default": "gen_random_uuid()"
+        },
+        "email": {
+          "name": "email",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "image": {
+          "name": "image",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {
+        "users_email_unique": {
+          "name": "users_email_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "email"
+          ]
+        }
+      },
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.workspace": {
+      "name": "workspace",
+      "schema": "",
+      "columns": {
+        "user_id": {
+          "name": "user_id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
         },
         "tabs": {
           "name": "tabs",
@@ -272,16 +382,25 @@
         }
       },
       "indexes": {},
-      "foreignKeys": {},
+      "foreignKeys": {
+        "workspace_user_id_users_id_fk": {
+          "name": "workspace_user_id_users_id_fk",
+          "tableFrom": "workspace",
+          "tableTo": "users",
+          "columnsFrom": [
+            "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "policies": {},
-      "checkConstraints": {
-        "dbide_workspace_singleton": {
-          "name": "dbide_workspace_singleton",
-          "value": "\"dbide_workspace\".\"id\" = 1"
-        }
-      },
+      "checkConstraints": {},
       "isRLSEnabled": false
     }
   },
