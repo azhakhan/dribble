@@ -126,14 +126,11 @@ function ChatInner({
   const dragStartResults = useRef(0);
   const sentFirst = useRef(initialMessages.length > 0);
 
-  const transport = useMemo(
-    () =>
-      new DefaultChatTransport({
-        api: "/api/chat",
-        body: () => ({ connectionId, chatId: tab.resourceId }),
-      }),
-    [connectionId, tab.resourceId]
-  );
+  // useChat freezes the transport from the first render (it only recreates the
+  // underlying Chat when `id` changes), so a `body` closure capturing connectionId
+  // would be stuck on the initial connection. Send the live connection per-request
+  // via sendMessage's body option instead.
+  const transport = useMemo(() => new DefaultChatTransport({ api: "/api/chat" }), []);
 
   const { messages, sendMessage, status, error, stop } = useChat({
     id: tab.resourceId,
@@ -152,7 +149,7 @@ function ChatInner({
     const text = input.trim();
     if (!text || busy || !connectionId) return;
     setInput("");
-    sendMessage({ text });
+    sendMessage({ text }, { body: { connectionId, chatId: tab.resourceId } });
     if (!sentFirst.current) {
       sentFirst.current = true;
       if (tab.title === "New chat") onFirstMessage(text);
