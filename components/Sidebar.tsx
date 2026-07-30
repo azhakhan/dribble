@@ -1,8 +1,22 @@
 "use client";
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { Database, Layers, Table2, Eye, FileCode2, MessageSquare } from "lucide-react";
-import { useIde, type ChatMeta, type ConnectionMeta, type NotebookMeta } from "@/lib/store";
+import {
+  Database,
+  Layers,
+  Table2,
+  Eye,
+  FileCode2,
+  MessageSquare,
+  RefreshCw,
+  XIcon,
+} from "lucide-react";
+import {
+  useIde,
+  type ChatMeta,
+  type ConnectionMeta,
+  type NotebookMeta,
+} from "@/lib/store";
 import ConnectionModal from "./ConnectionModal";
 
 interface Props {
@@ -44,6 +58,34 @@ function Chevron({ open }: { open: boolean }) {
   );
 }
 
+function ReloadButton({
+  busy,
+  title,
+  onClick,
+}: {
+  busy: boolean;
+  title: string;
+  onClick: (e: React.MouseEvent) => void;
+}) {
+  return (
+    <button
+      className="btn-ghost"
+      style={{
+        display: "flex",
+        alignItems: "center",
+        padding: "2px 4px",
+        borderRadius: 3,
+      }}
+      title={title}
+      aria-label={title}
+      disabled={busy}
+      onClick={onClick}
+    >
+      <RefreshCw size={8} className={busy ? "spin" : undefined} />
+    </button>
+  );
+}
+
 function TableNode({
   conn,
   schema,
@@ -77,29 +119,64 @@ function TableNode({
       }
       title={`${schema}.${table}`}
     >
-      {kind === "view"
-        ? <Eye size={13} color="#b48ead" style={{ flexShrink: 0 }} />
-        : <Table2 size={13} color="var(--teal)" style={{ flexShrink: 0 }} />
-      }
-      <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{table}</span>
+      {kind === "view" ? (
+        <Eye size={13} color="#b48ead" style={{ flexShrink: 0 }} />
+      ) : (
+        <Table2 size={13} color="var(--teal)" style={{ flexShrink: 0 }} />
+      )}
+      <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>
+        {table}
+      </span>
     </button>
   );
 }
 
-function SchemaNode({ conn, schema, selectedKey, setSelectedKey }: { conn: ConnectionMeta; schema: string; selectedKey: string; setSelectedKey: (k: string) => void }) {
+function SchemaNode({
+  conn,
+  schema,
+  selectedKey,
+  setSelectedKey,
+}: {
+  conn: ConnectionMeta;
+  schema: string;
+  selectedKey: string;
+  setSelectedKey: (k: string) => void;
+}) {
   const treeKey = `${conn.id}:${schema}`;
   const open = useIde((s) => s.tree.schemas.includes(treeKey));
   const setSchemaExpanded = useIde((s) => s.setSchemaExpanded);
-  const [tables, setTables] = useState<{ name: string; kind: "table" | "view" }[] | null>(null);
+  const [tables, setTables] = useState<
+    { name: string; kind: "table" | "view" }[] | null
+  >(null);
   const [error, setError] = useState<string | null>(null);
+  const [reloading, setReloading] = useState(false);
   const loadingRef = useRef(false);
   const key = `schema:${conn.id}:${schema}`;
 
   const loadTables = useCallback(async () => {
-    const res = await fetch(`/api/db/${conn.id}/tables?schema=${encodeURIComponent(schema)}`);
+    const res = await fetch(
+      `/api/db/${conn.id}/tables?schema=${encodeURIComponent(schema)}`,
+    );
     if (res.ok) setTables(await res.json());
     else setError((await res.json().catch(() => ({})))?.error ?? "failed");
   }, [conn.id, schema]);
+
+  /** Re-fetch this schema's tables, expanding the node so the result is visible. */
+  async function reload(e: React.MouseEvent) {
+    e.stopPropagation();
+    if (loadingRef.current) return;
+    loadingRef.current = true;
+    setReloading(true);
+    setError(null);
+    setTables(null);
+    if (!open) setSchemaExpanded(treeKey, true);
+    try {
+      await loadTables();
+    } finally {
+      loadingRef.current = false;
+      setReloading(false);
+    }
+  }
 
   // Fetch tables whenever expanded (including restored from a prior session).
   useEffect(() => {
@@ -121,13 +198,47 @@ function SchemaNode({ conn, schema, selectedKey, setSelectedKey }: { conn: Conne
 
   return (
     <div>
-      <button className={`tree-row ${selectedKey === key ? "selected" : ""}`} style={{ paddingLeft: 24 }} onClick={toggle}>
-        <Chevron open={open} />
-        <Layers size={13} color="var(--accent-dim)" style={{ flexShrink: 0 }} />
-        <span>{schema}</span>
-      </button>
-      {open && error && <div style={{ paddingLeft: 40, color: "var(--danger)", fontSize: 11 }}>{error}</div>}
-      {open && tables === null && !error && <div style={{ paddingLeft: 40, color: "var(--text-faint)" }}>loading…</div>}
+      <div
+        style={{ display: "flex", alignItems: "center", position: "relative" }}
+      >
+        <button
+          className={`tree-row ${selectedKey === key ? "selected" : ""}`}
+          style={{ paddingLeft: 24 }}
+          onClick={toggle}
+        >
+          <Chevron open={open} />
+          <Layers
+            size={13}
+            color="var(--accent-dim)"
+            style={{ flexShrink: 0 }}
+          />
+          <span>{schema}</span>
+        </button>
+        <span
+          style={{
+            position: "absolute",
+            right: 4,
+            display: "flex",
+            background: "var(--bg1)",
+          }}
+        >
+          <ReloadButton
+            busy={reloading}
+            title={`Reload tables in ${schema}`}
+            onClick={reload}
+          />
+        </span>
+      </div>
+      {open && error && (
+        <div style={{ paddingLeft: 40, color: "var(--danger)", fontSize: 11 }}>
+          {error}
+        </div>
+      )}
+      {open && tables === null && !error && (
+        <div style={{ paddingLeft: 40, color: "var(--text-faint)" }}>
+          loading…
+        </div>
+      )}
       {open &&
         tables?.map((t) => (
           <TableNode
@@ -137,10 +248,16 @@ function SchemaNode({ conn, schema, selectedKey, setSelectedKey }: { conn: Conne
             table={t.name}
             kind={t.kind}
             selected={selectedKey === `table:${conn.id}:${schema}.${t.name}`}
-            onSelect={() => setSelectedKey(`table:${conn.id}:${schema}.${t.name}`)}
+            onSelect={() =>
+              setSelectedKey(`table:${conn.id}:${schema}.${t.name}`)
+            }
           />
         ))}
-      {open && tables?.length === 0 && <div style={{ paddingLeft: 40, color: "var(--text-faint)" }}>no tables</div>}
+      {open && tables?.length === 0 && (
+        <div style={{ paddingLeft: 40, color: "var(--text-faint)" }}>
+          no tables
+        </div>
+      )}
     </div>
   );
 }
@@ -162,14 +279,39 @@ function ConnectionNode({
   const setConnectionExpanded = useIde((s) => s.setConnectionExpanded);
   const [schemas, setSchemas] = useState<string[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [reloading, setReloading] = useState(false);
+  // Bumped on reload; part of each SchemaNode's key so they remount and
+  // re-fetch their tables instead of showing a stale list.
+  const [nonce, setNonce] = useState(0);
   const loadingRef = useRef(false);
   const key = `conn:${conn.id}`;
 
   const loadSchemas = useCallback(async () => {
     const res = await fetch(`/api/db/${conn.id}/schemas`);
     if (res.ok) setSchemas(await res.json());
-    else setError((await res.json().catch(() => ({})))?.error ?? "connection failed");
+    else
+      setError(
+        (await res.json().catch(() => ({})))?.error ?? "connection failed",
+      );
   }, [conn.id]);
+
+  /** Re-fetch the schema list and every expanded schema's tables. */
+  async function reload(e: React.MouseEvent) {
+    e.stopPropagation();
+    if (loadingRef.current) return;
+    loadingRef.current = true;
+    setReloading(true);
+    setError(null);
+    setSchemas(null);
+    setNonce((n) => n + 1);
+    if (!open) setConnectionExpanded(conn.id, true);
+    try {
+      await loadSchemas();
+    } finally {
+      loadingRef.current = false;
+      setReloading(false);
+    }
+  }
 
   // Load schemas whenever expanded (including restored from a prior session).
   useEffect(() => {
@@ -191,32 +333,90 @@ function ConnectionNode({
 
   return (
     <div>
-      <div style={{ display: "flex", alignItems: "center", position: "relative" }} className="conn-row">
-        <button className={`tree-row ${selectedKey === key ? "selected" : ""}`} onClick={toggle} title={`${conn.host}:${conn.port}/${conn.database}${connected ? " · connected" : ""}`}>
+      <div
+        style={{ display: "flex", alignItems: "center", position: "relative" }}
+        className="conn-row"
+      >
+        <button
+          className={`tree-row ${selectedKey === key ? "selected" : ""}`}
+          onClick={toggle}
+          title={`${conn.host}:${conn.port}/${conn.database}${connected ? " · connected" : ""}`}
+        >
           <Chevron open={open} />
-          <Database size={13} color={connected ? "var(--green)" : "var(--text-faint)"} style={{ flexShrink: 0 }} />
+          <Database
+            size={13}
+            color={connected ? "var(--green)" : "var(--text-faint)"}
+            style={{ flexShrink: 0 }}
+          />
           <span style={{ fontWeight: 500 }}>{conn.name}</span>
-          <span className="mono" style={{ fontSize: 10, color: "var(--text-faint)", marginLeft: 2 }}>
+          <span
+            className="mono"
+            style={{ fontSize: 10, color: "var(--text-faint)", marginLeft: 2 }}
+          >
             {conn.database}
           </span>
         </button>
-        <button
-          className="btn-ghost"
-          style={{ position: "absolute", right: 4, fontSize: 11, padding: "1px 5px", borderRadius: 3 }}
-          title="Remove connection"
-          onClick={(e) => {
-            e.stopPropagation();
-            if (confirm(`Remove connection "${conn.name}"?`)) onDelete();
+        <span
+          style={{
+            position: "absolute",
+            right: 4,
+            display: "flex",
+            alignItems: "center",
+            gap: 1,
+            background: "var(--bg1)",
           }}
         >
-          ×
-        </button>
+          <ReloadButton
+            busy={reloading}
+            title={`Reload schemas in ${conn.name}`}
+            onClick={reload}
+          />
+          <button
+            className="btn-ghost"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              padding: "2px 4px",
+              borderRadius: 3,
+            }}
+            title="Remove connection"
+            onClick={(e) => {
+              e.stopPropagation();
+              if (confirm(`Remove connection "${conn.name}"?`)) onDelete();
+            }}
+          >
+            <XIcon size={8} />
+          </button>
+        </span>
       </div>
       {open && error && (
-        <div style={{ paddingLeft: 24, color: "var(--danger)", fontSize: 11, whiteSpace: "pre-wrap", padding: "2px 8px 2px 24px" }}>{error}</div>
+        <div
+          style={{
+            paddingLeft: 24,
+            color: "var(--danger)",
+            fontSize: 11,
+            whiteSpace: "pre-wrap",
+            padding: "2px 8px 2px 24px",
+          }}
+        >
+          {error}
+        </div>
       )}
-      {open && schemas === null && !error && <div style={{ paddingLeft: 24, color: "var(--text-faint)" }}>connecting…</div>}
-      {open && schemas?.map((s) => <SchemaNode key={s} conn={conn} schema={s} selectedKey={selectedKey} setSelectedKey={setSelectedKey} />)}
+      {open && schemas === null && !error && (
+        <div style={{ paddingLeft: 24, color: "var(--text-faint)" }}>
+          connecting…
+        </div>
+      )}
+      {open &&
+        schemas?.map((s) => (
+          <SchemaNode
+            key={`${nonce}:${s}`}
+            conn={conn}
+            schema={s}
+            selectedKey={selectedKey}
+            setSelectedKey={setSelectedKey}
+          />
+        ))}
     </div>
   );
 }
@@ -268,7 +468,13 @@ function ResourceNode({
 
   if (editing) {
     return (
-      <div style={{ display: "flex", alignItems: "center", padding: "1px 4px 1px 8px" }}>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          padding: "1px 4px 1px 8px",
+        }}
+      >
         <span style={{ width: 17, display: "flex", alignItems: "center" }}>
           {icon}
         </span>
@@ -293,18 +499,43 @@ function ResourceNode({
   }
 
   return (
-    <div style={{ display: "flex", alignItems: "center", position: "relative" }}>
-      <button className="tree-row" onClick={onOpen} onDoubleClick={startEditing} title={item.name}>
-        <span style={{ display: "flex", alignItems: "center" }}>
-          {icon}
+    <div
+      style={{ display: "flex", alignItems: "center", position: "relative" }}
+    >
+      <button
+        className="tree-row"
+        onClick={onOpen}
+        onDoubleClick={startEditing}
+        title={item.name}
+      >
+        <span style={{ display: "flex", alignItems: "center" }}>{icon}</span>
+        <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>
+          {item.name}
         </span>
-        <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{item.name}</span>
       </button>
-      <span style={{ position: "absolute", right: 4, display: "flex", gap: 1, background: "var(--bg1)" }}>
-        <button className="btn-ghost" style={{ fontSize: 11, padding: "1px 5px", borderRadius: 3 }} onClick={startEditing} title="Rename">
+      <span
+        style={{
+          position: "absolute",
+          right: 4,
+          display: "flex",
+          gap: 1,
+          background: "var(--bg1)",
+        }}
+      >
+        <button
+          className="btn-ghost"
+          style={{ fontSize: 11, padding: "1px 5px", borderRadius: 3 }}
+          onClick={startEditing}
+          title="Rename"
+        >
           ✎
         </button>
-        <button className="btn-ghost" style={{ fontSize: 11, padding: "1px 5px", borderRadius: 3 }} onClick={onDelete} title="Delete">
+        <button
+          className="btn-ghost"
+          style={{ fontSize: 11, padding: "1px 5px", borderRadius: 3 }}
+          onClick={onDelete}
+          title="Delete"
+        >
           ×
         </button>
       </span>
@@ -312,7 +543,16 @@ function ResourceNode({
   );
 }
 
-export default function Sidebar({ width, connections, notebooks, chats, connectedIds, refreshConnections, refreshNotebooks, refreshChats }: Props) {
+export default function Sidebar({
+  width,
+  connections,
+  notebooks,
+  chats,
+  connectedIds,
+  refreshConnections,
+  refreshNotebooks,
+  refreshChats,
+}: Props) {
   const openTab = useIde((s) => s.openTab);
   const closeTab = useIde((s) => s.closeTab);
   const renameTab = useIde((s) => s.renameTab);
@@ -334,7 +574,13 @@ export default function Sidebar({ width, connections, notebooks, chats, connecte
     if (res.ok) {
       const nb = await res.json();
       refreshNotebooks();
-      openTab({ id: `notebook:${nb.id}`, kind: "notebook", title: nb.name, connectionId: nb.connection_id, resourceId: nb.id });
+      openTab({
+        id: `notebook:${nb.id}`,
+        kind: "notebook",
+        title: nb.name,
+        connectionId: nb.connection_id,
+        resourceId: nb.id,
+      });
     }
   }
 
@@ -347,7 +593,13 @@ export default function Sidebar({ width, connections, notebooks, chats, connecte
     if (res.ok) {
       const chat = await res.json();
       refreshChats();
-      openTab({ id: `chat:${chat.id}`, kind: "chat", title: chat.name, connectionId: chat.connection_id, resourceId: chat.id });
+      openTab({
+        id: `chat:${chat.id}`,
+        kind: "chat",
+        title: chat.name,
+        connectionId: chat.connection_id,
+        resourceId: chat.id,
+      });
     }
   }
 
@@ -358,7 +610,11 @@ export default function Sidebar({ width, connections, notebooks, chats, connecte
     else refreshChats();
   }
 
-  async function renameResource(kind: "notebooks" | "chats", id: string, name: string) {
+  async function renameResource(
+    kind: "notebooks" | "chats",
+    id: string,
+    name: string,
+  ) {
     const res = await fetch(`/api/${kind}/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -384,7 +640,12 @@ export default function Sidebar({ width, connections, notebooks, chats, connecte
     >
       <div style={{ ...SECTION, paddingTop: 10 }}>
         <span>DATABASES</span>
-        <button className="btn-ghost" style={{ fontSize: 14, padding: "0 6px", borderRadius: 3 }} title="Add connection" onClick={() => setShowModal(true)}>
+        <button
+          className="btn-ghost"
+          style={{ fontSize: 14, padding: "0 6px", borderRadius: 3 }}
+          title="Add connection"
+          onClick={() => setShowModal(true)}
+        >
           +
         </button>
       </div>
@@ -392,7 +653,10 @@ export default function Sidebar({ width, connections, notebooks, chats, connecte
         {connections.length === 0 && (
           <div style={{ padding: "8px 10px", color: "var(--text-faint)" }}>
             No connections yet.{" "}
-            <button style={{ color: "var(--accent)", textDecoration: "underline" }} onClick={() => setShowModal(true)}>
+            <button
+              style={{ color: "var(--accent)", textDecoration: "underline" }}
+              onClick={() => setShowModal(true)}
+            >
               Add one
             </button>
           </div>
@@ -417,7 +681,12 @@ export default function Sidebar({ width, connections, notebooks, chats, connecte
 
       <div style={SECTION}>
         <span>QUERIES</span>
-        <button className="btn-ghost" style={{ fontSize: 14, padding: "0 6px", borderRadius: 3 }} title="New query notebook" onClick={newNotebook}>
+        <button
+          className="btn-ghost"
+          style={{ fontSize: 14, padding: "0 6px", borderRadius: 3 }}
+          title="New query notebook"
+          onClick={newNotebook}
+        >
           +
         </button>
       </div>
@@ -428,7 +697,15 @@ export default function Sidebar({ width, connections, notebooks, chats, connecte
             item={nb}
             kind="query"
             icon={<FileCode2 size={13} color="var(--accent)" />}
-            onOpen={() => openTab({ id: `notebook:${nb.id}`, kind: "notebook", title: nb.name, connectionId: nb.connection_id, resourceId: nb.id })}
+            onOpen={() =>
+              openTab({
+                id: `notebook:${nb.id}`,
+                kind: "notebook",
+                title: nb.name,
+                connectionId: nb.connection_id,
+                resourceId: nb.id,
+              })
+            }
             onDelete={() => deleteResource("notebooks", nb.id)}
             onRename={(name) => renameResource("notebooks", nb.id, name)}
           />
@@ -437,25 +714,50 @@ export default function Sidebar({ width, connections, notebooks, chats, connecte
 
       <div style={SECTION}>
         <span>CHATS</span>
-        <button className="btn-ghost" style={{ fontSize: 14, padding: "0 6px", borderRadius: 3 }} title="New chat" onClick={newChat}>
+        <button
+          className="btn-ghost"
+          style={{ fontSize: 14, padding: "0 6px", borderRadius: 3 }}
+          title="New chat"
+          onClick={newChat}
+        >
           +
         </button>
       </div>
-      <div style={{ overflowY: "auto", flex: "0 1 25%", padding: "0 4px", paddingBottom: 8 }}>
+      <div
+        style={{
+          overflowY: "auto",
+          flex: "0 1 25%",
+          padding: "0 4px",
+          paddingBottom: 8,
+        }}
+      >
         {chats.map((chat) => (
           <ResourceNode
             key={chat.id}
             item={chat}
             kind="chat"
             icon={<MessageSquare size={13} color="#b48ead" />}
-            onOpen={() => openTab({ id: `chat:${chat.id}`, kind: "chat", title: chat.name, connectionId: chat.connection_id, resourceId: chat.id })}
+            onOpen={() =>
+              openTab({
+                id: `chat:${chat.id}`,
+                kind: "chat",
+                title: chat.name,
+                connectionId: chat.connection_id,
+                resourceId: chat.id,
+              })
+            }
             onDelete={() => deleteResource("chats", chat.id)}
             onRename={(name) => renameResource("chats", chat.id, name)}
           />
         ))}
       </div>
 
-      {showModal && <ConnectionModal onClose={() => setShowModal(false)} onSaved={refreshConnections} />}
+      {showModal && (
+        <ConnectionModal
+          onClose={() => setShowModal(false)}
+          onSaved={refreshConnections}
+        />
+      )}
     </div>
   );
 }

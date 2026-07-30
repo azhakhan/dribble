@@ -132,6 +132,15 @@ select:focus {
   color: var(--text);
 }
 
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.spin {
+  animation: spin 0.7s linear infinite;
+}
+
 .tree-row {
   display: flex;
   align-items: center;
