@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { CheckCircle2 } from "lucide-react";
+import { ICON_SIZE } from "./IconButton";
 
 interface Props {
   onClose: () => void;
@@ -139,8 +141,15 @@ export default function ConnectionModal({ onClose, onSaved }: Props) {
         {error && <div style={{ color: "var(--danger)", fontSize: 12, whiteSpace: "pre-wrap" }}>{error}</div>}
 
         <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 4 }}>
-          <button type="button" className="btn" onClick={test} disabled={testState === "testing"}>
-            {testState === "testing" ? "Testing…" : testState === "ok" ? "✓ Connected" : "Test"}
+          <button
+            type="button"
+            className="btn"
+            style={{ display: "flex", alignItems: "center", gap: 5 }}
+            onClick={test}
+            disabled={testState === "testing"}
+          >
+            {testState === "ok" && <CheckCircle2 size={ICON_SIZE} />}
+            {testState === "testing" ? "Testing…" : testState === "ok" ? "Connected" : "Test"}
           </button>
           <button type="button" className="btn btn-ghost" onClick={onClose}>
             Cancel

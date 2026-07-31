@@ -10,6 +10,10 @@ import {
   MessageSquare,
   RefreshCw,
   XIcon,
+  ChevronRight,
+  Plus,
+  Pencil,
+  Trash2,
 } from "lucide-react";
 import {
   useIde,
@@ -18,6 +22,7 @@ import {
   type NotebookMeta,
 } from "@/lib/store";
 import ConnectionModal from "./ConnectionModal";
+import IconButton, { ICON_SIZE } from "./IconButton";
 
 interface Props {
   width: number;
@@ -45,15 +50,13 @@ function Chevron({ open }: { open: boolean }) {
   return (
     <span
       style={{
-        display: "inline-block",
-        width: 10,
-        fontSize: 9,
+        display: "flex",
         color: "var(--text-faint)",
         transform: open ? "rotate(90deg)" : "none",
         transition: "transform 0.12s",
       }}
     >
-      ▶
+      <ChevronRight size={ICON_SIZE} />
     </span>
   );
 }
@@ -68,21 +71,13 @@ function ReloadButton({
   onClick: (e: React.MouseEvent) => void;
 }) {
   return (
-    <button
-      className="btn-ghost"
-      style={{
-        display: "flex",
-        alignItems: "center",
-        padding: "2px 4px",
-        borderRadius: 3,
-      }}
+    <IconButton
+      icon={<RefreshCw size={ICON_SIZE} />}
       title={title}
-      aria-label={title}
       disabled={busy}
+      spin={busy}
       onClick={onClick}
-    >
-      <RefreshCw size={8} className={busy ? "spin" : undefined} />
-    </button>
+    />
   );
 }
 
@@ -120,9 +115,9 @@ function TableNode({
       title={`${schema}.${table}`}
     >
       {kind === "view" ? (
-        <Eye size={13} color="#b48ead" style={{ flexShrink: 0 }} />
+        <Eye size={ICON_SIZE} color="#b48ead" style={{ flexShrink: 0 }} />
       ) : (
-        <Table2 size={13} color="var(--teal)" style={{ flexShrink: 0 }} />
+        <Table2 size={ICON_SIZE} color="var(--teal)" style={{ flexShrink: 0 }} />
       )}
       <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>
         {table}
@@ -208,7 +203,7 @@ function SchemaNode({
         >
           <Chevron open={open} />
           <Layers
-            size={13}
+            size={ICON_SIZE}
             color="var(--accent-dim)"
             style={{ flexShrink: 0 }}
           />
@@ -344,7 +339,7 @@ function ConnectionNode({
         >
           <Chevron open={open} />
           <Database
-            size={13}
+            size={ICON_SIZE}
             color={connected ? "var(--green)" : "var(--text-faint)"}
             style={{ flexShrink: 0 }}
           />
@@ -371,22 +366,14 @@ function ConnectionNode({
             title={`Reload schemas in ${conn.name}`}
             onClick={reload}
           />
-          <button
-            className="btn-ghost"
-            style={{
-              display: "flex",
-              alignItems: "center",
-              padding: "2px 4px",
-              borderRadius: 3,
-            }}
+          <IconButton
+            icon={<XIcon size={ICON_SIZE} />}
             title="Remove connection"
             onClick={(e) => {
               e.stopPropagation();
               if (confirm(`Remove connection "${conn.name}"?`)) onDelete();
             }}
-          >
-            <XIcon size={8} />
-          </button>
+          />
         </span>
       </div>
       {open && error && (
@@ -522,22 +509,8 @@ function ResourceNode({
           background: "var(--bg1)",
         }}
       >
-        <button
-          className="btn-ghost"
-          style={{ fontSize: 11, padding: "1px 5px", borderRadius: 3 }}
-          onClick={startEditing}
-          title="Rename"
-        >
-          ✎
-        </button>
-        <button
-          className="btn-ghost"
-          style={{ fontSize: 11, padding: "1px 5px", borderRadius: 3 }}
-          onClick={onDelete}
-          title="Delete"
-        >
-          ×
-        </button>
+        <IconButton icon={<Pencil size={ICON_SIZE} />} title="Rename" onClick={startEditing} />
+        <IconButton icon={<Trash2 size={ICON_SIZE} />} title="Delete" onClick={onDelete} />
       </span>
     </div>
   );
@@ -640,14 +613,7 @@ export default function Sidebar({
     >
       <div style={{ ...SECTION, paddingTop: 10 }}>
         <span>DATABASES</span>
-        <button
-          className="btn-ghost"
-          style={{ fontSize: 14, padding: "0 6px", borderRadius: 3 }}
-          title="Add connection"
-          onClick={() => setShowModal(true)}
-        >
-          +
-        </button>
+        <IconButton icon={<Plus size={ICON_SIZE} />} title="Add connection" onClick={() => setShowModal(true)} />
       </div>
       <div style={{ overflowY: "auto", flex: "1 1 50%", padding: "0 4px" }}>
         {connections.length === 0 && (
@@ -681,14 +647,7 @@ export default function Sidebar({
 
       <div style={SECTION}>
         <span>QUERIES</span>
-        <button
-          className="btn-ghost"
-          style={{ fontSize: 14, padding: "0 6px", borderRadius: 3 }}
-          title="New query notebook"
-          onClick={newNotebook}
-        >
-          +
-        </button>
+        <IconButton icon={<Plus size={ICON_SIZE} />} title="New query notebook" onClick={newNotebook} />
       </div>
       <div style={{ overflowY: "auto", flex: "0 1 25%", padding: "0 4px" }}>
         {notebooks.map((nb) => (
@@ -696,7 +655,7 @@ export default function Sidebar({
             key={nb.id}
             item={nb}
             kind="query"
-            icon={<FileCode2 size={13} color="var(--accent)" />}
+            icon={<FileCode2 size={ICON_SIZE} color="var(--accent)" />}
             onOpen={() =>
               openTab({
                 id: `notebook:${nb.id}`,
@@ -714,14 +673,7 @@ export default function Sidebar({
 
       <div style={SECTION}>
         <span>CHATS</span>
-        <button
-          className="btn-ghost"
-          style={{ fontSize: 14, padding: "0 6px", borderRadius: 3 }}
-          title="New chat"
-          onClick={newChat}
-        >
-          +
-        </button>
+        <IconButton icon={<Plus size={ICON_SIZE} />} title="New chat" onClick={newChat} />
       </div>
       <div
         style={{
@@ -736,7 +688,7 @@ export default function Sidebar({
             key={chat.id}
             item={chat}
             kind="chat"
-            icon={<MessageSquare size={13} color="#b48ead" />}
+            icon={<MessageSquare size={ICON_SIZE} color="#b48ead" />}
             onOpen={() =>
               openTab({
                 id: `chat:${chat.id}`,

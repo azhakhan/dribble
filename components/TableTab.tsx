@@ -1,13 +1,15 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
-import { Download } from "lucide-react";
+import { Download, RefreshCw, X } from "lucide-react";
 import { useIde, type Tab } from "@/lib/store";
 import type { TableDataResult } from "@/lib/drivers/types";
 import { columnDisplayOrder } from "@/lib/columns";
 import { toCsv } from "@/lib/csv";
 import ResultsGrid from "./ResultsGrid";
 import PaginationBar from "./PaginationBar";
+import IconButton, { ICON_SIZE, SMALL_ICON_SIZE } from "./IconButton";
+import Spinner from "./Spinner";
 
 const menuItem: CSSProperties = {
   display: "flex",
@@ -200,15 +202,12 @@ export default function TableTab({ tab }: { tab: Tab }) {
           Apply
         </button>
         <div ref={exportRef} style={{ position: "relative", display: "flex" }}>
-          <button
-            className="btn btn-ghost"
-            style={{ padding: "3px 7px" }}
+          <IconButton
+            icon={<Download size={ICON_SIZE} />}
             title="Export CSV"
             disabled={!data || exporting}
             onClick={() => setExportOpen((v) => !v)}
-          >
-            <Download size={13} />
-          </button>
+          />
           {exportOpen && data && (
             <div
               style={{
@@ -245,9 +244,7 @@ export default function TableTab({ tab }: { tab: Tab }) {
             </div>
           )}
         </div>
-        <button className="btn btn-ghost" style={{ padding: "3px 8px", fontSize: 13 }} title="Refresh" onClick={load}>
-          ⟳
-        </button>
+        <IconButton icon={<RefreshCw size={ICON_SIZE} />} title="Refresh" onClick={load} />
       </div>
 
       {exportError && (
@@ -266,9 +263,7 @@ export default function TableTab({ tab }: { tab: Tab }) {
           }}
         >
           <span style={{ flex: 1 }}>export failed: {exportError}</span>
-          <button className="btn btn-ghost" style={{ padding: "1px 6px", fontSize: 11 }} onClick={() => setExportError(null)}>
-            ✕
-          </button>
+          <IconButton icon={<X size={ICON_SIZE} />} title="Dismiss" onClick={() => setExportError(null)} />
         </div>
       )}
 
@@ -295,8 +290,8 @@ export default function TableTab({ tab }: { tab: Tab }) {
           </div>
         )}
         {(loading || exporting) && data && (
-          <div className="pulse mono" style={{ position: "absolute", top: 8, right: 16, color: "var(--accent)", fontSize: 11 }}>
-            ● {exporting ? "exporting" : "loading"}
+          <div className="mono" style={{ position: "absolute", top: 8, right: 16, display: "flex", alignItems: "center", gap: 5, color: "var(--accent)", fontSize: 11 }}>
+            <Spinner size={SMALL_ICON_SIZE} /> {exporting ? "exporting" : "loading"}
           </div>
         )}
       </div>

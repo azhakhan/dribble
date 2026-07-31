@@ -3,10 +3,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport, type UIMessage } from "ai";
+import { Sparkles, Square, XCircle, CheckCircle2 } from "lucide-react";
 import { useIde, type ConnectionMeta, type Tab } from "@/lib/store";
 import type { QueryResult } from "@/lib/drivers/types";
 import ResultsPanel from "./ResultsPanel";
 import DragHandle from "./DragHandle";
+import Spinner from "./Spinner";
+import { ICON_SIZE, SMALL_ICON_SIZE } from "./IconButton";
 import { formatAge } from "@/lib/time";
 
 interface ToolPart {
@@ -64,7 +67,9 @@ function ToolChip({ part }: { part: ToolPart }) {
           color: failed ? "var(--danger)" : running ? "var(--accent)" : "var(--text-dim)",
         }}
       >
-        <span className={running ? "pulse" : ""}>{running ? "●" : failed ? "✕" : "✓"}</span>
+        <span style={{ display: "flex" }}>
+          {running ? <Spinner size={SMALL_ICON_SIZE} /> : failed ? <XCircle size={SMALL_ICON_SIZE} /> : <CheckCircle2 size={SMALL_ICON_SIZE} />}
+        </span>
         {label}
         {part.type === "tool-run_query" && part.state === "output-available" && !failed && (
           <span style={{ color: "var(--text-faint)" }}>{(part.output as { rowCount?: number })?.rowCount ?? 0} rows</span>
@@ -170,7 +175,9 @@ function ChatInner({
           flexShrink: 0,
         }}
       >
-        <span style={{ color: "#b48ead" }}>✦</span>
+        <span style={{ display: "flex", color: "#b48ead" }}>
+          <Sparkles size={ICON_SIZE} />
+        </span>
         <input
           value={tab.title}
           onChange={(e) => onRename(e.target.value)}
@@ -234,8 +241,8 @@ function ChatInner({
           </div>
         ))}
         {busy && (
-          <div className="pulse mono" style={{ color: "#b48ead", fontSize: 11 }}>
-            ● thinking…
+          <div className="mono" style={{ display: "flex", alignItems: "center", gap: 5, color: "#b48ead", fontSize: 11 }}>
+            <Spinner size={SMALL_ICON_SIZE} color="#b48ead" /> thinking…
           </div>
         )}
         {error && (
@@ -263,8 +270,8 @@ function ChatInner({
             style={{ flex: 1, resize: "none", fontSize: 13, lineHeight: 1.5 }}
           />
           {busy ? (
-            <button className="btn" onClick={() => stop()}>
-              ■ Stop
+            <button className="btn" style={{ display: "flex", alignItems: "center", gap: 5 }} onClick={() => stop()}>
+              <Square size={ICON_SIZE} /> Stop
             </button>
           ) : (
             <button className="btn btn-accent" onClick={submit} disabled={!input.trim() || !connectionId}>

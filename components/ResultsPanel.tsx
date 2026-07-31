@@ -3,6 +3,8 @@
 import { useState } from "react";
 import ResultsGrid from "./ResultsGrid";
 import PaginationBar from "./PaginationBar";
+import Spinner from "./Spinner";
+import { SMALL_ICON_SIZE } from "./IconButton";
 import type { QueryResult } from "@/lib/drivers/types";
 
 /**
@@ -69,8 +71,8 @@ export default function ResultsPanel({ result, error, running, emptyHint, server
       >
         <span style={{ letterSpacing: "0.08em", color: "var(--text-faint)" }}>RESULTS</span>
         {running && (
-          <span className="pulse" style={{ color: "var(--accent)" }}>
-            ● running…
+          <span style={{ display: "flex", alignItems: "center", gap: 5, color: "var(--accent)" }}>
+            <Spinner size={SMALL_ICON_SIZE} /> running…
           </span>
         )}
         {result && !running && (
