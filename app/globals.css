@@ -39,6 +39,7 @@ html,
 body {
   height: 100%;
   overflow: hidden;
+  overscroll-behavior-x: none;
   background: var(--bg0);
   color: var(--text);
   font-family: var(--font-sans), system-ui, sans-serif;
