@@ -1,10 +1,23 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
+import { Download } from "lucide-react";
 import { useIde, type Tab } from "@/lib/store";
 import type { TableDataResult } from "@/lib/drivers/types";
+import { columnDisplayOrder } from "@/lib/columns";
+import { toCsv } from "@/lib/csv";
 import ResultsGrid from "./ResultsGrid";
 import PaginationBar from "./PaginationBar";
+
+const menuItem: CSSProperties = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  gap: 16,
+  width: "100%",
+  padding: "5px 8px",
+  fontSize: 12,
+};
 
 export default function TableTab({ tab }: { tab: Tab }) {
   const columnWidths = useIde((s) => s.layout.columnWidths[tab.id]);
@@ -22,6 +35,10 @@ export default function TableTab({ tab }: { tab: Tab }) {
   const [sortDir, setSortDir] = useState<"asc" | "desc">(savedSort?.dir ?? "asc");
   const [whereInput, setWhereInput] = useState("");
   const [where, setWhere] = useState("");
+  const [exportOpen, setExportOpen] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
+  const exportRef = useRef<HTMLDivElement>(null);
 
   const load = useCallback(async () => {
     if (!tab.connectionId || !tab.schema || !tab.table) return;
@@ -53,6 +70,71 @@ export default function TableTab({ tab }: { tab: Tab }) {
     }, 0);
     return () => clearTimeout(timer);
   }, [load]);
+
+  // Close the export menu on an outside click.
+  useEffect(() => {
+    if (!exportOpen) return;
+    const onDown = (e: MouseEvent) => {
+      if (!exportRef.current?.contains(e.target as Node)) setExportOpen(false);
+    };
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [exportOpen]);
+
+  const download = (blob: Blob, filename: string) => {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  /** Export exactly what the grid shows — current page, current column order. */
+  const exportCurrentView = () => {
+    if (!data) return;
+    setExportOpen(false);
+    const order = columnDisplayOrder(data.columns.map((c) => c.name), columnOrder);
+    const csv = toCsv(
+      order.map((i) => data.columns[i].name),
+      data.rows.map((row) => order.map((i) => row[i])),
+    );
+    download(
+      new Blob([csv], { type: "text/csv;charset=utf-8" }),
+      `${tab.schema}.${tab.table}_page${page + 1}.csv`,
+    );
+  };
+
+  /** Export every row the current filter and sort produce, not just this page. */
+  const exportAll = async () => {
+    if (!tab.connectionId || !tab.schema || !tab.table) return;
+    setExportOpen(false);
+    setExporting(true);
+    setExportError(null);
+    try {
+      const params = new URLSearchParams({ schema: tab.schema, table: tab.table });
+      if (sortColumn) {
+        params.set("sortColumn", sortColumn);
+        params.set("sortDir", sortDir);
+      }
+      if (where) params.set("where", where);
+      if (data) {
+        for (const i of columnDisplayOrder(data.columns.map((c) => c.name), columnOrder)) {
+          params.append("col", data.columns[i].name);
+        }
+      }
+      const res = await fetch(`/api/db/${tab.connectionId}/export?${params}`);
+      if (!res.ok) {
+        setExportError((await res.json().catch(() => ({})))?.error ?? "Export failed");
+        return;
+      }
+      download(await res.blob(), `${tab.schema}.${tab.table}.csv`);
+    } catch (err) {
+      setExportError(err instanceof Error ? err.message : "Export failed");
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const onHeaderClick = (col: string) => {
     if (sortColumn === col) {
@@ -117,10 +199,78 @@ export default function TableTab({ tab }: { tab: Tab }) {
         >
           Apply
         </button>
+        <div ref={exportRef} style={{ position: "relative", display: "flex" }}>
+          <button
+            className="btn btn-ghost"
+            style={{ padding: "3px 7px" }}
+            title="Export CSV"
+            disabled={!data || exporting}
+            onClick={() => setExportOpen((v) => !v)}
+          >
+            <Download size={13} />
+          </button>
+          {exportOpen && data && (
+            <div
+              style={{
+                position: "absolute",
+                top: "calc(100% + 4px)",
+                right: 0,
+                zIndex: 20,
+                minWidth: 230,
+                padding: 4,
+                borderRadius: 4,
+                border: "1px solid var(--border)",
+                background: "var(--bg2)",
+                boxShadow: "0 8px 24px rgba(0,0,0,0.45)",
+              }}
+            >
+              <div
+                className="mono"
+                style={{ padding: "4px 8px 6px", fontSize: 10, color: "var(--text-faint)" }}
+              >
+                EXPORT CSV{where ? " · filter applied" : ""}
+              </div>
+              <button className="btn btn-ghost" style={menuItem} onClick={exportCurrentView}>
+                <span>Current view</span>
+                <span style={{ color: "var(--text-faint)", fontSize: 11 }}>
+                  {data.rows.length.toLocaleString()} rows
+                </span>
+              </button>
+              <button className="btn btn-ghost" style={menuItem} onClick={exportAll}>
+                <span>All data</span>
+                <span style={{ color: "var(--text-faint)", fontSize: 11 }}>
+                  {data.totalCount != null ? `${data.totalCount.toLocaleString()} rows` : "all pages"}
+                </span>
+              </button>
+            </div>
+          )}
+        </div>
         <button className="btn btn-ghost" style={{ padding: "3px 8px", fontSize: 13 }} title="Refresh" onClick={load}>
           ⟳
         </button>
       </div>
+
+      {exportError && (
+        <div
+          className="mono"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            padding: "4px 10px",
+            borderBottom: "1px solid var(--border)",
+            background: "var(--bg1)",
+            color: "var(--danger)",
+            fontSize: 11,
+            flexShrink: 0,
+          }}
+        >
+          <span style={{ flex: 1 }}>export failed: {exportError}</span>
+          <button className="btn btn-ghost" style={{ padding: "1px 6px", fontSize: 11 }} onClick={() => setExportError(null)}>
+            ✕
+          </button>
+        </div>
+      )}
 
       {/* grid */}
       <div style={{ flex: 1, minHeight: 0, display: "flex", position: "relative" }}>
@@ -144,9 +294,9 @@ export default function TableTab({ tab }: { tab: Tab }) {
             {loading ? "loading…" : ""}
           </div>
         )}
-        {loading && data && (
+        {(loading || exporting) && data && (
           <div className="pulse mono" style={{ position: "absolute", top: 8, right: 16, color: "var(--accent)", fontSize: 11 }}>
-            ● loading
+            ● {exporting ? "exporting" : "loading"}
           </div>
         )}
       </div>

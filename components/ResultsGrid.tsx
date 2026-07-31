@@ -11,6 +11,7 @@ import {
 } from "@glideapps/glide-data-grid";
 import "@glideapps/glide-data-grid/dist/index.css";
 import type { QueryResult } from "@/lib/drivers/types";
+import { columnDisplayOrder } from "@/lib/columns";
 
 const GRID_THEME: Partial<Theme> = {
   accentColor: "#e8a14c",
@@ -94,26 +95,10 @@ export default function ResultsGrid({
   }, []);
 
   // Map from display column index → original index into result.columns/rows.
-  // Built from `columnOrder` (surviving names in saved order) then any
-  // remaining columns appended in native order.
-  const order: number[] = useMemo(() => {
-    const byName = new Map(result.columns.map((c, i) => [c.name, i]));
-    const seen = new Set<number>();
-    const out: number[] = [];
-    if (columnOrder) {
-      for (const name of columnOrder) {
-        const idx = byName.get(name);
-        if (idx !== undefined && !seen.has(idx)) {
-          seen.add(idx);
-          out.push(idx);
-        }
-      }
-    }
-    for (let i = 0; i < result.columns.length; i++) {
-      if (!seen.has(i)) out.push(i);
-    }
-    return out;
-  }, [result.columns, columnOrder]);
+  const order: number[] = useMemo(
+    () => columnDisplayOrder(result.columns.map((c) => c.name), columnOrder),
+    [result.columns, columnOrder],
+  );
 
   const columns: GridColumn[] = useMemo(
     () =>

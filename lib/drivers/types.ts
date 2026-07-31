@@ -41,6 +41,27 @@ export interface TableDataResult extends QueryResult {
   totalCount: number | null;
 }
 
+export interface TableStreamParams {
+  schema: string;
+  table: string;
+  sortColumn?: string;
+  sortDir?: "asc" | "desc";
+  /** Raw WHERE clause (without the WHERE keyword). */
+  where?: string;
+  /** Column names to emit, in order. Unknown names are dropped; absent = every column. */
+  columns?: string[];
+}
+
+/** An open, unbounded read over a table — used to export more rows than a query returns. */
+export interface TableRowStream {
+  /** Columns in the order rows are emitted. */
+  columns: ColumnInfo[];
+  /** Successive row batches until the table is exhausted. */
+  batches(): AsyncGenerator<unknown[][]>;
+  /** Release the underlying resources. Safe to call more than once. */
+  close(): Promise<void>;
+}
+
 export interface PagedQueryParams {
   limit: number;
   offset: number;
@@ -61,6 +82,8 @@ export interface DatabaseDriver {
   listTables(schema: string): Promise<{ name: string; kind: "table" | "view" }[]>;
   listColumns(schema: string, table: string): Promise<ColumnInfo[]>;
   getTableData(params: TableDataParams): Promise<TableDataResult>;
+  /** Open a batched read over a whole table. Rejects if the query is invalid. */
+  openTableStream(params: TableStreamParams): Promise<TableRowStream>;
   runQuery(sql: string, maxRows?: number): Promise<QueryResult>;
   /** Run an arbitrary user query with server-side pagination (and optional total count). */
   runPagedQuery(sql: string, params: PagedQueryParams): Promise<PagedQueryResult>;

@@ -8,6 +8,8 @@ import type {
   QueryResult,
   TableDataParams,
   TableDataResult,
+  TableRowStream,
+  TableStreamParams,
 } from "./types";
 
 const OID_NAMES: Record<number, string> = {
@@ -63,6 +65,8 @@ function jsonSafe(v: unknown): unknown {
 }
 
 const MAX_ROWS = 1000;
+/** Rows pulled per cursor FETCH while exporting. */
+const EXPORT_BATCH = 2000;
 
 export class PostgresDriver implements DatabaseDriver {
   readonly type = "postgres" as const;
@@ -142,6 +146,63 @@ export class PostgresDriver implements DatabaseDriver {
       // count can fail (e.g. permissions) without blocking the data fetch
     }
     return { ...result, totalCount };
+  }
+
+  async openTableStream(p: TableStreamParams): Promise<TableRowStream> {
+    const rel = `${quoteIdent(p.schema)}.${quoteIdent(p.table)}`;
+    const where = p.where?.trim() ? ` WHERE ${p.where.trim()}` : "";
+
+    // Every identifier we interpolate is validated against the real columns.
+    const tableColumns = await this.listColumns(p.schema, p.table);
+    const byName = new Map(tableColumns.map((c) => [c.name, c]));
+    const picked = (p.columns ?? []).map((n) => byName.get(n)).filter((c): c is ColumnInfo => !!c);
+    const columns = picked.length ? picked : tableColumns;
+    const selectList = picked.length ? picked.map((c) => quoteIdent(c.name)).join(", ") : "*";
+    const orderBy =
+      p.sortColumn && byName.has(p.sortColumn)
+        ? ` ORDER BY ${quoteIdent(p.sortColumn)} ${p.sortDir === "desc" ? "DESC" : "ASC"}`
+        : "";
+
+    const client = await this.pool.connect();
+    let closed = false;
+    const close = async () => {
+      if (closed) return;
+      closed = true;
+      try {
+        await client.query("ROLLBACK");
+      } catch {
+        // the transaction may already be gone; releasing the client is what matters
+      }
+      client.release();
+    };
+
+    try {
+      await client.query("BEGIN READ ONLY");
+      await client.query(
+        `DECLARE _dribble_export NO SCROLL CURSOR FOR SELECT ${selectList} FROM ${rel}${where}${orderBy}`,
+      );
+    } catch (err) {
+      await close();
+      throw err;
+    }
+
+    async function* batches(): AsyncGenerator<unknown[][]> {
+      try {
+        for (;;) {
+          const res = await client.query({
+            text: `FETCH ${EXPORT_BATCH} FROM _dribble_export`,
+            rowMode: "array",
+          });
+          const rows = (res.rows as unknown[][]).map((row) => row.map(jsonSafe));
+          if (rows.length) yield rows;
+          if (rows.length < EXPORT_BATCH) return;
+        }
+      } finally {
+        await close();
+      }
+    }
+
+    return { columns, batches, close };
   }
 
   async runPagedQuery(sql: string, p: PagedQueryParams): Promise<PagedQueryResult> {
