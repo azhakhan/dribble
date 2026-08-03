@@ -15,6 +15,12 @@ export interface ConnectionConfig {
 export interface ColumnInfo {
   name: string;
   dataType: string;
+  /** Catalog-only metadata — absent for columns synthesised by an ad-hoc query. */
+  nullable?: boolean;
+  isPrimaryKey?: boolean;
+  isForeignKey?: boolean;
+  /** For a foreign key, the referenced `schema.table.column`. */
+  references?: string;
 }
 
 export interface QueryResult {

@@ -11,7 +11,8 @@ import {
 } from "@glideapps/glide-data-grid";
 import "@glideapps/glide-data-grid/dist/index.css";
 import type { QueryResult } from "@/lib/drivers/types";
-import { columnDisplayOrder } from "@/lib/columns";
+import { columnCategory, columnDisplayOrder } from "@/lib/columns";
+import { FK_ONLY_ICON, HEADER_ICON_SIZE, columnIconName, headerIcons } from "./headerIcons";
 
 const GRID_THEME: Partial<Theme> = {
   accentColor: "#e8a14c",
@@ -34,24 +35,11 @@ const GRID_THEME: Partial<Theme> = {
   cellHorizontalPadding: 8,
   cellVerticalPadding: 7,
   headerFontStyle: "600 14px",
+  headerIconSize: HEADER_ICON_SIZE,
   baseFontStyle: "12px",
   markerFontStyle: "13px",
   fontFamily: "Roboto Mono, Consolas, monospace",
 };
-
-const NUMERIC_TYPES = new Set([
-  "int2",
-  "int4",
-  "int8",
-  "float4",
-  "float8",
-  "numeric",
-  "integer",
-  "bigint",
-  "smallint",
-  "real",
-  "double precision",
-]);
 
 interface Props {
   result: QueryResult;
@@ -111,9 +99,18 @@ export default function ResultsGrid({
         return {
           id,
           title: c.name + arrow,
+          // Type glyph, with a key glyph beside it. Both-key columns are rare
+          // enough to hand the paired slot to the primary key and let the
+          // reference marker trail the name, rather than widen every header.
+          icon: columnIconName(
+            columnCategory(c.dataType),
+            c.isPrimaryKey ? "pk" : c.isForeignKey ? "fk" : undefined,
+          ),
+          indicatorIcon:
+            c.isPrimaryKey && c.isForeignKey ? FK_ONLY_ICON : undefined,
           width:
             columnWidths[id] ??
-            Math.min(Math.max(c.name.length * 10 + 48, 110), 360),
+            Math.min(Math.max(c.name.length * 10 + 80, 140), 380),
         };
       }),
     [order, columnWidths, result.columns, sortColumn, sortDir],
@@ -133,8 +130,7 @@ export default function ResultsGrid({
     ([col, row]: Item): GridCell => {
       const origIdx = order[col];
       const value = result.rows[row]?.[origIdx];
-      const dataType = result.columns[origIdx]?.dataType ?? "";
-      const isNum = NUMERIC_TYPES.has(dataType);
+      const isNum = columnCategory(result.columns[origIdx]?.dataType ?? "") === "number";
       const display =
         value === null || value === undefined ? "" : String(value);
       return {
@@ -163,6 +159,7 @@ export default function ResultsGrid({
           width={size.width}
           height={size.height}
           theme={GRID_THEME}
+          headerIcons={headerIcons}
           rowMarkers="number"
           rowHeight={38}
           headerHeight={38}

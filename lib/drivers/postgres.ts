@@ -112,31 +112,70 @@ export class PostgresDriver implements DatabaseDriver {
     }));
   }
 
+  /**
+   * Read from pg_catalog rather than information_schema: `format_type` gives the
+   * declared type with its modifier (`character varying(50)`, enum type names),
+   * and constraint membership is only reachable here without extra round-trips.
+   */
   async listColumns(schema: string, table: string): Promise<ColumnInfo[]> {
     const res = await this.pool.query(
-      `SELECT column_name, data_type FROM information_schema.columns
-       WHERE table_schema = $1 AND table_name = $2 ORDER BY ordinal_position`,
+      `SELECT
+         a.attname                              AS name,
+         format_type(a.atttypid, a.atttypmod)   AS data_type,
+         NOT a.attnotnull                       AS nullable,
+         EXISTS (
+           SELECT 1 FROM pg_constraint pk
+           WHERE pk.conrelid = c.oid AND pk.contype = 'p' AND a.attnum = ANY (pk.conkey)
+         )                                      AS is_primary_key,
+         (
+           SELECT fn.nspname || '.' || fc.relname || '.' || fa.attname
+           FROM pg_constraint fk
+           JOIN pg_class fc ON fc.oid = fk.confrelid
+           JOIN pg_namespace fn ON fn.oid = fc.relnamespace
+           JOIN pg_attribute fa
+             ON fa.attrelid = fk.confrelid
+            AND fa.attnum = fk.confkey[array_position(fk.conkey, a.attnum)]
+           WHERE fk.conrelid = c.oid AND fk.contype = 'f' AND a.attnum = ANY (fk.conkey)
+           ORDER BY fk.conname
+           LIMIT 1
+         )                                      AS references_column
+       FROM pg_attribute a
+       JOIN pg_class c ON c.oid = a.attrelid
+       JOIN pg_namespace n ON n.oid = c.relnamespace
+       WHERE n.nspname = $1 AND c.relname = $2 AND a.attnum > 0 AND NOT a.attisdropped
+       ORDER BY a.attnum`,
       [schema, table]
     );
-    return res.rows.map((r) => ({ name: r.column_name, dataType: r.data_type }));
+    return res.rows.map((r) => ({
+      name: r.name,
+      dataType: r.data_type,
+      nullable: r.nullable,
+      isPrimaryKey: r.is_primary_key,
+      isForeignKey: r.references_column !== null,
+      references: r.references_column ?? undefined,
+    }));
   }
 
   async getTableData(p: TableDataParams): Promise<TableDataResult> {
     const rel = `${quoteIdent(p.schema)}.${quoteIdent(p.table)}`;
     const where = p.where?.trim() ? ` WHERE ${p.where.trim()}` : "";
 
+    // Doubles as validation for the sort identifier (keeping the quoting sound)
+    // and as the source of the key/type metadata the wire protocol doesn't carry.
+    const meta = await this.listColumns(p.schema, p.table);
+
     let orderBy = "";
-    if (p.sortColumn) {
-      // Validate the sort column against real columns to keep identifier quoting sound.
-      const cols = await this.listColumns(p.schema, p.table);
-      if (cols.some((c) => c.name === p.sortColumn)) {
-        orderBy = ` ORDER BY ${quoteIdent(p.sortColumn)} ${p.sortDir === "desc" ? "DESC" : "ASC"}`;
-      }
+    if (p.sortColumn && meta.some((c) => c.name === p.sortColumn)) {
+      orderBy = ` ORDER BY ${quoteIdent(p.sortColumn)} ${p.sortDir === "desc" ? "DESC" : "ASC"}`;
     }
 
     const limit = Math.min(Math.max(p.limit, 1), MAX_ROWS);
     const sql = `SELECT * FROM ${rel}${where}${orderBy} LIMIT ${limit} OFFSET ${Math.max(p.offset, 0)}`;
     const result = await this.runQuery(sql, limit);
+
+    // `SELECT *` returns the table's own columns, so names line up one-to-one.
+    const byName = new Map(meta.map((c) => [c.name, c]));
+    const columns = result.columns.map((c) => byName.get(c.name) ?? c);
 
     let totalCount: number | null = null;
     try {
@@ -145,7 +184,7 @@ export class PostgresDriver implements DatabaseDriver {
     } catch {
       // count can fail (e.g. permissions) without blocking the data fetch
     }
-    return { ...result, totalCount };
+    return { ...result, columns, totalCount };
   }
 
   async openTableStream(p: TableStreamParams): Promise<TableRowStream> {
