@@ -33,6 +33,12 @@ export const HEADER_ICON_SIZE = 18;
 /** One step darker than `GRID_THEME.textHeader`, so icons read below the title. */
 const ICON_COLOR = "#838b9a";
 
+/** Matches `GRID_THEME.accentColor` — marks the header's active sort direction. */
+const ACTIVE_COLOR = "#e8a14c";
+
+/** Matches `--green` — flashed briefly after a column name is copied. */
+const SUCCESS_COLOR = "#7fb069";
+
 /** lucide glyph bodies, 24×24 viewBox. */
 const GLYPH: Record<ColumnCategory, string> = {
   // hash
@@ -87,6 +93,22 @@ function sprite(...glyphs: string[]): string {
   );
 }
 
+/** Extra viewBox margin the interactive icons (sort/copy) get, so they render
+ *  visibly smaller than the type glyph inside the same fixed header icon box. */
+const SMALL_PAD = 8;
+const SMALL_BOX = 24 + SMALL_PAD * 2;
+
+/** Like `squareSprite`, but padded down to a smaller apparent size — used for
+ *  the interactive sort/copy icons so they don't compete visually with the
+ *  type glyph they sit beside. */
+function smallSprite(glyph: string, color: string): string {
+  return (
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${SMALL_BOX}" height="${SMALL_BOX}" viewBox="0 0 ${SMALL_BOX} ${SMALL_BOX}" ` +
+    `fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">` +
+    `<g transform="translate(${SMALL_PAD},${SMALL_PAD})">${glyph}</g></svg>`
+  );
+}
+
 /** Sprite name for a column's type glyph, optionally paired with a key glyph. */
 export function columnIconName(
   category: ColumnCategory,
@@ -102,6 +124,24 @@ export function columnIconName(
  */
 export const FK_ONLY_ICON = "key-foreign";
 
+/**
+ * Sort icon, always in the header's hover-revealed menu slot (fixed at the
+ * right edge, regardless of sort state — so it never jumps when a sort is
+ * applied). `SORT_NEUTRAL_ICON` sorts ascending on click; once active, the
+ * same slot shows `SORT_ASC_ICON`/`SORT_DESC_ICON` and cycles further.
+ */
+export const SORT_NEUTRAL_ICON = "sort-neutral";
+export const SORT_ASC_ICON = "sort-asc";
+export const SORT_DESC_ICON = "sort-desc";
+
+/**
+ * Copy icon, in the header's indicator slot (right after the title text) —
+ * shown only while hovering that column, and swapped for `COPIED_ICON` for a
+ * moment after a successful copy.
+ */
+export const COPY_ICON = "copy-name";
+export const COPIED_ICON = "copied";
+
 const categories = Object.keys(GLYPH) as ColumnCategory[];
 
 export const headerIcons: SpriteMap = {
@@ -115,4 +155,25 @@ export const headerIcons: SpriteMap = {
     ]),
   ),
   [FK_ONLY_ICON]: () => sprite(KEY_GLYPH.fk),
+  // chevrons-up-down
+  [SORT_NEUTRAL_ICON]: () =>
+    smallSprite(
+      `<path d="m7 15 5 5 5-5"/><path d="m7 9 5-5 5 5"/>`,
+      ICON_COLOR,
+    ),
+  // arrow-up
+  [SORT_ASC_ICON]: () =>
+    smallSprite(`<path d="m5 12 7-7 7 7"/><path d="M12 19V5"/>`, ACTIVE_COLOR),
+  // arrow-down
+  [SORT_DESC_ICON]: () =>
+    smallSprite(`<path d="M12 5v14"/><path d="m19 12-7 7-7-7"/>`, ACTIVE_COLOR),
+  // copy
+  [COPY_ICON]: () =>
+    smallSprite(
+      `<rect width="12" height="12" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>`,
+      ICON_COLOR,
+    ),
+  // check
+  [COPIED_ICON]: () =>
+    smallSprite(`<path d="M20 6 9 17l-5-5"/>`, SUCCESS_COLOR),
 };

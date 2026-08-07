@@ -160,6 +160,15 @@ export class PostgresDriver implements DatabaseDriver {
     const rel = `${quoteIdent(p.schema)}.${quoteIdent(p.table)}`;
     const where = p.where?.trim() ? ` WHERE ${p.where.trim()}` : "";
 
+    // Kicked off first and awaited last: on a large table the count is a full
+    // scan, and it depends on nothing the other two queries produce. A count
+    // can fail (e.g. permissions) without blocking the data fetch, so the
+    // rejection is absorbed here rather than surfacing as a failed page load.
+    const countPromise = this.pool
+      .query(`SELECT count(*)::int8 AS n FROM ${rel}${where}`)
+      .then((cnt) => Number(cnt.rows[0].n))
+      .catch(() => null);
+
     // Doubles as validation for the sort identifier (keeping the quoting sound)
     // and as the source of the key/type metadata the wire protocol doesn't carry.
     const meta = await this.listColumns(p.schema, p.table);
@@ -177,14 +186,7 @@ export class PostgresDriver implements DatabaseDriver {
     const byName = new Map(meta.map((c) => [c.name, c]));
     const columns = result.columns.map((c) => byName.get(c.name) ?? c);
 
-    let totalCount: number | null = null;
-    try {
-      const cnt = await this.pool.query(`SELECT count(*)::int8 AS n FROM ${rel}${where}`);
-      totalCount = Number(cnt.rows[0].n);
-    } catch {
-      // count can fail (e.g. permissions) without blocking the data fetch
-    }
-    return { ...result, columns, totalCount };
+    return { ...result, columns, totalCount: await countPromise };
   }
 
   async openTableStream(p: TableStreamParams): Promise<TableRowStream> {
