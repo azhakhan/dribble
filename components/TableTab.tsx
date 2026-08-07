@@ -22,6 +22,10 @@ const menuItem: CSSProperties = {
 };
 
 export default function TableTab({ tab }: { tab: Tab }) {
+  // Every tab stays mounted (hidden ones are display:none), so a tab must not
+  // query until it is actually on screen — otherwise a reload fires one query
+  // per open tab and starves the one the user is looking at.
+  const isActive = useIde((s) => s.activeTabId === tab.id);
   const columnWidths = useIde((s) => s.layout.columnWidths[tab.id]);
   const setColumnWidths = useIde((s) => s.setColumnWidths);
   const savedSort = useIde((s) => s.layout.tableSort[tab.id]);
@@ -66,12 +70,23 @@ export default function TableTab({ tab }: { tab: Tab }) {
     setLoading(false);
   }, [tab.connectionId, tab.schema, tab.table, page, limit, sortColumn, sortDir, where]);
 
+  // Identifies the query the current controls describe. `load` is rebuilt from
+  // exactly these inputs, so the key changes iff the data would.
+  const queryKey = JSON.stringify([
+    tab.connectionId, tab.schema, tab.table, page, limit, sortColumn, sortDir, where,
+  ]);
+  const loadedKey = useRef<string | null>(null);
+
+  // Load when this tab is on screen and what it shows is out of date. Switching
+  // away and back is free — the key still matches, so the cached rows stand.
   useEffect(() => {
+    if (!isActive || loadedKey.current === queryKey) return;
     const timer = setTimeout(() => {
+      loadedKey.current = queryKey;
       load();
     }, 0);
     return () => clearTimeout(timer);
-  }, [load]);
+  }, [isActive, queryKey, load]);
 
   // Close the export menu on an outside click.
   useEffect(() => {
