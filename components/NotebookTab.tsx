@@ -1,11 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Play, Plus, Trash2, AlertTriangle } from "lucide-react";
 import { useIde, type ConnectionMeta, type Tab } from "@/lib/store";
 import type { PagedQueryResult } from "@/lib/drivers/types";
 import SqlEditor from "./SqlEditor";
 import ResultsPanel from "./ResultsPanel";
 import DragHandle from "./DragHandle";
+import IconButton, { ICON_SIZE, SMALL_ICON_SIZE } from "./IconButton";
+import Spinner from "./Spinner";
 import { formatAge, isStale } from "@/lib/time";
 
 interface Cell {
@@ -40,6 +43,12 @@ export default function NotebookTab({
   const setCellHeight = useIde((s) => s.setCellHeight);
   const [cells, setCells] = useState<Cell[] | null>(null);
   const [name, setName] = useState(tab.title);
+
+  // Keep the header input in sync when the tab is renamed elsewhere
+  // (e.g. the tab strip's context menu).
+  useEffect(() => {
+    setName(tab.title);
+  }, [tab.title]);
   const [connectionId, setConnectionId] = useState<string | null>(
     tab.connectionId,
   );
@@ -353,6 +362,9 @@ export default function NotebookTab({
                 <button
                   className="btn"
                   style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 5,
                     padding: "1px 10px",
                     fontSize: 11,
                     color: cr?.running ? "var(--accent)" : "var(--green)",
@@ -361,7 +373,7 @@ export default function NotebookTab({
                   disabled={!!cr?.running || !connectionId}
                   title="Run (⌘↩)"
                 >
-                  {cr?.running ? "…" : "▶ Run"}
+                  {cr?.running ? <Spinner size={ICON_SIZE} /> : <Play size={ICON_SIZE} />} Run
                 </button>
                 <span
                   className="mono"
@@ -372,29 +384,15 @@ export default function NotebookTab({
                 {cr?.ranAt && !cr.running && (
                   <span
                     className="mono"
-                    style={{ fontSize: 10, color: stale ? "var(--accent)" : "var(--text-faint)" }}
+                    style={{ display: "flex", alignItems: "center", gap: 3, fontSize: 10, color: stale ? "var(--accent)" : "var(--text-faint)" }}
                     title={stale ? (sqlChanged ? "SQL changed since this ran — re-run for fresh results" : "These results may be out of date — re-run for fresh results") : undefined}
                   >
-                    {stale ? "⚠ stale · " : ""}ran {formatAge(cr.ranAt)}
+                    {stale && <AlertTriangle size={SMALL_ICON_SIZE} />}ran {formatAge(cr.ranAt)}
                   </span>
                 )}
                 <span style={{ marginLeft: "auto", display: "flex", gap: 2 }}>
-                  <button
-                    className="btn-ghost"
-                    style={{ fontSize: 11, padding: "1px 6px" }}
-                    title="Add cell below"
-                    onClick={() => addCell(cell.id)}
-                  >
-                    +
-                  </button>
-                  <button
-                    className="btn-ghost"
-                    style={{ fontSize: 11, padding: "1px 6px" }}
-                    title="Delete cell"
-                    onClick={() => removeCell(cell.id)}
-                  >
-                    ×
-                  </button>
+                  <IconButton icon={<Plus size={ICON_SIZE} />} title="Add cell below" onClick={() => addCell(cell.id)} />
+                  <IconButton icon={<Trash2 size={ICON_SIZE} />} title="Delete cell" onClick={() => removeCell(cell.id)} />
                 </span>
               </div>
               <SqlEditor
@@ -452,10 +450,10 @@ export default function NotebookTab({
         })}
         <button
           className="btn btn-ghost"
-          style={{ alignSelf: "center", fontSize: 12 }}
+          style={{ display: "flex", alignItems: "center", gap: 5, alignSelf: "center", fontSize: 12 }}
           onClick={() => addCell()}
         >
-          + Add cell
+          <Plus size={ICON_SIZE} /> Add cell
         </button>
       </div>
     </div>

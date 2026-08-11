@@ -1,5 +1,8 @@
 "use client";
 
+import { ChevronsLeft, ChevronLeft, ChevronRight, ChevronsRight } from "lucide-react";
+import { ICON_SIZE } from "./IconButton";
+
 const PAGE_SIZES = [50, 100, 200, 500, 1000];
 
 interface Props {
@@ -30,22 +33,22 @@ export default function PaginationBar({ page, totalPages, limit, totalCount, row
         flexShrink: 0,
       }}
     >
-      <button className="btn-ghost" style={{ padding: "1px 8px" }} disabled={page === 0} onClick={() => onPage(0)}>
-        «
+      <button className="btn-ghost" style={{ display: "flex", padding: "1px 8px" }} disabled={page === 0} onClick={() => onPage(0)}>
+        <ChevronsLeft size={ICON_SIZE} />
       </button>
-      <button className="btn-ghost" style={{ padding: "1px 8px" }} disabled={page === 0} onClick={() => onPage(page - 1)}>
-        ‹
+      <button className="btn-ghost" style={{ display: "flex", padding: "1px 8px" }} disabled={page === 0} onClick={() => onPage(page - 1)}>
+        <ChevronLeft size={ICON_SIZE} />
       </button>
       <span>
         page {page + 1}
         {totalPages != null ? ` / ${totalPages}` : ""}
       </span>
-      <button className="btn-ghost" style={{ padding: "1px 8px" }} disabled={!hasNext} onClick={() => onPage(page + 1)}>
-        ›
+      <button className="btn-ghost" style={{ display: "flex", padding: "1px 8px" }} disabled={!hasNext} onClick={() => onPage(page + 1)}>
+        <ChevronRight size={ICON_SIZE} />
       </button>
       {totalPages != null && (
-        <button className="btn-ghost" style={{ padding: "1px 8px" }} disabled={page + 1 >= totalPages} onClick={() => onPage(totalPages - 1)}>
-          »
+        <button className="btn-ghost" style={{ display: "flex", padding: "1px 8px" }} disabled={page + 1 >= totalPages} onClick={() => onPage(totalPages - 1)}>
+          <ChevronsRight size={ICON_SIZE} />
         </button>
       )}
       <span style={{ marginLeft: "auto" }}>

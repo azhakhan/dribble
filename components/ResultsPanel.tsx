@@ -1,9 +1,21 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import ResultsGrid from "./ResultsGrid";
 import PaginationBar from "./PaginationBar";
+import Spinner from "./Spinner";
+import { SMALL_ICON_SIZE } from "./IconButton";
 import type { QueryResult } from "@/lib/drivers/types";
+
+/** Postgres's own default: NULLS LAST ascending, NULLS FIRST descending. */
+function compareValues(a: unknown, b: unknown, dir: "asc" | "desc"): number {
+  if (a === b) return 0;
+  if (a === null || a === undefined) return dir === "asc" ? 1 : -1;
+  if (b === null || b === undefined) return dir === "asc" ? -1 : 1;
+  const sign = dir === "asc" ? 1 : -1;
+  if (typeof a === "number" && typeof b === "number") return (a - b) * sign;
+  return String(a).localeCompare(String(b)) * sign;
+}
 
 /**
  * When set, paging is controlled by the parent: `result.rows` is already the
@@ -28,12 +40,16 @@ interface Props {
 export default function ResultsPanel({ result, error, running, emptyHint, serverPagination }: Props) {
   const [localPage, setLocalPage] = useState(0);
   const [localLimit, setLocalLimit] = useState(100);
+  const [sortColumn, setSortColumn] = useState<string | undefined>(undefined);
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
 
-  // Reset to the first page whenever a new (local-mode) result arrives.
+  // Reset to the first page and clear any sort whenever a new (local-mode) result arrives.
   const [prevResult, setPrevResult] = useState(result);
   if (result !== prevResult) {
     setPrevResult(result);
     setLocalPage(0);
+    setSortColumn(undefined);
+    setSortDir("asc");
   }
 
   const server = serverPagination ?? null;
@@ -41,15 +57,39 @@ export default function ResultsPanel({ result, error, running, emptyHint, server
   const limit = server ? server.limit : localLimit;
   const setPage = server ? server.onPage : setLocalPage;
 
+  // Query results have no known source table to re-query, so sorting is
+  // client-side over whatever rows are already in hand.
+  const sortedResult = useMemo(() => {
+    if (!result || !sortColumn) return result;
+    const colIdx = result.columns.findIndex((c) => c.name === sortColumn);
+    if (colIdx === -1) return result;
+    const rows = [...result.rows].sort((a, b) => compareValues(a[colIdx], b[colIdx], sortDir));
+    return { ...result, rows };
+  }, [result, sortColumn, sortDir]);
+
+  const onHeaderClick = (col: string) => {
+    if (sortColumn === col) {
+      if (sortDir === "asc") setSortDir("desc");
+      else {
+        setSortColumn(undefined);
+        setSortDir("asc");
+      }
+    } else {
+      setSortColumn(col);
+      setSortDir("asc");
+    }
+    setPage(0);
+  };
+
   // Server mode: rows are already the current page, and the total comes from a
   // count(*). Local mode: paginate the in-memory rows client-side.
-  const totalCount = server ? server.totalCount : result?.rowCount ?? 0;
+  const totalCount = server ? server.totalCount : sortedResult?.rowCount ?? 0;
   const totalPages =
-    result && totalCount != null ? Math.max(1, Math.ceil(totalCount / limit)) : null;
-  const pagedResult = result
+    sortedResult && totalCount != null ? Math.max(1, Math.ceil(totalCount / limit)) : null;
+  const pagedResult = sortedResult
     ? server
-      ? result
-      : { ...result, rows: result.rows.slice(page * limit, page * limit + limit) }
+      ? sortedResult
+      : { ...sortedResult, rows: sortedResult.rows.slice(page * limit, page * limit + limit) }
     : null;
 
   return (
@@ -69,8 +109,8 @@ export default function ResultsPanel({ result, error, running, emptyHint, server
       >
         <span style={{ letterSpacing: "0.08em", color: "var(--text-faint)" }}>RESULTS</span>
         {running && (
-          <span className="pulse" style={{ color: "var(--accent)" }}>
-            ● running…
+          <span style={{ display: "flex", alignItems: "center", gap: 5, color: "var(--accent)" }}>
+            <Spinner size={SMALL_ICON_SIZE} /> running…
           </span>
         )}
         {result && !running && (
@@ -94,7 +134,12 @@ export default function ResultsPanel({ result, error, running, emptyHint, server
             {error}
           </pre>
         ) : pagedResult ? (
-          <ResultsGrid result={pagedResult} />
+          <ResultsGrid
+            result={pagedResult}
+            sortColumn={sortColumn}
+            sortDir={sortDir}
+            onHeaderClick={onHeaderClick}
+          />
         ) : (
           <div style={{ display: "grid", placeItems: "center", width: "100%", color: "var(--text-faint)" }}>{emptyHint}</div>
         )}

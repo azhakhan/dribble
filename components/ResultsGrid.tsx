@@ -11,6 +11,18 @@ import {
 } from "@glideapps/glide-data-grid";
 import "@glideapps/glide-data-grid/dist/index.css";
 import type { QueryResult } from "@/lib/drivers/types";
+import { columnCategory, columnDisplayOrder } from "@/lib/columns";
+import {
+  COPIED_ICON,
+  COPY_ICON,
+  FK_ONLY_ICON,
+  HEADER_ICON_SIZE,
+  SORT_ASC_ICON,
+  SORT_DESC_ICON,
+  SORT_NEUTRAL_ICON,
+  columnIconName,
+  headerIcons,
+} from "./headerIcons";
 
 const GRID_THEME: Partial<Theme> = {
   accentColor: "#e8a14c",
@@ -33,29 +45,17 @@ const GRID_THEME: Partial<Theme> = {
   cellHorizontalPadding: 8,
   cellVerticalPadding: 7,
   headerFontStyle: "600 14px",
+  headerIconSize: HEADER_ICON_SIZE,
   baseFontStyle: "12px",
   markerFontStyle: "13px",
   fontFamily: "Roboto Mono, Consolas, monospace",
 };
 
-const NUMERIC_TYPES = new Set([
-  "int2",
-  "int4",
-  "int8",
-  "float4",
-  "float8",
-  "numeric",
-  "integer",
-  "bigint",
-  "smallint",
-  "real",
-  "double precision",
-]);
-
 interface Props {
   result: QueryResult;
   sortColumn?: string;
   sortDir?: "asc" | "desc";
+  /** Requests a sort by this column, via the header's sort icon (not the header at large). */
   onHeaderClick?: (columnName: string) => void;
   /** Controlled column widths keyed by `${index}:${name}`. When provided, the
    *  parent owns the state (and persists it); otherwise it's local-only. */
@@ -82,6 +82,17 @@ export default function ResultsGrid({
   const [localWidths, setLocalWidths] = useState<Record<string, number>>({});
   const columnWidths = controlledWidths ?? localWidths;
 
+  // Briefly swaps a copied column's indicator icon for a checkmark as feedback.
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const copiedTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => {
+    if (copiedTimeout.current) clearTimeout(copiedTimeout.current);
+  }, []);
+
+  // Which column (display index) the pointer is over, so the copy icon can
+  // appear only on hover instead of cluttering every header.
+  const [hoveredCol, setHoveredCol] = useState<number | null>(null);
+
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
@@ -94,44 +105,54 @@ export default function ResultsGrid({
   }, []);
 
   // Map from display column index → original index into result.columns/rows.
-  // Built from `columnOrder` (surviving names in saved order) then any
-  // remaining columns appended in native order.
-  const order: number[] = useMemo(() => {
-    const byName = new Map(result.columns.map((c, i) => [c.name, i]));
-    const seen = new Set<number>();
-    const out: number[] = [];
-    if (columnOrder) {
-      for (const name of columnOrder) {
-        const idx = byName.get(name);
-        if (idx !== undefined && !seen.has(idx)) {
-          seen.add(idx);
-          out.push(idx);
-        }
-      }
-    }
-    for (let i = 0; i < result.columns.length; i++) {
-      if (!seen.has(i)) out.push(i);
-    }
-    return out;
-  }, [result.columns, columnOrder]);
+  const order: number[] = useMemo(
+    () => columnDisplayOrder(result.columns.map((c) => c.name), columnOrder),
+    [result.columns, columnOrder],
+  );
 
   const columns: GridColumn[] = useMemo(
     () =>
-      order.map((origIdx) => {
+      order.map((origIdx, displayIdx) => {
         const c = result.columns[origIdx];
-        const arrow =
-          c.name === sortColumn ? (sortDir === "desc" ? " ↓" : " ↑") : "";
         // Keep the id stable per source column so widths follow it on reorder.
         const id = `${origIdx}:${c.name}`;
+        const isSorted = c.name === sortColumn;
         return {
           id,
-          title: c.name + arrow,
+          title: c.name,
+          // Type glyph, with a key glyph beside it. Both-key columns are rare
+          // enough to hand the paired slot to the primary key and let the
+          // reference marker trail the name, rather than widen every header.
+          icon: columnIconName(
+            columnCategory(c.dataType),
+            c.isPrimaryKey ? "pk" : c.isForeignKey ? "fk" : undefined,
+          ),
+          // Right after the title: a copy icon while hovering this column
+          // (briefly a checkmark right after copying), otherwise the FK
+          // marker for both-key columns, otherwise nothing.
+          indicatorIcon:
+            copiedId === id
+              ? COPIED_ICON
+              : hoveredCol === displayIdx
+                ? COPY_ICON
+                : c.isPrimaryKey && c.isForeignKey
+                  ? FK_ONLY_ICON
+                  : undefined,
+          // The sort button always lives in this fixed, right-aligned slot —
+          // whether it's showing the neutral (click-to-sort) glyph or the
+          // active column's direction — so it never jumps around on sort.
+          hasMenu: !!onHeaderClick,
+          menuIcon: isSorted
+            ? sortDir === "desc"
+              ? SORT_DESC_ICON
+              : SORT_ASC_ICON
+            : SORT_NEUTRAL_ICON,
           width:
             columnWidths[id] ??
-            Math.min(Math.max(c.name.length * 10 + 48, 110), 360),
+            Math.min(Math.max(c.name.length * 10 + 80, 140), 380),
         };
       }),
-    [order, columnWidths, result.columns, sortColumn, sortDir],
+    [order, columnWidths, result.columns, sortColumn, sortDir, onHeaderClick, copiedId, hoveredCol],
   );
 
   const resizeColumn = useCallback(
@@ -148,8 +169,7 @@ export default function ResultsGrid({
     ([col, row]: Item): GridCell => {
       const origIdx = order[col];
       const value = result.rows[row]?.[origIdx];
-      const dataType = result.columns[origIdx]?.dataType ?? "";
-      const isNum = NUMERIC_TYPES.has(dataType);
+      const isNum = columnCategory(result.columns[origIdx]?.dataType ?? "") === "number";
       const display =
         value === null || value === undefined ? "" : String(value);
       return {
@@ -178,6 +198,7 @@ export default function ResultsGrid({
           width={size.width}
           height={size.height}
           theme={GRID_THEME}
+          headerIcons={headerIcons}
           rowMarkers="number"
           rowHeight={38}
           headerHeight={38}
@@ -198,11 +219,28 @@ export default function ResultsGrid({
                 }
               : undefined
           }
-          onHeaderClicked={
+          onHeaderMenuClick={
             onHeaderClick
               ? (col) => onHeaderClick(result.columns[order[col]].name)
               : undefined
           }
+          onHeaderIndicatorClick={(col) => {
+            const origIdx = order[col];
+            const name = result.columns[origIdx]?.name;
+            if (!name || !navigator.clipboard) return;
+            const id = `${origIdx}:${name}`;
+            navigator.clipboard
+              .writeText(name)
+              .then(() => {
+                setCopiedId(id);
+                if (copiedTimeout.current) clearTimeout(copiedTimeout.current);
+                copiedTimeout.current = setTimeout(() => setCopiedId(null), 900);
+              })
+              .catch(() => {});
+          }}
+          onItemHovered={(args) => {
+            setHoveredCol(args.kind === "header" ? args.location[0] : null);
+          }}
         />
       )}
     </div>

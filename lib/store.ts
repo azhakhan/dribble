@@ -61,6 +61,8 @@ interface IdeState {
   hydrate: () => Promise<void>;
   openTab: (tab: Tab) => void;
   closeTab: (id: string) => void;
+  /** Close several tabs at once (close others / to the right / all). */
+  closeTabs: (ids: string[]) => void;
   setActive: (id: string) => void;
   moveTab: (fromIndex: number, toIndex: number) => void;
   renameTab: (id: string, title: string) => void;
@@ -139,6 +141,21 @@ export const useIde = create<IdeState>((set, get) => ({
     const next = tabs.filter((t) => t.id !== id);
     let active = activeTabId;
     if (activeTabId === id) {
+      active = next[Math.min(idx, next.length - 1)]?.id ?? null;
+    }
+    set({ tabs: next, activeTabId: active });
+    persist(get);
+  },
+
+  closeTabs: (ids) => {
+    const { tabs, activeTabId } = get();
+    const drop = new Set(ids);
+    if (!drop.size) return;
+    const next = tabs.filter((t) => !drop.has(t.id));
+    if (next.length === tabs.length) return;
+    let active = activeTabId;
+    if (activeTabId && drop.has(activeTabId)) {
+      const idx = tabs.findIndex((t) => drop.has(t.id));
       active = next[Math.min(idx, next.length - 1)]?.id ?? null;
     }
     set({ tabs: next, activeTabId: active });

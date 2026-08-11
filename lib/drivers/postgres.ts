@@ -8,6 +8,8 @@ import type {
   QueryResult,
   TableDataParams,
   TableDataResult,
+  TableRowStream,
+  TableStreamParams,
 } from "./types";
 
 const OID_NAMES: Record<number, string> = {
@@ -63,6 +65,8 @@ function jsonSafe(v: unknown): unknown {
 }
 
 const MAX_ROWS = 1000;
+/** Rows pulled per cursor FETCH while exporting. */
+const EXPORT_BATCH = 2000;
 
 export class PostgresDriver implements DatabaseDriver {
   readonly type = "postgres" as const;
@@ -108,40 +112,138 @@ export class PostgresDriver implements DatabaseDriver {
     }));
   }
 
+  /**
+   * Read from pg_catalog rather than information_schema: `format_type` gives the
+   * declared type with its modifier (`character varying(50)`, enum type names),
+   * and constraint membership is only reachable here without extra round-trips.
+   */
   async listColumns(schema: string, table: string): Promise<ColumnInfo[]> {
     const res = await this.pool.query(
-      `SELECT column_name, data_type FROM information_schema.columns
-       WHERE table_schema = $1 AND table_name = $2 ORDER BY ordinal_position`,
+      `SELECT
+         a.attname                              AS name,
+         format_type(a.atttypid, a.atttypmod)   AS data_type,
+         NOT a.attnotnull                       AS nullable,
+         EXISTS (
+           SELECT 1 FROM pg_constraint pk
+           WHERE pk.conrelid = c.oid AND pk.contype = 'p' AND a.attnum = ANY (pk.conkey)
+         )                                      AS is_primary_key,
+         (
+           SELECT fn.nspname || '.' || fc.relname || '.' || fa.attname
+           FROM pg_constraint fk
+           JOIN pg_class fc ON fc.oid = fk.confrelid
+           JOIN pg_namespace fn ON fn.oid = fc.relnamespace
+           JOIN pg_attribute fa
+             ON fa.attrelid = fk.confrelid
+            AND fa.attnum = fk.confkey[array_position(fk.conkey, a.attnum)]
+           WHERE fk.conrelid = c.oid AND fk.contype = 'f' AND a.attnum = ANY (fk.conkey)
+           ORDER BY fk.conname
+           LIMIT 1
+         )                                      AS references_column
+       FROM pg_attribute a
+       JOIN pg_class c ON c.oid = a.attrelid
+       JOIN pg_namespace n ON n.oid = c.relnamespace
+       WHERE n.nspname = $1 AND c.relname = $2 AND a.attnum > 0 AND NOT a.attisdropped
+       ORDER BY a.attnum`,
       [schema, table]
     );
-    return res.rows.map((r) => ({ name: r.column_name, dataType: r.data_type }));
+    return res.rows.map((r) => ({
+      name: r.name,
+      dataType: r.data_type,
+      nullable: r.nullable,
+      isPrimaryKey: r.is_primary_key,
+      isForeignKey: r.references_column !== null,
+      references: r.references_column ?? undefined,
+    }));
   }
 
   async getTableData(p: TableDataParams): Promise<TableDataResult> {
     const rel = `${quoteIdent(p.schema)}.${quoteIdent(p.table)}`;
     const where = p.where?.trim() ? ` WHERE ${p.where.trim()}` : "";
 
+    // Kicked off first and awaited last: on a large table the count is a full
+    // scan, and it depends on nothing the other two queries produce. A count
+    // can fail (e.g. permissions) without blocking the data fetch, so the
+    // rejection is absorbed here rather than surfacing as a failed page load.
+    const countPromise = this.pool
+      .query(`SELECT count(*)::int8 AS n FROM ${rel}${where}`)
+      .then((cnt) => Number(cnt.rows[0].n))
+      .catch(() => null);
+
+    // Doubles as validation for the sort identifier (keeping the quoting sound)
+    // and as the source of the key/type metadata the wire protocol doesn't carry.
+    const meta = await this.listColumns(p.schema, p.table);
+
     let orderBy = "";
-    if (p.sortColumn) {
-      // Validate the sort column against real columns to keep identifier quoting sound.
-      const cols = await this.listColumns(p.schema, p.table);
-      if (cols.some((c) => c.name === p.sortColumn)) {
-        orderBy = ` ORDER BY ${quoteIdent(p.sortColumn)} ${p.sortDir === "desc" ? "DESC" : "ASC"}`;
-      }
+    if (p.sortColumn && meta.some((c) => c.name === p.sortColumn)) {
+      orderBy = ` ORDER BY ${quoteIdent(p.sortColumn)} ${p.sortDir === "desc" ? "DESC" : "ASC"}`;
     }
 
     const limit = Math.min(Math.max(p.limit, 1), MAX_ROWS);
     const sql = `SELECT * FROM ${rel}${where}${orderBy} LIMIT ${limit} OFFSET ${Math.max(p.offset, 0)}`;
     const result = await this.runQuery(sql, limit);
 
-    let totalCount: number | null = null;
+    // `SELECT *` returns the table's own columns, so names line up one-to-one.
+    const byName = new Map(meta.map((c) => [c.name, c]));
+    const columns = result.columns.map((c) => byName.get(c.name) ?? c);
+
+    return { ...result, columns, totalCount: await countPromise };
+  }
+
+  async openTableStream(p: TableStreamParams): Promise<TableRowStream> {
+    const rel = `${quoteIdent(p.schema)}.${quoteIdent(p.table)}`;
+    const where = p.where?.trim() ? ` WHERE ${p.where.trim()}` : "";
+
+    // Every identifier we interpolate is validated against the real columns.
+    const tableColumns = await this.listColumns(p.schema, p.table);
+    const byName = new Map(tableColumns.map((c) => [c.name, c]));
+    const picked = (p.columns ?? []).map((n) => byName.get(n)).filter((c): c is ColumnInfo => !!c);
+    const columns = picked.length ? picked : tableColumns;
+    const selectList = picked.length ? picked.map((c) => quoteIdent(c.name)).join(", ") : "*";
+    const orderBy =
+      p.sortColumn && byName.has(p.sortColumn)
+        ? ` ORDER BY ${quoteIdent(p.sortColumn)} ${p.sortDir === "desc" ? "DESC" : "ASC"}`
+        : "";
+
+    const client = await this.pool.connect();
+    let closed = false;
+    const close = async () => {
+      if (closed) return;
+      closed = true;
+      try {
+        await client.query("ROLLBACK");
+      } catch {
+        // the transaction may already be gone; releasing the client is what matters
+      }
+      client.release();
+    };
+
     try {
-      const cnt = await this.pool.query(`SELECT count(*)::int8 AS n FROM ${rel}${where}`);
-      totalCount = Number(cnt.rows[0].n);
-    } catch {
-      // count can fail (e.g. permissions) without blocking the data fetch
+      await client.query("BEGIN READ ONLY");
+      await client.query(
+        `DECLARE _dribble_export NO SCROLL CURSOR FOR SELECT ${selectList} FROM ${rel}${where}${orderBy}`,
+      );
+    } catch (err) {
+      await close();
+      throw err;
     }
-    return { ...result, totalCount };
+
+    async function* batches(): AsyncGenerator<unknown[][]> {
+      try {
+        for (;;) {
+          const res = await client.query({
+            text: `FETCH ${EXPORT_BATCH} FROM _dribble_export`,
+            rowMode: "array",
+          });
+          const rows = (res.rows as unknown[][]).map((row) => row.map(jsonSafe));
+          if (rows.length) yield rows;
+          if (rows.length < EXPORT_BATCH) return;
+        }
+      } finally {
+        await close();
+      }
+    }
+
+    return { columns, batches, close };
   }
 
   async runPagedQuery(sql: string, p: PagedQueryParams): Promise<PagedQueryResult> {

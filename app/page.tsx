@@ -36,12 +36,14 @@ export default function Ide() {
   }, []);
 
   // A connection counts as "connected" if the server holds a live driver, or if
-  // an open table tab is actively using it (instant, before the next poll).
+  // the visible table tab is using it (instant, before the next poll). Only the
+  // active tab queries, so background tabs prove nothing about their connection.
   const connectedIds = useMemo(() => {
     const ids = new Set(serverConnected);
-    for (const t of tabs) if (t.kind === "table" && t.connectionId) ids.add(t.connectionId);
+    const active = tabs.find((t) => t.id === activeTabId);
+    if (active?.kind === "table" && active.connectionId) ids.add(active.connectionId);
     return ids;
-  }, [serverConnected, tabs]);
+  }, [serverConnected, tabs, activeTabId]);
 
   // Connections the heartbeat should keep warm: those used by any open tab.
   // Everything else (e.g. opened only to browse schemas) is left to idle out.
@@ -68,6 +70,17 @@ export default function Ide() {
     refreshChats();
   }, [hydrate, refreshConnections, refreshNotebooks, refreshChats]);
 
+  // Renames done from the tab strip's context menu notify here so the
+  // sidebar lists stay in sync.
+  useEffect(() => {
+    const onRenamed = () => {
+      refreshNotebooks();
+      refreshChats();
+    };
+    window.addEventListener("resources-renamed", onRenamed);
+    return () => window.removeEventListener("resources-renamed", onRenamed);
+  }, [refreshNotebooks, refreshChats]);
+
   // Poll which connections are live so the sidebar dot reflects reality.
   useEffect(() => {
     refreshStatus();
@@ -78,7 +91,11 @@ export default function Ide() {
     refreshStatus();
   }, [tabs, refreshStatus]);
 
-  // Keep DB connections alive while the page is open; release them on close.
+  // Keep DB connections alive while the page is open. Nothing is released on
+  // unload: `pagehide` can't tell a reload from a real close, so tearing pools
+  // down there made every reload pay a fresh TCP+TLS+auth handshake per pool.
+  // Once the heartbeat stops, the idle sweep in lib/connections.ts collects
+  // them ~60-90s later, which is what it exists for.
   useEffect(() => {
     const heartbeat = setInterval(() => {
       fetch("/api/db/heartbeat", {
@@ -87,16 +104,7 @@ export default function Ide() {
         body: JSON.stringify({ active: activeConnRef.current }),
       }).catch(() => {});
     }, 25_000);
-    const onPageHide = (e: PageTransitionEvent) => {
-      // Only release DB connections when the page is actually going away,
-      // not when it is being put into the back/forward cache or tab-switched.
-      if (!e.persisted) navigator.sendBeacon("/api/db/disconnect");
-    };
-    window.addEventListener("pagehide", onPageHide);
-    return () => {
-      clearInterval(heartbeat);
-      window.removeEventListener("pagehide", onPageHide);
-    };
+    return () => clearInterval(heartbeat);
   }, []);
 
   return (

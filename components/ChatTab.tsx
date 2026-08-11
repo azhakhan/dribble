@@ -3,10 +3,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport, type UIMessage } from "ai";
+import { Sparkles, Square, XCircle, CheckCircle2 } from "lucide-react";
 import { useIde, type ConnectionMeta, type Tab } from "@/lib/store";
 import type { QueryResult } from "@/lib/drivers/types";
 import ResultsPanel from "./ResultsPanel";
 import DragHandle from "./DragHandle";
+import Spinner from "./Spinner";
+import { ICON_SIZE, SMALL_ICON_SIZE } from "./IconButton";
 import { formatAge } from "@/lib/time";
 
 interface ToolPart {
@@ -17,13 +20,23 @@ interface ToolPart {
   errorText?: string;
 }
 
-function latestQueryResult(messages: UIMessage[]): QueryResult | null {
+interface LatestQuery {
+  result: QueryResult;
+  sql: string | null;
+  key: string;
+}
+
+function latestQuery(messages: UIMessage[]): LatestQuery | null {
   for (let i = messages.length - 1; i >= 0; i--) {
     const parts = messages[i].parts ?? [];
     for (let j = parts.length - 1; j >= 0; j--) {
       const p = parts[j] as ToolPart;
       if (p.type === "tool-run_query" && p.state === "output-available" && p.output && !("error" in p.output) && Array.isArray(p.output.columns)) {
-        return p.output as unknown as QueryResult;
+        return {
+          result: p.output as unknown as QueryResult,
+          sql: typeof p.input?.sql === "string" ? p.input.sql : null,
+          key: `${messages[i].id ?? i}:${j}`,
+        };
       }
     }
   }
@@ -64,7 +77,9 @@ function ToolChip({ part }: { part: ToolPart }) {
           color: failed ? "var(--danger)" : running ? "var(--accent)" : "var(--text-dim)",
         }}
       >
-        <span className={running ? "pulse" : ""}>{running ? "●" : failed ? "✕" : "✓"}</span>
+        <span style={{ display: "flex" }}>
+          {running ? <Spinner size={SMALL_ICON_SIZE} /> : failed ? <XCircle size={SMALL_ICON_SIZE} /> : <CheckCircle2 size={SMALL_ICON_SIZE} />}
+        </span>
         {label}
         {part.type === "tool-run_query" && part.state === "output-available" && !failed && (
           <span style={{ color: "var(--text-faint)" }}>{(part.output as { rowCount?: number })?.rowCount ?? 0} rows</span>
@@ -139,7 +154,35 @@ function ChatInner({
   });
 
   const busy = status === "submitted" || status === "streaming";
-  const result = latestQueryResult(messages);
+  const latest = latestQuery(messages);
+
+  // The agent's tool call only ever hands back the first MAX_TOOL_ROWS rows
+  // (with the true rowCount), so paging past that re-runs the same SQL with a
+  // server-side LIMIT/OFFSET, same as the notebook's query cells do.
+  const [pageOverride, setPageOverride] = useState<{ key: string; page: number; limit: number; result: QueryResult } | null>(null);
+  const [pageLoading, setPageLoading] = useState(false);
+  const activeOverride = pageOverride && latest && pageOverride.key === latest.key ? pageOverride : null;
+  const displayResult = activeOverride?.result ?? latest?.result ?? null;
+  const page = activeOverride?.page ?? 0;
+  const limit = activeOverride?.limit ?? 100;
+
+  async function loadPage(newPage: number, newLimit: number) {
+    if (!connectionId || !latest?.sql) return;
+    setPageLoading(true);
+    try {
+      const res = await fetch(`/api/db/${connectionId}/query`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sql: latest.sql, limit: newLimit, offset: newPage * newLimit, count: false }),
+      });
+      const body = await res.json();
+      if (res.ok && body.paged !== false) {
+        setPageOverride({ key: latest.key, page: newPage, limit: newLimit, result: body });
+      }
+    } finally {
+      setPageLoading(false);
+    }
+  }
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
@@ -170,7 +213,9 @@ function ChatInner({
           flexShrink: 0,
         }}
       >
-        <span style={{ color: "#b48ead" }}>✦</span>
+        <span style={{ display: "flex", color: "#b48ead" }}>
+          <Sparkles size={ICON_SIZE} />
+        </span>
         <input
           value={tab.title}
           onChange={(e) => onRename(e.target.value)}
@@ -234,8 +279,8 @@ function ChatInner({
           </div>
         ))}
         {busy && (
-          <div className="pulse mono" style={{ color: "#b48ead", fontSize: 11 }}>
-            ● thinking…
+          <div className="mono" style={{ display: "flex", alignItems: "center", gap: 5, color: "#b48ead", fontSize: 11 }}>
+            <Spinner size={SMALL_ICON_SIZE} color="#b48ead" /> thinking…
           </div>
         )}
         {error && (
@@ -263,8 +308,8 @@ function ChatInner({
             style={{ flex: 1, resize: "none", fontSize: 13, lineHeight: 1.5 }}
           />
           {busy ? (
-            <button className="btn" onClick={() => stop()}>
-              ■ Stop
+            <button className="btn" style={{ display: "flex", alignItems: "center", gap: 5 }} onClick={() => stop()}>
+              <Square size={ICON_SIZE} /> Stop
             </button>
           ) : (
             <button className="btn btn-accent" onClick={submit} disabled={!input.trim() || !connectionId}>
@@ -292,7 +337,7 @@ function ChatInner({
 
       {/* shared results panel — last query the agent ran */}
       <div ref={resultsRef} style={{ flex: `${1 - messageShare} 1 0`, minHeight: 80, borderTop: "1px solid var(--border)", display: "flex", flexDirection: "column" }}>
-        {result && !busy && updatedAt && (
+        {displayResult && !busy && updatedAt && (
           <div
             className="mono"
             style={{ padding: "2px 12px", fontSize: 10, color: "var(--text-faint)", borderBottom: "1px solid var(--border-soft)", flexShrink: 0 }}
@@ -301,7 +346,23 @@ function ChatInner({
           </div>
         )}
         <div style={{ flex: 1, minHeight: 0 }}>
-          <ResultsPanel result={result} error={null} running={false} emptyHint="The agent's final query results appear here" />
+          <ResultsPanel
+            result={displayResult}
+            error={null}
+            running={pageLoading}
+            emptyHint="The agent's final query results appear here"
+            serverPagination={
+              latest?.sql && connectionId
+                ? {
+                    page,
+                    limit,
+                    totalCount: latest.result.rowCount,
+                    onPage: (p) => loadPage(p, limit),
+                    onLimit: (n) => loadPage(0, n),
+                  }
+                : null
+            }
+          />
         </div>
       </div>
     </div>

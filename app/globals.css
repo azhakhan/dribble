@@ -39,6 +39,7 @@ html,
 body {
   height: 100%;
   overflow: hidden;
+  overscroll-behavior-x: none;
   background: var(--bg0);
   color: var(--text);
   font-family: var(--font-sans), system-ui, sans-serif;
@@ -132,6 +133,15 @@ select:focus {
   color: var(--text);
 }
 
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.spin {
+  animation: spin 0.7s linear infinite;
+}
+
 .tree-row {
   display: flex;
   align-items: center;
@@ -153,6 +163,13 @@ select:focus {
   color: var(--accent);
 }
 
+.tabstrip {
+  scrollbar-width: none;
+}
+.tabstrip::-webkit-scrollbar {
+  display: none;
+}
+
 .tab {
   display: inline-flex;
   align-items: center;
@@ -166,6 +183,8 @@ select:focus {
   user-select: none;
   cursor: pointer;
   position: relative;
+  flex: 0 1 auto;
+  min-width: 90px;
 }
 .tab.active {
   color: var(--text);
@@ -196,6 +215,35 @@ select:focus {
 .tab .close:hover {
   opacity: 1;
   background: var(--bg3);
+}
+
+.ctx-menu {
+  position: fixed;
+  z-index: 101;
+  min-width: 160px;
+  background: var(--bg1);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.45);
+}
+.ctx-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 5px 10px;
+  font-size: 12.5px;
+  border-radius: 4px;
+  color: var(--text);
+  white-space: nowrap;
+}
+.ctx-item:hover:not(:disabled) {
+  background: var(--bg3);
+}
+.ctx-sep {
+  height: 1px;
+  margin: 4px 6px;
+  background: var(--border);
 }
 
 .cell-card {

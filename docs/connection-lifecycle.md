@@ -47,10 +47,18 @@ A driver is closed (`driver.end()`) when:
 
 1. **It goes idle** — no open tab uses it and nothing queried it for 60 s
    (the sweep above). This is the common case.
-2. **The page closes** — `pagehide` (when not entering the bfcache) fires
-   `navigator.sendBeacon('/api/db/disconnect')` → `disconnectAll()`.
-3. **The connection is deleted** — `DELETE /api/connections/[id]` calls
+2. **The connection is deleted** — `DELETE /api/connections/[id]` calls
    `disconnect(id)` before removing the row.
+
+Note there is no unload hook. The page used to fire
+`navigator.sendBeacon('/api/db/disconnect')` → `disconnectAll()` on `pagehide`,
+but `pagehide` cannot distinguish a reload from a real close, so every reload
+destroyed all pools and then immediately paid a fresh TCP+TLS+auth handshake to
+rebuild them — on the critical path of the reload's first queries. It also
+raced: the beacon could land *after* the new page had opened a driver, killing
+a pool that page was using. Closing the page now just stops the heartbeat, and
+case 1 collects the drivers ~60–90 s later. `/api/db/disconnect` still exists
+for manual/administrative use.
 
 ## Reflecting status in the UI
 
@@ -61,15 +69,17 @@ from whether the tree node is expanded (that's the chevron).
 
 1. `GET /api/db/status` (the server registry), polled every 8 s and on tab
    changes, and
-2. the connections of any open **table** tab — added client-side so a
+2. the connection of the **active table tab** — added client-side so a
    just-opened or restored table tab shows connected instantly, before the poll.
+   Only the active tab queries (see below), so a background tab's connection is
+   not assumed live; it shows whatever `/api/db/status` reports.
 
 ### On reload
 
 - If the **server process is still running**, `/api/db/status` returns whatever
-  drivers are still alive; restored table tabs light up immediately (their data
-  fetch reconnects), and restored expanded sidebar connections auto-fetch
-  schemas (reconnecting) and turn green within ~8 s.
+  drivers are still alive; the restored active table tab lights up immediately
+  (its data fetch reconnects), and restored expanded sidebar connections
+  auto-fetch schemas (reconnecting) and turn green within ~8 s.
 - After a **fresh server start** the registry is empty, so everything starts
   grey until a tab or tree expansion reconnects it. Nothing shows "connected"
   without an actual live driver.
