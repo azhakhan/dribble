@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Table2, FileCode2, MessageSquare, X } from "lucide-react";
 import { useIde, type Tab } from "@/lib/store";
 import { ICON_SIZE } from "./IconButton";
@@ -11,15 +11,48 @@ const KIND_ICONS: Record<Tab["kind"], React.ReactElement> = {
   chat: <MessageSquare size={ICON_SIZE} color="#b48ead" />,
 };
 
+const MENU_WIDTH = 180;
+const MENU_HEIGHT = 210;
+
 export default function Tabs() {
-  const { tabs, activeTabId, setActive, closeTab, moveTab } = useIde();
+  const { tabs, activeTabId, setActive, closeTab, closeTabs, moveTab, renameTab } = useIde();
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [dropIndex, setDropIndex] = useState<number | null>(null);
+  const [menu, setMenu] = useState<{ x: number; y: number; tabId: string } | null>(null);
+  const [renaming, setRenaming] = useState<{ id: string; value: string } | null>(null);
+
+  useEffect(() => {
+    if (!menu) return;
+    const close = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setMenu(null);
+    };
+    window.addEventListener("keydown", close);
+    return () => window.removeEventListener("keydown", close);
+  }, [menu]);
+
+  async function commitRename() {
+    if (!renaming) return;
+    const tab = tabs.find((t) => t.id === renaming.id);
+    const name = renaming.value.trim();
+    setRenaming(null);
+    if (!tab || tab.kind === "table" || !name || name === tab.title) return;
+    renameTab(tab.id, name);
+    const res = await fetch(`/api/${tab.kind === "notebook" ? "notebooks" : "chats"}/${tab.resourceId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name }),
+    });
+    if (res.ok) window.dispatchEvent(new Event("resources-renamed"));
+  }
 
   if (!tabs.length) return <div style={{ height: 35, borderBottom: "1px solid var(--border)", background: "var(--bg1)" }} />;
 
+  const menuTab = menu ? tabs.find((t) => t.id === menu.tabId) : null;
+  const menuIndex = menuTab ? tabs.findIndex((t) => t.id === menuTab.id) : -1;
+
   return (
     <div
+      className="tabstrip"
       style={{
         display: "flex",
         height: 35,
@@ -34,7 +67,7 @@ export default function Tabs() {
         <div
           key={tab.id}
           className={`tab ${tab.id === activeTabId ? "active" : ""} ${dropIndex === i && dragIndex !== i ? "dragover" : ""}`}
-          draggable
+          draggable={renaming?.id !== tab.id}
           onDragStart={(e) => {
             setDragIndex(i);
             e.dataTransfer.effectAllowed = "move";
@@ -58,15 +91,46 @@ export default function Tabs() {
           onAuxClick={(e) => {
             if (e.button === 1) closeTab(tab.id);
           }}
+          onContextMenu={(e) => {
+            e.preventDefault();
+            setActive(tab.id);
+            setMenu({ x: e.clientX, y: e.clientY, tabId: tab.id });
+          }}
           title={tab.title}
         >
-          <span style={{ display: "flex", alignItems: "center" }}>
+          <span style={{ display: "flex", alignItems: "center", flexShrink: 0 }}>
             {KIND_ICONS[tab.kind]}
           </span>
-          <span style={{ maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis" }}>{tab.title}</span>
+          {renaming?.id === tab.id ? (
+            <input
+              autoFocus
+              value={renaming.value}
+              onChange={(e) => setRenaming({ id: tab.id, value: e.target.value })}
+              onFocus={(e) => e.target.select()}
+              onClick={(e) => e.stopPropagation()}
+              onKeyDown={(e) => {
+                e.stopPropagation();
+                if (e.key === "Enter") commitRename();
+                else if (e.key === "Escape") setRenaming(null);
+              }}
+              onBlur={commitRename}
+              style={{
+                padding: "1px 4px",
+                fontSize: 12,
+                width: 120,
+                minWidth: 0,
+                flexShrink: 1,
+              }}
+              aria-label="Rename tab"
+            />
+          ) : (
+            <span style={{ maxWidth: 180, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", flexShrink: 1 }}>
+              {tab.title}
+            </span>
+          )}
           <button
             className="close"
-            style={{ display: "flex", alignItems: "center" }}
+            style={{ display: "flex", alignItems: "center", flexShrink: 0 }}
             onClick={(e) => {
               e.stopPropagation();
               closeTab(tab.id);
@@ -77,6 +141,64 @@ export default function Tabs() {
           </button>
         </div>
       ))}
+      {menu && menuTab && (
+        <div
+          style={{ position: "fixed", inset: 0, zIndex: 100 }}
+          onClick={() => setMenu(null)}
+          onContextMenu={(e) => {
+            e.preventDefault();
+            setMenu(null);
+          }}
+        >
+          <div
+            className="ctx-menu"
+            style={{
+              left: Math.max(0, Math.min(menu.x, window.innerWidth - MENU_WIDTH - 8)),
+              top: Math.max(0, Math.min(menu.y, window.innerHeight - MENU_HEIGHT - 8)),
+            }}
+            onClick={(e) => {
+              e.stopPropagation();
+              setMenu(null);
+            }}
+          >
+            {menuTab.kind !== "table" && (
+              <button
+                className="ctx-item"
+                onClick={() => {
+                  setMenu(null);
+                  setRenaming({ id: menuTab.id, value: menuTab.title });
+                }}
+              >
+                Rename
+              </button>
+            )}
+            <button className="ctx-item" onClick={() => closeTab(menuTab.id)}>
+              Close
+            </button>
+            <button
+              className="ctx-item"
+              disabled={tabs.length === 1}
+              onClick={() => closeTabs(tabs.filter((t) => t.id !== menuTab.id).map((t) => t.id))}
+            >
+              Close Others
+            </button>
+            <button
+              className="ctx-item"
+              disabled={menuIndex === tabs.length - 1}
+              onClick={() => closeTabs(tabs.slice(menuIndex + 1).map((t) => t.id))}
+            >
+              Close to the Right
+            </button>
+            <button className="ctx-item" onClick={() => closeTabs(tabs.map((t) => t.id))}>
+              Close All
+            </button>
+            <div className="ctx-sep" />
+            <button className="ctx-item" onClick={() => navigator.clipboard.writeText(menuTab.title)}>
+              Copy Name
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

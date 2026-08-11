@@ -70,6 +70,17 @@ export default function Ide() {
     refreshChats();
   }, [hydrate, refreshConnections, refreshNotebooks, refreshChats]);
 
+  // Renames done from the tab strip's context menu notify here so the
+  // sidebar lists stay in sync.
+  useEffect(() => {
+    const onRenamed = () => {
+      refreshNotebooks();
+      refreshChats();
+    };
+    window.addEventListener("resources-renamed", onRenamed);
+    return () => window.removeEventListener("resources-renamed", onRenamed);
+  }, [refreshNotebooks, refreshChats]);
+
   // Poll which connections are live so the sidebar dot reflects reality.
   useEffect(() => {
     refreshStatus();

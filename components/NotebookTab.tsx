@@ -43,6 +43,12 @@ export default function NotebookTab({
   const setCellHeight = useIde((s) => s.setCellHeight);
   const [cells, setCells] = useState<Cell[] | null>(null);
   const [name, setName] = useState(tab.title);
+
+  // Keep the header input in sync when the tab is renamed elsewhere
+  // (e.g. the tab strip's context menu).
+  useEffect(() => {
+    setName(tab.title);
+  }, [tab.title]);
   const [connectionId, setConnectionId] = useState<string | null>(
     tab.connectionId,
   );
