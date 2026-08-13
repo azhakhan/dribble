@@ -1,4 +1,4 @@
-import { Pool, type FieldDef } from "pg";
+import { Pool, type FieldDef, type PoolClient } from "pg";
 import type {
   ColumnInfo,
   ConnectionConfig,
@@ -6,10 +6,13 @@ import type {
   PagedQueryParams,
   PagedQueryResult,
   QueryResult,
+  RowUpdate,
   TableDataParams,
   TableDataResult,
   TableRowStream,
   TableStreamParams,
+  UpdateRowOutcome,
+  UpdateRowsResult,
 } from "./types";
 
 const OID_NAMES: Record<number, string> = {
@@ -138,7 +141,20 @@ export class PostgresDriver implements DatabaseDriver {
            WHERE fk.conrelid = c.oid AND fk.contype = 'f' AND a.attnum = ANY (fk.conkey)
            ORDER BY fk.conname
            LIMIT 1
-         )                                      AS references_column
+         )                                      AS references_column,
+         (
+           WITH RECURSIVE type_chain AS (
+             SELECT t.oid, t.typbasetype FROM pg_type t WHERE t.oid = a.atttypid
+             UNION ALL
+             SELECT base.oid, base.typbasetype
+             FROM type_chain current
+             JOIN pg_type base ON base.oid = current.typbasetype
+             WHERE current.typbasetype <> 0
+           )
+           SELECT array_agg(e.enumlabel::text ORDER BY e.enumsortorder)
+           FROM type_chain
+           JOIN pg_enum e ON e.enumtypid = type_chain.oid
+         )                                      AS enum_values
        FROM pg_attribute a
        JOIN pg_class c ON c.oid = a.attrelid
        JOIN pg_namespace n ON n.oid = c.relnamespace
@@ -153,6 +169,7 @@ export class PostgresDriver implements DatabaseDriver {
       isPrimaryKey: r.is_primary_key,
       isForeignKey: r.references_column !== null,
       references: r.references_column ?? undefined,
+      enumValues: r.enum_values ?? undefined,
     }));
   }
 
@@ -187,6 +204,80 @@ export class PostgresDriver implements DatabaseDriver {
     const columns = result.columns.map((c) => byName.get(c.name) ?? c);
 
     return { ...result, columns, totalCount: await countPromise };
+  }
+
+  async updateRows(schema: string, table: string, rows: RowUpdate[]): Promise<UpdateRowsResult> {
+    // Every identifier is validated against the real catalog before quoting,
+    // so nothing client-supplied is interpolated unchecked.
+    const meta = await this.listColumns(schema, table);
+    const pkCols = meta.filter((c) => c.isPrimaryKey).map((c) => c.name);
+    if (!pkCols.length) {
+      throw new Error(`"${schema}"."${table}" has no primary key — rows can't be targeted for update`);
+    }
+    const byName = new Map(meta.map((c) => [c.name, c]));
+    const rel = `${quoteIdent(schema)}.${quoteIdent(table)}`;
+
+    const outcomes: UpdateRowOutcome[] = [];
+    let updated = 0;
+    for (let i = 0; i < rows.length; i++) {
+      const { pk, set } = rows[i];
+      const setCols = Object.keys(set);
+      const outcome: UpdateRowOutcome = { index: i, sql: "", ok: false, pk, set };
+      let client: PoolClient | undefined;
+      let inTransaction = false;
+      try {
+        if (Object.keys(pk).sort().join() !== [...pkCols].sort().join()) {
+          throw new Error(`primary key values must cover exactly: ${pkCols.join(", ")}`);
+        }
+        if (!setCols.length) throw new Error("nothing to update");
+        for (const col of setCols) {
+          const info = byName.get(col);
+          if (!info) throw new Error(`unknown column "${col}"`);
+          if (info.isPrimaryKey) throw new Error(`primary key column "${col}" is not editable`);
+        }
+        const pkVals = pkCols.map((c) => pk[c]);
+        const whereSelect = pkCols.map((c, j) => `${quoteIdent(c)} = $${j + 1}`).join(" AND ");
+        client = await this.pool.connect();
+        await client.query("BEGIN");
+        inTransaction = true;
+        // Lock the row so the audit snapshot and UPDATE describe one atomic change.
+        const oldRes = await client.query({
+          text: `SELECT ${setCols.map((c) => quoteIdent(c)).join(", ")} FROM ${rel} WHERE ${whereSelect} FOR UPDATE`,
+          values: pkVals,
+          rowMode: "array",
+        });
+        if (!oldRes.rows.length) throw new Error("row not found (changed or deleted since load)");
+        outcome.old = Object.fromEntries(
+          setCols.map((c, j) => [c, jsonSafe((oldRes.rows[0] as unknown[])[j])]),
+        );
+        outcome.sql =
+          `UPDATE ${rel} SET ${setCols.map((c, j) => `${quoteIdent(c)} = $${j + 1}`).join(", ")}` +
+          ` WHERE ${pkCols.map((c, j) => `${quoteIdent(c)} = $${setCols.length + j + 1}`).join(" AND ")}`;
+        const res = await client.query(outcome.sql, [...setCols.map((c) => set[c]), ...pkVals]);
+        if (!res.rowCount) throw new Error("row not found (changed or deleted since load)");
+        await client.query("COMMIT");
+        inTransaction = false;
+        updated += res.rowCount;
+        outcome.ok = true;
+      } catch (err) {
+        if (client && inTransaction) {
+          try {
+            await client.query("ROLLBACK");
+          } catch {
+            // Preserve the original update error in the per-row result.
+          }
+        }
+        outcome.error = err instanceof Error ? err.message : String(err);
+      } finally {
+        client?.release();
+      }
+      outcomes.push(outcome);
+    }
+    return {
+      updated,
+      failed: outcomes.flatMap((o) => (o.ok ? [] : [{ index: o.index, error: o.error ?? "failed" }])),
+      rows: outcomes,
+    };
   }
 
   async openTableStream(p: TableStreamParams): Promise<TableRowStream> {

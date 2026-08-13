@@ -1,15 +1,28 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { Download, RefreshCw, X } from "lucide-react";
 import { useIde, type Tab } from "@/lib/store";
 import type { TableDataResult } from "@/lib/drivers/types";
 import { columnDisplayOrder } from "@/lib/columns";
 import { toCsv } from "@/lib/csv";
-import ResultsGrid from "./ResultsGrid";
+import ResultsGrid, { type GridEditing } from "./ResultsGrid";
 import PaginationBar from "./PaginationBar";
 import IconButton, { ICON_SIZE, SMALL_ICON_SIZE } from "./IconButton";
 import Spinner from "./Spinner";
+
+/** A staged (uncommitted) cell edit. `value: null` means "set to SQL NULL";
+ *  `failed` carries the server's error after an unsuccessful save. */
+interface StagedCell {
+  value: string | null;
+  failed?: string;
+}
+
+/** All staged cells of one row, plus the PK values that identify it. */
+interface StagedRow {
+  pk: Record<string, unknown>;
+  cells: Record<string, StagedCell>;
+}
 
 const menuItem: CSSProperties = {
   display: "flex",
@@ -45,6 +58,163 @@ export default function TableTab({ tab }: { tab: Tab }) {
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
   const exportRef = useRef<HTMLDivElement>(null);
+  const setDirty = useIde((s) => s.setDirty);
+  /** Staged edits keyed by rowKey (JSON of the row's PK values) — stable across
+   *  refetches, sorting, and paging. Session-only: lives in this component and
+   *  dies with the tab. */
+  const [edits, setEdits] = useState<Record<string, StagedRow>>({});
+  const [saving, setSaving] = useState(false);
+  const [saveResult, setSaveResult] = useState<{ ok: boolean; text: string } | null>(null);
+
+  const pkIdxs = useMemo(
+    () => (data ? data.columns.flatMap((c, i) => (c.isPrimaryKey ? [i] : [])) : []),
+    [data],
+  );
+
+  /** Row identity: JSON of the row's PK values — stable across refetches,
+   *  sorting, and paging. */
+  const rowKey = useCallback((row: unknown[]) => JSON.stringify(pkIdxs.map((i) => row[i])), [pkIdxs]);
+
+  const discard = useCallback(() => {
+    setEdits({});
+    setSaveResult(null);
+  }, []);
+
+  /** Revert one staged cell (DataGrip-style), removing the row entry if empty. */
+  const revert = useCallback(
+    (row: number, origColIdx: number) => {
+      if (!data) return;
+      const r = data.rows[row];
+      if (!r) return;
+      const key = rowKey(r);
+      const colName = data.columns[origColIdx].name;
+      setEdits((prev) => {
+        const existing = prev[key];
+        if (!existing?.cells[colName]) return prev;
+        const cells = { ...existing.cells };
+        delete cells[colName];
+        const next = { ...prev };
+        if (Object.keys(cells).length) next[key] = { ...existing, cells };
+        else delete next[key];
+        return next;
+      });
+    },
+    [data, rowKey],
+  );
+
+  const stagedCount = useMemo(
+    () => Object.values(edits).reduce((n, r) => n + Object.keys(r.cells).length, 0),
+    [edits],
+  );
+
+  // Keep the tab-strip dirty registry in sync so closing a tab with staged
+  // edits can prompt. Cleared on unmount (tab close).
+  useEffect(() => {
+    setDirty(tab.id, stagedCount);
+    return () => setDirty(tab.id, 0);
+  }, [stagedCount, tab.id, setDirty]);
+
+  const gridEditing = useMemo<GridEditing | undefined>(() => {
+    if (!data || !pkIdxs.length) return undefined;
+    return {
+      disabled: saving,
+      getStaged: (row, origColIdx) => {
+        const r = data.rows[row];
+        if (!r) return undefined;
+        return edits[rowKey(r)]?.cells[data.columns[origColIdx].name];
+      },
+      onEdit: (row, origColIdx, value) => {
+        const r = data.rows[row];
+        if (!r) return;
+        const colName = data.columns[origColIdx].name;
+        const key = rowKey(r);
+        setEdits((prev) => {
+          const existing = prev[key] ?? {
+            pk: Object.fromEntries(pkIdxs.map((i) => [data.columns[i].name, r[i]])),
+            cells: {},
+          };
+          // Editing back to the DB value unstages the cell.
+          const orig = r[origColIdx];
+          const origStr = orig === null || orig === undefined ? null : String(orig);
+          const cells = { ...existing.cells };
+          if (value === origStr) delete cells[colName];
+          else cells[colName] = { value };
+          const next = { ...prev };
+          if (Object.keys(cells).length) next[key] = { ...existing, cells };
+          else delete next[key];
+          return next;
+        });
+      },
+      revert,
+      revertAll: discard,
+    };
+  }, [data, pkIdxs, edits, rowKey, revert, discard, saving]);
+
+  /** Commit all staged rows: one UPDATE per row server-side; failures stay staged. */
+  const save = async () => {
+    if (!tab.connectionId || !tab.schema || !tab.table || saving) return;
+    const entries = Object.entries(edits);
+    if (!entries.length) return;
+    setSaving(true);
+    setSaveResult(null);
+    try {
+      const res = await fetch(`/api/db/${tab.connectionId}/update-rows`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          schema: tab.schema,
+          table: tab.table,
+          // Groups this save's per-row audit entries in the logs table.
+          sessionId: crypto.randomUUID(),
+          rows: entries.map(([, r]) => ({
+            pk: r.pk,
+            set: Object.fromEntries(Object.entries(r.cells).map(([c, cell]) => [c, cell.value])),
+          })),
+        }),
+      });
+      if (!res.ok) {
+        setSaveResult({ ok: false, text: (await res.json().catch(() => ({})))?.error ?? "Save failed" });
+        return;
+      }
+      const { updated, failed } = (await res.json()) as {
+        updated: number;
+        failed: { index: number; error: string }[];
+      };
+      const failedByIndex = new Map(failed.map((f) => [f.index, f.error]));
+      setEdits((current) => {
+        const next = { ...current };
+        entries.forEach(([key, savedRow], i) => {
+          const currentRow = next[key];
+          if (!currentRow) return;
+          const err = failedByIndex.get(i);
+          const cells = { ...currentRow.cells };
+          for (const [col, savedCell] of Object.entries(savedRow.cells)) {
+            const currentCell = cells[col];
+            // A newer edit must survive completion of this older save request.
+            if (!currentCell || currentCell.value !== savedCell.value) continue;
+            if (err === undefined) delete cells[col];
+            else cells[col] = { ...currentCell, failed: err };
+          }
+          if (Object.keys(cells).length) next[key] = { ...currentRow, cells };
+          else delete next[key];
+        });
+        return next;
+      });
+      setSaveResult({
+        ok: failed.length === 0,
+        text: failed.length
+          ? `${updated} row${updated === 1 ? "" : "s"} updated; ${failed.length} failed — ${failed[0].error}`
+          : `${updated} row${updated === 1 ? "" : "s"} updated (${stagedCount} cell${stagedCount === 1 ? "" : "s"})`,
+      });
+      // Refetch so triggers/defaults and concurrent changes show. Failed edits
+      // survive — they're keyed by PK, not row position.
+      await load();
+    } catch (err) {
+      setSaveResult({ ok: false, text: err instanceof Error ? err.message : "Save failed" });
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const load = useCallback(async () => {
     if (!tab.connectionId || !tab.schema || !tab.table) return;
@@ -217,6 +387,26 @@ export default function TableTab({ tab }: { tab: Tab }) {
           Apply
         </button>
         <div ref={exportRef} style={{ position: "relative", display: "flex" }}>
+          {stagedCount > 0 && (
+            <div style={{ display: "flex", gap: 6, marginRight: 6 }}>
+              <button
+                className="btn btn-ghost"
+                style={{ padding: "3px 10px", fontSize: 12 }}
+                disabled={saving}
+                onClick={discard}
+              >
+                Discard
+              </button>
+              <button
+                className="btn btn-accent"
+                style={{ padding: "3px 10px", fontSize: 12 }}
+                disabled={saving}
+                onClick={save}
+              >
+                {saving ? "Saving…" : `Save ${stagedCount}`}
+              </button>
+            </div>
+          )}
           <IconButton
             icon={<Download size={ICON_SIZE} />}
             title="Export CSV"
@@ -282,6 +472,26 @@ export default function TableTab({ tab }: { tab: Tab }) {
         </div>
       )}
 
+      {saveResult && (
+        <div
+          className="mono"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            padding: "4px 10px",
+            borderBottom: "1px solid var(--border)",
+            background: "var(--bg1)",
+            color: saveResult.ok ? "var(--green)" : "var(--danger)",
+            fontSize: 11,
+            flexShrink: 0,
+          }}
+        >
+          <span style={{ flex: 1 }}>{saveResult.text}</span>
+          <IconButton icon={<X size={ICON_SIZE} />} title="Dismiss" onClick={() => setSaveResult(null)} />
+        </div>
+      )}
+
       {/* grid */}
       <div style={{ flex: 1, minHeight: 0, display: "flex", position: "relative" }}>
         {error ? (
@@ -298,6 +508,7 @@ export default function TableTab({ tab }: { tab: Tab }) {
             onColumnWidthsChange={(w) => setColumnWidths(tab.id, w)}
             columnOrder={columnOrder}
             onColumnOrderChange={(o) => setColumnOrder(tab.id, o)}
+            editing={gridEditing}
           />
         ) : (
           <div style={{ display: "grid", placeItems: "center", width: "100%", color: "var(--text-faint)" }}>

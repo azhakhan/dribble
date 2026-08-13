@@ -8,6 +8,20 @@
       "when": 1782776968673,
       "tag": "0000_stormy_rattler",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1786479607152,
+      "tag": "0001_conscious_hulk",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1786554948498,
+      "tag": "0002_round_green_goblin",
+      "breakpoints": true
     }
   ]
 }

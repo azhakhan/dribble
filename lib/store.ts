@@ -56,6 +56,9 @@ interface IdeState {
   activeTabId: string | null;
   layout: Layout;
   tree: TreeState;
+  /** Tab id → number of staged (unsaved) cell edits. Session-only, never persisted —
+   *  staged edits live in the browser and die with it. */
+  dirtyTabs: Record<string, number>;
   /** True once workspace state has been loaded from the server. */
   hydrated: boolean;
   hydrate: () => Promise<void>;
@@ -66,6 +69,8 @@ interface IdeState {
   setActive: (id: string) => void;
   moveTab: (fromIndex: number, toIndex: number) => void;
   renameTab: (id: string, title: string) => void;
+  /** Record how many staged edits a tab holds; 0 clears the entry. */
+  setDirty: (tabId: string, count: number) => void;
   setSidebarWidth: (width: number) => void;
   setColumnWidths: (tableId: string, widths: Record<string, number>) => void;
   setChatSplit: (chatId: string, messageShare: number) => void;
@@ -101,6 +106,7 @@ export const useIde = create<IdeState>((set, get) => ({
   activeTabId: null,
   layout: DEFAULT_LAYOUT,
   tree: DEFAULT_TREE,
+  dirtyTabs: {},
   hydrated: false,
 
   hydrate: async () => {
@@ -135,7 +141,7 @@ export const useIde = create<IdeState>((set, get) => ({
   },
 
   closeTab: (id) => {
-    const { tabs, activeTabId } = get();
+    const { tabs, activeTabId, dirtyTabs } = get();
     const idx = tabs.findIndex((t) => t.id === id);
     if (idx === -1) return;
     const next = tabs.filter((t) => t.id !== id);
@@ -143,12 +149,14 @@ export const useIde = create<IdeState>((set, get) => ({
     if (activeTabId === id) {
       active = next[Math.min(idx, next.length - 1)]?.id ?? null;
     }
-    set({ tabs: next, activeTabId: active });
+    const dirty = { ...dirtyTabs };
+    delete dirty[id];
+    set({ tabs: next, activeTabId: active, dirtyTabs: dirty });
     persist(get);
   },
 
   closeTabs: (ids) => {
-    const { tabs, activeTabId } = get();
+    const { tabs, activeTabId, dirtyTabs } = get();
     const drop = new Set(ids);
     if (!drop.size) return;
     const next = tabs.filter((t) => !drop.has(t.id));
@@ -158,7 +166,9 @@ export const useIde = create<IdeState>((set, get) => ({
       const idx = tabs.findIndex((t) => drop.has(t.id));
       active = next[Math.min(idx, next.length - 1)]?.id ?? null;
     }
-    set({ tabs: next, activeTabId: active });
+    const dirty = { ...dirtyTabs };
+    for (const id of ids) delete dirty[id];
+    set({ tabs: next, activeTabId: active, dirtyTabs: dirty });
     persist(get);
   },
 
@@ -178,6 +188,14 @@ export const useIde = create<IdeState>((set, get) => ({
   renameTab: (id, title) => {
     set({ tabs: get().tabs.map((t) => (t.id === id ? { ...t, title } : t)) });
     persist(get);
+  },
+
+  setDirty: (tabId, count) => {
+    const dirtyTabs = { ...get().dirtyTabs };
+    if (count > 0) dirtyTabs[tabId] = count;
+    else delete dirtyTabs[tabId];
+    set({ dirtyTabs });
+    // not persisted — staged edits are session-only by design
   },
 
   setSidebarWidth: (width) => {
@@ -267,8 +285,11 @@ export const useIde = create<IdeState>((set, get) => ({
         delete tableSort[id];
         delete columnOrder[id];
       }
+      const dirtyTabs = { ...s.dirtyTabs };
+      for (const id of closingTabIds) delete dirtyTabs[id];
       return {
         tabs,
+        dirtyTabs,
         activeTabId: tabs.some((t) => t.id === s.activeTabId)
           ? s.activeTabId
           : tabs[tabs.length - 1]?.id ?? null,

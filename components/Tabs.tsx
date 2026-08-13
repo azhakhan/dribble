@@ -16,10 +16,24 @@ const MENU_HEIGHT = 210;
 
 export default function Tabs() {
   const { tabs, activeTabId, setActive, closeTab, closeTabs, moveTab, renameTab } = useIde();
+  const dirtyTabs = useIde((s) => s.dirtyTabs);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [dropIndex, setDropIndex] = useState<number | null>(null);
   const [menu, setMenu] = useState<{ x: number; y: number; tabId: string } | null>(null);
   const [renaming, setRenaming] = useState<{ id: string; value: string } | null>(null);
+  /** Full close request awaiting confirmation because at least one tab is dirty. */
+  const [confirmClose, setConfirmClose] = useState<string[] | null>(null);
+
+  /** A multi-tab close is atomic: cancel leaves every requested tab open. */
+  function requestClose(ids: string[]) {
+    if (!ids.length) return;
+    if (ids.some((id) => (dirtyTabs[id] ?? 0) > 0)) {
+      setConfirmClose(ids);
+      return;
+    }
+    if (ids.length === 1) closeTab(ids[0]);
+    else closeTabs(ids);
+  }
 
   useEffect(() => {
     if (!menu) return;
@@ -89,7 +103,7 @@ export default function Tabs() {
           }}
           onClick={() => setActive(tab.id)}
           onAuxClick={(e) => {
-            if (e.button === 1) closeTab(tab.id);
+            if (e.button === 1) requestClose([tab.id]);
           }}
           onContextMenu={(e) => {
             e.preventDefault();
@@ -133,7 +147,7 @@ export default function Tabs() {
             style={{ display: "flex", alignItems: "center", flexShrink: 0 }}
             onClick={(e) => {
               e.stopPropagation();
-              closeTab(tab.id);
+              requestClose([tab.id]);
             }}
             aria-label="Close tab"
           >
@@ -172,30 +186,84 @@ export default function Tabs() {
                 Rename
               </button>
             )}
-            <button className="ctx-item" onClick={() => closeTab(menuTab.id)}>
+            <button className="ctx-item" onClick={() => requestClose([menuTab.id])}>
               Close
             </button>
             <button
               className="ctx-item"
               disabled={tabs.length === 1}
-              onClick={() => closeTabs(tabs.filter((t) => t.id !== menuTab.id).map((t) => t.id))}
+              onClick={() => requestClose(tabs.filter((t) => t.id !== menuTab.id).map((t) => t.id))}
             >
               Close Others
             </button>
             <button
               className="ctx-item"
               disabled={menuIndex === tabs.length - 1}
-              onClick={() => closeTabs(tabs.slice(menuIndex + 1).map((t) => t.id))}
+              onClick={() => requestClose(tabs.slice(menuIndex + 1).map((t) => t.id))}
             >
               Close to the Right
             </button>
-            <button className="ctx-item" onClick={() => closeTabs(tabs.map((t) => t.id))}>
+            <button className="ctx-item" onClick={() => requestClose(tabs.map((t) => t.id))}>
               Close All
             </button>
             <div className="ctx-sep" />
             <button className="ctx-item" onClick={() => navigator.clipboard.writeText(menuTab.title)}>
               Copy Name
             </button>
+          </div>
+        </div>
+      )}
+      {confirmClose && (
+        <div
+          onClick={() => setConfirmClose(null)}
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(8,9,12,0.7)",
+            display: "grid",
+            placeItems: "center",
+            zIndex: 200,
+          }}
+        >
+          <div
+            className="fadeup"
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: 400,
+              background: "var(--bg1)",
+              border: "1px solid var(--border)",
+              borderRadius: 10,
+              padding: 24,
+              display: "flex",
+              flexDirection: "column",
+              gap: 12,
+            }}
+          >
+            <div style={{ fontSize: 15, fontWeight: 600 }}>Discard unsaved changes?</div>
+            <div style={{ fontSize: 12, color: "var(--text-dim)" }}>
+              {confirmClose.filter((id) => (dirtyTabs[id] ?? 0) > 0).map((id) => {
+                const t = tabs.find((t) => t.id === id);
+                return (
+                  <div key={id} className="mono" style={{ padding: "2px 0" }}>
+                    {t?.title ?? id} — {dirtyTabs[id]} unsaved cell{dirtyTabs[id] === 1 ? "" : "s"}
+                  </div>
+                );
+              })}
+            </div>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+              <button className="btn btn-ghost" onClick={() => setConfirmClose(null)}>
+                Cancel
+              </button>
+              <button
+                className="btn btn-accent"
+                onClick={() => {
+                  closeTabs(confirmClose);
+                  setConfirmClose(null);
+                }}
+              >
+                Discard
+              </button>
+            </div>
           </div>
         </div>
       )}
