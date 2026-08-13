@@ -7,11 +7,13 @@ import {
   type GridCell,
   type GridColumn,
   type Item,
+  type ProvideEditorCallbackResult,
   type Theme,
 } from "@glideapps/glide-data-grid";
 import "@glideapps/glide-data-grid/dist/index.css";
 import type { QueryResult } from "@/lib/drivers/types";
 import { columnCategory, columnDisplayOrder } from "@/lib/columns";
+import { NULL_SENTINEL, makeDateEditor, makeSelectEditor } from "./cellEditors";
 import {
   COPIED_ICON,
   COPY_ICON,
@@ -51,6 +53,20 @@ const GRID_THEME: Partial<Theme> = {
   fontFamily: "Roboto Mono, Consolas, monospace",
 };
 
+/** Staged-edit wiring for table tabs. Absent → the grid stays read-only
+ *  (notebook/chat results). All indexes are original result column indexes. */
+export interface GridEditing {
+  /** Keep staged values visible while temporarily preventing new edits. */
+  disabled?: boolean;
+  /** The staged value for a cell, if any. `value: null` = set to SQL NULL. */
+  getStaged: (row: number, origColIdx: number) => { value: string | null; failed?: string } | undefined;
+  onEdit: (row: number, origColIdx: number, value: string | null) => void;
+  /** Unstage one cell. */
+  revert: (row: number, origColIdx: number) => void;
+  /** Unstage everything. */
+  revertAll: () => void;
+}
+
 interface Props {
   result: QueryResult;
   sortColumn?: string;
@@ -65,6 +81,7 @@ interface Props {
    *  result are ignored; result columns not listed are appended in native order. */
   columnOrder?: string[];
   onColumnOrderChange?: (order: string[]) => void;
+  editing?: GridEditing;
 }
 
 export default function ResultsGrid({
@@ -76,6 +93,7 @@ export default function ResultsGrid({
   onColumnWidthsChange,
   columnOrder,
   onColumnOrderChange,
+  editing,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ width: 0, height: 0 });
@@ -93,6 +111,10 @@ export default function ResultsGrid({
   // appear only on hover instead of cluttering every header.
   const [hoveredCol, setHoveredCol] = useState<number | null>(null);
 
+  // Right-click revert menu for staged cells (viewport coordinates, as .ctx-menu
+  // is position:fixed; glide's bounds are grid-relative).
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; row: number; origIdx: number } | null>(null);
+
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
@@ -109,6 +131,54 @@ export default function ResultsGrid({
     () => columnDisplayOrder(result.columns.map((c) => c.name), columnOrder),
     [result.columns, columnOrder],
   );
+
+  // Editability is a pure function of the column metadata: primary-key columns
+  // anchor the row's identity, and bytea/arrays round-trip lossily as text.
+  const isEditableCol = useCallback(
+    (origIdx: number) => {
+      const c = result.columns[origIdx];
+      if (!c || c.isPrimaryKey) return false;
+      const cat = columnCategory(c.dataType);
+      return cat !== "binary" && cat !== "array";
+    },
+    [result.columns],
+  );
+
+  // Editor components are created once per column so their component types stay
+  // stable across renders — recreating them per provideEditor call would remount
+  // the open overlay (losing focus and local state) on every grid re-render.
+  const editingEnabled = !!editing;
+  const editorByCol = useMemo(() => {
+    if (!editingEnabled) return undefined;
+    const map = new Map<number, NonNullable<ProvideEditorCallbackResult<GridCell>>>();
+    result.columns.forEach((c, origIdx) => {
+      if (!isEditableCol(origIdx)) return;
+      const nullOpt = c.nullable ? [{ label: "∅ null", value: NULL_SENTINEL }] : [];
+      if (c.enumValues?.length) {
+        map.set(
+          origIdx,
+          makeSelectEditor([...c.enumValues.map((v) => ({ label: v, value: v })), ...nullOpt]),
+        );
+        return;
+      }
+      const cat = columnCategory(c.dataType);
+      if (cat === "boolean") {
+        map.set(
+          origIdx,
+          makeSelectEditor([
+            { label: "true", value: "true" },
+            { label: "false", value: "false" },
+            ...nullOpt,
+          ]),
+        );
+      } else if (cat === "date") {
+        map.set(origIdx, makeDateEditor(false));
+      } else if (cat === "timestamp") {
+        map.set(origIdx, makeDateEditor(true, /with time zone|timestamptz/i.test(c.dataType)));
+      }
+    });
+    return map;
+  }, [editingEnabled, result.columns, isEditableCol]);
 
   const columns: GridColumn[] = useMemo(
     () =>
@@ -170,19 +240,29 @@ export default function ResultsGrid({
       const origIdx = order[col];
       const value = result.rows[row]?.[origIdx];
       const isNum = columnCategory(result.columns[origIdx]?.dataType ?? "") === "number";
-      const display =
-        value === null || value === undefined ? "" : String(value);
+      const staged = editing?.getStaged(row, origIdx);
+      const nullish = staged ? staged.value === null : value === null || value === undefined;
+      const display = staged
+        ? (staged.value ?? "")
+        : nullish
+          ? ""
+          : String(value);
       return {
         kind: GridCellKind.Text,
         data: display,
-        displayData: display === "" && value === null ? "∅" : display,
+        displayData: display === "" && nullish ? "∅" : display,
         allowOverlay: true,
-        readonly: true,
+        readonly: !(editing && !editing.disabled && isEditableCol(origIdx)),
         contentAlign: isNum ? "right" : "left",
-        themeOverride: value === null ? { textDark: "#5d6678" } : undefined,
+        // Staged cells are tinted: amber while pending, red after a failed save.
+        themeOverride: staged
+          ? { bgCell: staged.failed ? "rgba(224,90,90,0.22)" : "rgba(232,161,76,0.16)" }
+          : nullish
+            ? { textDark: "#5d6678" }
+            : undefined,
       };
     },
-    [result, order],
+    [result, order, editing, isEditableCol],
   );
 
   return (
@@ -208,7 +288,47 @@ export default function ResultsGrid({
           smoothScrollX
           smoothScrollY
           getCellsForSelection
+          onCellEdited={
+            editing && !editing.disabled
+              ? ([col, row], newValue) => {
+                  if (newValue.kind !== GridCellKind.Text) return;
+                  const data = newValue.data;
+                  editing.onEdit(row, order[col], data === NULL_SENTINEL ? null : data);
+                }
+              : undefined
+          }
+          provideEditor={
+            editing && !editing.disabled
+              ? (cell) => {
+                  const loc = cell.location;
+                  if (!loc) return undefined;
+                  // The overlay reports its location in glide's internal
+                  // ("mangled") coordinates, where the row-marker gutter counts
+                  // as column 0 — shift back to data columns before mapping.
+                  const origIdx = order[loc[0] - 1];
+                  return editorByCol?.get(origIdx);
+                }
+              : undefined
+          }
           onColumnResize={resizeColumn}
+          onCellContextMenu={
+            editing
+              ? ([col, row], event) => {
+                  const origIdx = order[col];
+                  // Only staged cells get the revert menu; others keep the
+                  // browser default.
+                  if (!editing.getStaged(row, origIdx)) return;
+                  event.preventDefault();
+                  const rect = containerRef.current?.getBoundingClientRect();
+                  setCtxMenu({
+                    x: (rect?.left ?? 0) + event.bounds.x,
+                    y: (rect?.top ?? 0) + event.bounds.y + event.bounds.height,
+                    row,
+                    origIdx,
+                  });
+                }
+              : undefined
+          }
           onColumnMoved={
             onColumnOrderChange
               ? (startIndex, endIndex) => {
@@ -242,6 +362,44 @@ export default function ResultsGrid({
             setHoveredCol(args.kind === "header" ? args.location[0] : null);
           }}
         />
+      )}
+      {ctxMenu && editing && (
+        <div
+          style={{ position: "fixed", inset: 0, zIndex: 100 }}
+          onClick={() => setCtxMenu(null)}
+          onContextMenu={(e) => {
+            e.preventDefault();
+            setCtxMenu(null);
+          }}
+        >
+          <div
+            className="ctx-menu"
+            style={{
+              left: Math.max(0, Math.min(ctxMenu.x, window.innerWidth - 200)),
+              top: Math.max(0, Math.min(ctxMenu.y, window.innerHeight - 90)),
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              className="ctx-item"
+              onClick={() => {
+                editing.revert(ctxMenu.row, ctxMenu.origIdx);
+                setCtxMenu(null);
+              }}
+            >
+              Revert change
+            </button>
+            <button
+              className="ctx-item"
+              onClick={() => {
+                editing.revertAll();
+                setCtxMenu(null);
+              }}
+            >
+              Revert all changes
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );

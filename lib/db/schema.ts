@@ -74,12 +74,39 @@ export const workspace = pgTable("workspace", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+// Generic audit log for user-initiated actions against a connection: row edits
+// ("update_rows") today, later renames, arbitrary SQL runs, AI runs. One row per
+// executed statement; entries of a single user action share a session_id.
+// schema/table are nullable — not every action has one.
+export const logs = pgTable("logs", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  connectionId: uuid("connection_id").references(() => connections.id, { onDelete: "set null" }),
+  kind: text("kind").notNull(),
+  /** Groups the entries of one user action (e.g. one save click = one UPDATE per
+   *  row), so a whole batch can be reviewed or reverted together. */
+  sessionId: uuid("session_id"),
+  database: text("database"),
+  schema: text("schema"),
+  table: text("table"),
+  sql: text("sql").notNull(),
+  outcome: text("outcome").notNull(), // "success" | "error"
+  message: text("message"),
+  /** Kind-specific payload. For "update_rows": { pk, set, old } — old holds the
+   *  pre-update values, so the change can be reverted one row or a whole session. */
+  details: jsonb("details").$type<Record<string, unknown>>(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 // Inferred row types — use these instead of hand-written interfaces.
 export type User = typeof users.$inferSelect;
 export type Connection = typeof connections.$inferSelect;
 export type Notebook = typeof notebooks.$inferSelect;
 export type Chat = typeof chats.$inferSelect;
 export type Workspace = typeof workspace.$inferSelect;
+export type Log = typeof logs.$inferSelect;
 
 // Zod is the single source of truth for input validation, derived from the
 // tables above. Refine where the API contract differs from raw column shapes.

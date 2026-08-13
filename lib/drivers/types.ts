@@ -21,6 +21,8 @@ export interface ColumnInfo {
   isForeignKey?: boolean;
   /** For a foreign key, the referenced `schema.table.column`. */
   references?: string;
+  /** For an enum column, its labels in sort order (catalog-only). */
+  enumValues?: string[];
 }
 
 export interface QueryResult {
@@ -45,6 +47,35 @@ export interface TableDataParams {
 
 export interface TableDataResult extends QueryResult {
   totalCount: number | null;
+}
+
+export interface RowUpdate {
+  /** Exact primary-key columns → values identifying the row. */
+  pk: Record<string, unknown>;
+  /** Non-PK columns → new values (string | number | boolean | null). */
+  set: Record<string, unknown>;
+}
+
+/** Per-row result of an updateRows call — one audit-log entry is written from each. */
+export interface UpdateRowOutcome {
+  /** Index into the request's rows array. */
+  index: number;
+  /** The UPDATE statement attempted ("" when validation failed before building it). */
+  sql: string;
+  ok: boolean;
+  error?: string;
+  pk: Record<string, unknown>;
+  /** The new values that were applied (or attempted). */
+  set: Record<string, unknown>;
+  /** Values the edited cells held before the update (present on success) —
+   *  enough to revert the change later. */
+  old?: Record<string, unknown>;
+}
+
+export interface UpdateRowsResult {
+  updated: number;
+  failed: { index: number; error: string }[];
+  rows: UpdateRowOutcome[];
 }
 
 export interface TableStreamParams {
@@ -88,6 +119,9 @@ export interface DatabaseDriver {
   listTables(schema: string): Promise<{ name: string; kind: "table" | "view" }[]>;
   listColumns(schema: string, table: string): Promise<ColumnInfo[]>;
   getTableData(params: TableDataParams): Promise<TableDataResult>;
+  /** Apply per-row UPDATEs keyed by primary key. Rows execute independently —
+   *  one failure does not roll back the others (DataGrip-style auto-commit). */
+  updateRows(schema: string, table: string, rows: RowUpdate[]): Promise<UpdateRowsResult>;
   /** Open a batched read over a whole table. Rejects if the query is invalid. */
   openTableStream(params: TableStreamParams): Promise<TableRowStream>;
   runQuery(sql: string, maxRows?: number): Promise<QueryResult>;

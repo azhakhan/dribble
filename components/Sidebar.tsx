@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Database,
   Layers,
@@ -97,8 +97,16 @@ function TableNode({
   onSelect: () => void;
 }) {
   const openTab = useIde((s) => s.openTab);
+  const rowRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (!selected) return;
+    rowRef.current?.scrollIntoView({ block: "center", inline: "nearest" });
+  }, [selected]);
+
   return (
     <button
+      ref={rowRef}
       className={`tree-row ${selected ? "selected" : ""}`}
       style={{ paddingLeft: 40 }}
       onClick={onSelect}
@@ -412,6 +420,7 @@ function ResourceNode({
   item,
   kind,
   icon,
+  selected,
   onOpen,
   onDelete,
   onRename,
@@ -419,14 +428,21 @@ function ResourceNode({
   item: NotebookMeta | ChatMeta;
   kind: "query" | "chat";
   icon: React.ReactNode;
+  selected: boolean;
   onOpen: () => void;
   onDelete: () => void;
   onRename: (name: string) => Promise<void>;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const rowRef = useRef<HTMLButtonElement>(null);
   const cancelRenameRef = useRef(false);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(item.name);
+
+  useEffect(() => {
+    if (!selected || editing) return;
+    rowRef.current?.scrollIntoView({ block: "center", inline: "nearest" });
+  }, [selected, editing]);
 
   function startEditing() {
     cancelRenameRef.current = false;
@@ -490,7 +506,8 @@ function ResourceNode({
       style={{ display: "flex", alignItems: "center", position: "relative" }}
     >
       <button
-        className="tree-row"
+        ref={rowRef}
+        className={`tree-row ${selected ? "selected" : ""}`}
         onClick={onOpen}
         onDoubleClick={startEditing}
         title={item.name}
@@ -530,8 +547,34 @@ export default function Sidebar({
   const closeTab = useIde((s) => s.closeTab);
   const renameTab = useIde((s) => s.renameTab);
   const pruneConnection = useIde((s) => s.pruneConnection);
-  const [selectedKey, setSelectedKey] = useState("");
+  const activeTab = useIde((s) =>
+    s.tabs.find((tab) => tab.id === s.activeTabId),
+  );
+  const setConnectionExpanded = useIde((s) => s.setConnectionExpanded);
+  const setSchemaExpanded = useIde((s) => s.setSchemaExpanded);
+  const [manualSelectedKey, setManualSelectedKey] = useState("");
   const [showModal, setShowModal] = useState(false);
+
+  const activeSelectedKey = useMemo(() => {
+    if (!activeTab) return "";
+    if (activeTab.kind === "table") {
+      const { connectionId, schema, table } = activeTab;
+      return connectionId && schema && table
+        ? `table:${connectionId}:${schema}.${table}`
+        : "";
+    }
+    return activeTab.resourceId ? `${activeTab.kind}:${activeTab.resourceId}` : "";
+  }, [activeTab]);
+
+  const selectedKey = activeSelectedKey || manualSelectedKey;
+
+  useEffect(() => {
+    if (activeTab?.kind !== "table") return;
+    const { connectionId, schema, table } = activeTab;
+    if (!connectionId || !schema || !table) return;
+    setConnectionExpanded(connectionId, true);
+    setSchemaExpanded(`${connectionId}:${schema}`, true);
+  }, [activeTab, setConnectionExpanded, setSchemaExpanded]);
 
   const defaultConnection = (): string | null => {
     const m = selectedKey.match(/^(?:conn|schema|table):([^:]+)/);
@@ -633,7 +676,7 @@ export default function Sidebar({
             conn={c}
             connected={connectedIds.has(c.id)}
             selectedKey={selectedKey}
-            setSelectedKey={setSelectedKey}
+            setSelectedKey={setManualSelectedKey}
             onDelete={async () => {
               await fetch(`/api/connections/${c.id}`, { method: "DELETE" });
               pruneConnection(c.id);
@@ -656,6 +699,7 @@ export default function Sidebar({
             item={nb}
             kind="query"
             icon={<FileCode2 size={ICON_SIZE} color="var(--accent)" />}
+            selected={selectedKey === `notebook:${nb.id}`}
             onOpen={() =>
               openTab({
                 id: `notebook:${nb.id}`,
@@ -689,6 +733,7 @@ export default function Sidebar({
             item={chat}
             kind="chat"
             icon={<MessageSquare size={ICON_SIZE} color="#b48ead" />}
+            selected={selectedKey === `chat:${chat.id}`}
             onOpen={() =>
               openTab({
                 id: `chat:${chat.id}`,
