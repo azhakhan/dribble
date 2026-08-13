@@ -1,3 +1,5 @@
+
+
 # Dribble
 
 **An AI-powered, open-source SQL IDE for your databases.**
@@ -40,7 +42,7 @@ in one tabbed workspace that remembers where you left off.
 ## Tech stack
 
 Next.js 16 · React 19 · TypeScript · Tailwind CSS 4 · Monaco Editor ·
-glide-data-grid · Zustand · Vercel AI SDK (`@ai-sdk/anthropic`) · Postgres (`pg`)
+glide-data-grid · Zustand · Drizzle ORM · Vercel AI SDK (`@ai-sdk/anthropic`) · Postgres (`pg`)
 
 ## Getting started
 
