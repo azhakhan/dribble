@@ -1,4 +1,9 @@
-import { Pool, type FieldDef, type PoolClient } from "pg";
+import { Pool, type FieldDef, type PoolClient, type QueryArrayConfig, type QueryArrayResult } from "pg";
+import {
+  AiReadOnlyQueryCleanupError,
+  AiReadOnlyQueryError,
+  assertAiSelectQuery,
+} from "./ai-query";
 import type {
   ColumnInfo,
   ConnectionConfig,
@@ -70,13 +75,53 @@ function jsonSafe(v: unknown): unknown {
 const MAX_ROWS = 1000;
 /** Rows pulled per cursor FETCH while exporting. */
 const EXPORT_BATCH = 2000;
+const AI_STATEMENT_TIMEOUT_MS = 15_000;
+const AI_LOCK_TIMEOUT_MS = 1_000;
+const AI_IDLE_TRANSACTION_TIMEOUT_MS = 5_000;
+
+type ExtendedQueryArrayConfig = QueryArrayConfig & { queryMode: "extended" };
+
+function postgresErrorCode(err: unknown): string | undefined {
+  if (typeof err !== "object" || err === null || !("code" in err)) return undefined;
+  return typeof err.code === "string" ? err.code : undefined;
+}
+
+function normalizeAiQueryError(err: unknown): unknown {
+  if (err instanceof AiReadOnlyQueryError || err instanceof AiReadOnlyQueryCleanupError) return err;
+  if (postgresErrorCode(err) === "25006") return new AiReadOnlyQueryError();
+  if (err instanceof Error && err.message.includes("multiple commands")) {
+    return new AiReadOnlyQueryError();
+  }
+  return err;
+}
+
+function formatQueryResult(
+  result: QueryArrayResult<unknown[]>,
+  started: number,
+  maxRows: number,
+): QueryResult {
+  const columns: ColumnInfo[] = (result.fields ?? []).map((f: FieldDef) => ({
+    name: f.name,
+    dataType: OID_NAMES[f.dataTypeID] ?? `oid:${f.dataTypeID}`,
+  }));
+  const allRows = result.rows ?? [];
+  const truncated = allRows.length > maxRows;
+  const rows = allRows.slice(0, maxRows).map((row) => row.map(jsonSafe));
+  return {
+    columns,
+    rows,
+    rowCount: result.rowCount ?? rows.length,
+    durationMs: Date.now() - started,
+    truncated,
+  };
+}
 
 export class PostgresDriver implements DatabaseDriver {
   readonly type = "postgres" as const;
   private pool: Pool;
 
-  constructor(cfg: ConnectionConfig) {
-    this.pool = new Pool({
+  constructor(cfg: ConnectionConfig, pool?: Pool) {
+    this.pool = pool ?? new Pool({
       host: cfg.host,
       port: cfg.port,
       database: cfg.database,
@@ -89,9 +134,11 @@ export class PostgresDriver implements DatabaseDriver {
       statement_timeout: 60_000,
       allowExitOnIdle: true,
     });
-    this.pool.on("error", () => {
-      /* keep idle-client errors from crashing the process */
-    });
+    if (!pool) {
+      this.pool.on("error", () => {
+        /* keep idle-client errors from crashing the process */
+      });
+    }
   }
 
   async listSchemas(): Promise<string[]> {
@@ -369,26 +416,55 @@ export class PostgresDriver implements DatabaseDriver {
   async runQuery(sql: string, maxRows = MAX_ROWS): Promise<QueryResult> {
     const started = Date.now();
     const res = await this.pool.query({ text: sql, rowMode: "array" });
-    const durationMs = Date.now() - started;
 
     // Multi-statement queries return an array of results; show the last one with rows.
     const results = Array.isArray(res) ? res : [res];
     const withRows = [...results].reverse().find((r) => r.fields?.length) ?? results[results.length - 1];
+    return formatQueryResult(withRows, started, maxRows);
+  }
 
-    const columns: ColumnInfo[] = (withRows.fields ?? []).map((f: FieldDef) => ({
-      name: f.name,
-      dataType: OID_NAMES[f.dataTypeID] ?? `oid:${f.dataTypeID}`,
-    }));
-    const allRows = (withRows.rows ?? []) as unknown[][];
-    const truncated = allRows.length > maxRows;
-    const rows = allRows.slice(0, maxRows).map((row) => row.map(jsonSafe));
-    return {
-      columns,
-      rows,
-      rowCount: withRows.rowCount ?? rows.length,
-      durationMs,
-      truncated,
-    };
+  async runAiReadOnlyQuery(sql: string, maxRows = MAX_ROWS): Promise<QueryResult> {
+    assertAiSelectQuery(sql);
+
+    const client = await this.pool.connect();
+    let inTransaction = false;
+    let released = false;
+    try {
+      await client.query("BEGIN TRANSACTION READ ONLY");
+      inTransaction = true;
+      await client.query(`SET LOCAL statement_timeout = '${AI_STATEMENT_TIMEOUT_MS}ms'`);
+      await client.query(`SET LOCAL lock_timeout = '${AI_LOCK_TIMEOUT_MS}ms'`);
+      await client.query(
+        `SET LOCAL idle_in_transaction_session_timeout = '${AI_IDLE_TRANSACTION_TIMEOUT_MS}ms'`,
+      );
+
+      const started = Date.now();
+      const config: ExtendedQueryArrayConfig = {
+        text: sql,
+        rowMode: "array",
+        queryMode: "extended",
+      };
+      const result = await client.query<unknown[]>(config);
+      await client.query("COMMIT");
+      inTransaction = false;
+      return formatQueryResult(result, started, maxRows);
+    } catch (queryError) {
+      const normalizedError = normalizeAiQueryError(queryError);
+      if (inTransaction) {
+        try {
+          await client.query("ROLLBACK");
+          inTransaction = false;
+        } catch (cleanupError) {
+          const releaseError = cleanupError instanceof Error ? cleanupError : new Error(String(cleanupError));
+          client.release(releaseError);
+          released = true;
+          throw new AiReadOnlyQueryCleanupError(normalizedError, cleanupError);
+        }
+      }
+      throw normalizedError;
+    } finally {
+      if (!released) client.release();
+    }
   }
 
   async end(): Promise<void> {

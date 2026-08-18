@@ -9,3 +9,5 @@
 - [Database connection lifecycle](./connection-lifecycle.md) — when database
   drivers open, how they're kept warm vs. left to idle out, and how the sidebar
   reflects real connection status.
+- [AI query read-only security](./ai-query-security.md) — how AI-generated SQL
+  is restricted without changing notebook or table-edit permissions.

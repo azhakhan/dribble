@@ -124,6 +124,8 @@ export interface DatabaseDriver {
   updateRows(schema: string, table: string, rows: RowUpdate[]): Promise<UpdateRowsResult>;
   /** Open a batched read over a whole table. Rejects if the query is invalid. */
   openTableStream(params: TableStreamParams): Promise<TableRowStream>;
+  /** Execute one AI-generated SELECT-family statement inside a read-only transaction. */
+  runAiReadOnlyQuery(sql: string, maxRows?: number): Promise<QueryResult>;
   runQuery(sql: string, maxRows?: number): Promise<QueryResult>;
   /** Run an arbitrary user query with server-side pagination (and optional total count). */
   runPagedQuery(sql: string, params: PagedQueryParams): Promise<PagedQueryResult>;

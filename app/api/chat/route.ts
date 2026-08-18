@@ -21,7 +21,7 @@ Workflow:
 3. Iterate until you can answer the user's question, then give a concise answer in plain text.
 
 Rules:
-- Only run read-only queries (SELECT, WITH ... SELECT, EXPLAIN) unless the user explicitly asks you to modify data.
+- Only run read-only queries (SELECT, WITH ... SELECT, EXPLAIN SELECT). The run_query tool enforces this boundary and cannot modify data, even when the user requests a write.
 - Finish with a final run_query call that produces the result set best answering the user's question — the IDE renders the last query's results as a table below the chat. Then summarize the findings briefly.
 - Query results shown to you are capped at ${MAX_TOOL_ROWS} rows; use aggregation/LIMIT instead of selecting everything.
 - Keep prose short; the data table speaks for itself.`;
@@ -63,7 +63,7 @@ export async function POST(req: Request) {
           inputSchema: z.object({ sql: z.string().describe("The SQL query to execute") }),
           execute: async ({ sql }) => {
             try {
-              return await driver.runQuery(sql, MAX_TOOL_ROWS);
+              return await driver.runAiReadOnlyQuery(sql, MAX_TOOL_ROWS);
             } catch (err) {
               return { error: err instanceof Error ? err.message : String(err) };
             }
