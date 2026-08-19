@@ -2,32 +2,40 @@
 
 import { useState } from "react";
 import { CheckCircle2 } from "lucide-react";
+import type { ConnectionMeta } from "@/lib/store";
 import { ICON_SIZE } from "./IconButton";
 
 interface Props {
   onClose: () => void;
   onSaved: () => void;
+  /** When set, the modal edits this connection instead of creating a new one. */
+  initial?: ConnectionMeta;
 }
 
 const FIELD: React.CSSProperties = { display: "flex", flexDirection: "column", gap: 4 };
 const LABEL: React.CSSProperties = { fontSize: 11, color: "var(--text-dim)", letterSpacing: "0.04em" };
 
-export default function ConnectionModal({ onClose, onSaved }: Props) {
+export default function ConnectionModal({ onClose, onSaved, initial }: Props) {
   const [form, setForm] = useState({
-    name: "",
-    type: "postgres",
-    host: "",
-    port: 5432,
-    database: "",
-    username: "",
+    name: initial?.name ?? "",
+    type: initial?.type ?? "postgres",
+    host: initial?.host ?? "",
+    port: initial?.port ?? 5432,
+    database: initial?.database ?? "",
+    username: initial?.username ?? "",
     password: "",
-    ssl: true,
+    ssl: initial?.ssl ?? true,
   });
   const [testState, setTestState] = useState<"idle" | "testing" | "ok" | "fail">("idle");
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
-  const set = (k: string, v: unknown) => setForm((f) => ({ ...f, [k]: v }));
+  const set = (k: string, v: unknown) => {
+    setForm((f) => ({ ...f, [k]: v }));
+    // Any change to the connection itself invalidates a previous test;
+    // renaming doesn't.
+    if (k !== "name") setTestState("idle");
+  };
 
   async function test() {
     setTestState("testing");
@@ -35,7 +43,7 @@ export default function ConnectionModal({ onClose, onSaved }: Props) {
     const res = await fetch("/api/connections/test", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(form),
+      body: JSON.stringify({ ...form, id: initial?.id }),
     });
     if (res.ok) {
       setTestState("ok");
@@ -47,10 +55,11 @@ export default function ConnectionModal({ onClose, onSaved }: Props) {
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
+    if (testState !== "ok") return;
     setSaving(true);
     setError(null);
-    const res = await fetch("/api/connections", {
-      method: "POST",
+    const res = await fetch(initial ? `/api/connections/${initial.id}` : "/api/connections", {
+      method: initial ? "PATCH" : "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(form),
     });
@@ -90,7 +99,7 @@ export default function ConnectionModal({ onClose, onSaved }: Props) {
           gap: 12,
         }}
       >
-        <div style={{ fontSize: 15, fontWeight: 600 }}>New connection</div>
+        <div style={{ fontSize: 15, fontWeight: 600 }}>{initial ? "Connection settings" : "New connection"}</div>
 
         <div style={FIELD}>
           <span style={LABEL}>NAME</span>
@@ -129,7 +138,12 @@ export default function ConnectionModal({ onClose, onSaved }: Props) {
           </div>
           <div style={FIELD}>
             <span style={LABEL}>PASSWORD</span>
-            <input type="password" value={form.password} onChange={(e) => set("password", e.target.value)} />
+            <input
+              type="password"
+              value={form.password}
+              onChange={(e) => set("password", e.target.value)}
+              placeholder={initial ? "••••• (unchanged)" : undefined}
+            />
           </div>
         </div>
 
@@ -154,7 +168,12 @@ export default function ConnectionModal({ onClose, onSaved }: Props) {
           <button type="button" className="btn btn-ghost" onClick={onClose}>
             Cancel
           </button>
-          <button type="submit" className="btn btn-accent" disabled={saving}>
+          <button
+            type="submit"
+            className="btn btn-accent"
+            disabled={saving || testState !== "ok"}
+            title={testState !== "ok" ? "Test the connection before saving" : undefined}
+          >
             {saving ? "Saving…" : "Save"}
           </button>
         </div>

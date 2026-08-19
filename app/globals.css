@@ -123,6 +123,19 @@ select:focus {
   background: #f0b066;
   border-color: #f0b066;
 }
+.btn-danger {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: #14161a;
+  font-weight: 600;
+}
+.btn-danger:hover:not(:disabled) {
+  background: #e97b84;
+  border-color: #e97b84;
+}
+.btn-danger:disabled {
+  opacity: 0.5;
+}
 .btn-ghost {
   border-color: transparent;
   background: transparent;

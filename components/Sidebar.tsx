@@ -9,7 +9,7 @@ import {
   FileCode2,
   MessageSquare,
   RefreshCw,
-  XIcon,
+  MoreVertical,
   ChevronRight,
   Plus,
   Pencil,
@@ -22,6 +22,7 @@ import {
   type NotebookMeta,
 } from "@/lib/store";
 import ConnectionModal from "./ConnectionModal";
+import DeleteConnectionModal from "./DeleteConnectionModal";
 import IconButton, { ICON_SIZE } from "./IconButton";
 
 interface Props {
@@ -265,21 +266,26 @@ function SchemaNode({
   );
 }
 
+const CONN_MENU_WIDTH = 160;
+
 function ConnectionNode({
   conn,
   connected,
   selectedKey,
   setSelectedKey,
+  onEdit,
   onDelete,
 }: {
   conn: ConnectionMeta;
   connected: boolean;
   selectedKey: string;
   setSelectedKey: (k: string) => void;
+  onEdit: () => void;
   onDelete: () => void;
 }) {
   const open = useIde((s) => s.tree.connections.includes(conn.id));
   const setConnectionExpanded = useIde((s) => s.setConnectionExpanded);
+  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   const [schemas, setSchemas] = useState<string[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [reloading, setReloading] = useState(false);
@@ -375,15 +381,46 @@ function ConnectionNode({
             onClick={reload}
           />
           <IconButton
-            icon={<XIcon size={ICON_SIZE} />}
-            title="Remove connection"
+            icon={<MoreVertical size={ICON_SIZE} />}
+            title="Connection actions"
             onClick={(e) => {
               e.stopPropagation();
-              if (confirm(`Remove connection "${conn.name}"?`)) onDelete();
+              const r = e.currentTarget.getBoundingClientRect();
+              setMenu({ x: r.right, y: r.bottom + 2 });
             }}
           />
         </span>
       </div>
+      {menu && (
+        <div
+          style={{ position: "fixed", inset: 0, zIndex: 100 }}
+          onClick={() => setMenu(null)}
+          onContextMenu={(e) => {
+            e.preventDefault();
+            setMenu(null);
+          }}
+        >
+          <div
+            className="ctx-menu"
+            style={{
+              left: Math.max(0, Math.min(menu.x - CONN_MENU_WIDTH, window.innerWidth - CONN_MENU_WIDTH - 8)),
+              top: menu.y,
+            }}
+            onClick={(e) => {
+              e.stopPropagation();
+              setMenu(null);
+            }}
+          >
+            <button className="ctx-item" onClick={onEdit}>
+              Settings…
+            </button>
+            <div className="ctx-sep" />
+            <button className="ctx-item" style={{ color: "var(--danger)" }} onClick={onDelete}>
+              Delete…
+            </button>
+          </div>
+        </div>
+      )}
       {open && error && (
         <div
           style={{
@@ -554,6 +591,8 @@ export default function Sidebar({
   const setSchemaExpanded = useIde((s) => s.setSchemaExpanded);
   const [manualSelectedKey, setManualSelectedKey] = useState("");
   const [showModal, setShowModal] = useState(false);
+  const [editingConn, setEditingConn] = useState<ConnectionMeta | null>(null);
+  const [deletingConn, setDeletingConn] = useState<ConnectionMeta | null>(null);
 
   const activeSelectedKey = useMemo(() => {
     if (!activeTab) return "";
@@ -677,13 +716,8 @@ export default function Sidebar({
             connected={connectedIds.has(c.id)}
             selectedKey={selectedKey}
             setSelectedKey={setManualSelectedKey}
-            onDelete={async () => {
-              await fetch(`/api/connections/${c.id}`, { method: "DELETE" });
-              pruneConnection(c.id);
-              refreshConnections();
-              refreshNotebooks();
-              refreshChats();
-            }}
+            onEdit={() => setEditingConn(c)}
+            onDelete={() => setDeletingConn(c)}
           />
         ))}
       </div>
@@ -753,6 +787,26 @@ export default function Sidebar({
         <ConnectionModal
           onClose={() => setShowModal(false)}
           onSaved={refreshConnections}
+        />
+      )}
+      {editingConn && (
+        <ConnectionModal
+          initial={editingConn}
+          onClose={() => setEditingConn(null)}
+          onSaved={refreshConnections}
+        />
+      )}
+      {deletingConn && (
+        <DeleteConnectionModal
+          conn={deletingConn}
+          onClose={() => setDeletingConn(null)}
+          onConfirm={async () => {
+            await fetch(`/api/connections/${deletingConn.id}`, { method: "DELETE" });
+            pruneConnection(deletingConn.id);
+            refreshConnections();
+            refreshNotebooks();
+            refreshChats();
+          }}
         />
       )}
     </div>
