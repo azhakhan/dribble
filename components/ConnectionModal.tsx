@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { CheckCircle2 } from "lucide-react";
 import type { ConnectionMeta } from "@/lib/store";
+import { parseConnectionString, looksLikeConnectionString } from "@/lib/connection-string";
 import { ICON_SIZE } from "./IconButton";
 
 interface Props {
@@ -29,12 +30,35 @@ export default function ConnectionModal({ onClose, onSaved, initial }: Props) {
   const [testState, setTestState] = useState<"idle" | "testing" | "ok" | "fail">("idle");
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [pasteState, setPasteState] = useState<"idle" | "ok" | "fail">("idle");
 
   const set = (k: string, v: unknown) => {
     setForm((f) => ({ ...f, [k]: v }));
     // Any change to the connection itself invalidates a previous test;
     // renaming doesn't.
     if (k !== "name") setTestState("idle");
+  };
+
+  const applyConnectionString = (raw: string, input: HTMLInputElement) => {
+    if (!raw.trim()) {
+      setPasteState("idle");
+      return;
+    }
+    const parsed = parseConnectionString(raw);
+    if (!parsed) {
+      setPasteState(looksLikeConnectionString(raw) ? "fail" : "idle");
+      return;
+    }
+    setForm((f) => ({
+      ...f,
+      ...parsed,
+      // Suggest a name from the database (or host) unless the user already set one.
+      name: f.name || parsed.database || parsed.host.split(".")[0],
+    }));
+    setTestState("idle");
+    setPasteState("ok");
+    // Don't keep the raw string (with its password) sitting in the field.
+    input.value = "";
   };
 
   async function test() {
@@ -102,8 +126,21 @@ export default function ConnectionModal({ onClose, onSaved, initial }: Props) {
         <div style={{ fontSize: 15, fontWeight: 600 }}>{initial ? "Connection settings" : "New connection"}</div>
 
         <div style={FIELD}>
+          <span style={LABEL}>
+            CONNECTION STRING{" "}
+            {pasteState === "ok" && <span style={{ color: "var(--accent)" }}>— details filled below</span>}
+            {pasteState === "fail" && <span style={{ color: "var(--danger)" }}>— couldn&apos;t parse</span>}
+          </span>
+          <input
+            autoFocus={!initial}
+            placeholder="paste postgresql://user:pass@host/db to autofill"
+            onChange={(e) => applyConnectionString(e.target.value, e.target)}
+          />
+        </div>
+
+        <div style={FIELD}>
           <span style={LABEL}>NAME</span>
-          <input autoFocus required value={form.name} onChange={(e) => set("name", e.target.value)} placeholder="production" />
+          <input autoFocus={!!initial} required value={form.name} onChange={(e) => set("name", e.target.value)} placeholder="production" />
         </div>
 
         <div style={FIELD}>
