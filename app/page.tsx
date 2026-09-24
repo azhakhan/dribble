@@ -164,14 +164,20 @@ export default function Ide() {
                 </div>
               </div>
             )}
+            {/* Inactive tabs are hidden with `visibility`, not `display: none`:
+                they keep their layout, so the grid keeps its measured size,
+                scroll offset and selection instead of being torn down and
+                rebuilt from scratch every time the user switches away. Hidden
+                panes are neither painted nor hit-testable. */}
             {tabs.map((tab) => (
               <div
                 key={tab.id}
                 style={{
                   position: "absolute",
                   inset: 0,
-                  display: tab.id === activeTabId ? "flex" : "none",
+                  display: "flex",
                   flexDirection: "column",
+                  visibility: tab.id === activeTabId ? "visible" : "hidden",
                 }}
               >
                 {tab.kind === "table" && <TableTab tab={tab} />}

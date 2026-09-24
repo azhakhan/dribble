@@ -53,6 +53,11 @@ const GRID_THEME: Partial<Theme> = {
   fontFamily: "Roboto Mono, Consolas, monospace",
 };
 
+/** Clicking the row number selects the whole row, so the highlight stays with it
+ *  while scrolling horizontally. The header marker stays inert — a select-all
+ *  that only tints every row is noise here. */
+const ROW_MARKERS = { kind: "clickable-number", headerDisabled: true } as const;
+
 /** Staged-edit wiring for table tabs. Absent → the grid stays read-only
  *  (notebook/chat results). All indexes are original result column indexes. */
 export interface GridEditing {
@@ -279,7 +284,7 @@ export default function ResultsGrid({
           height={size.height}
           theme={GRID_THEME}
           headerIcons={headerIcons}
-          rowMarkers="number"
+          rowMarkers={ROW_MARKERS}
           rowHeight={38}
           headerHeight={38}
           minColumnWidth={70}
